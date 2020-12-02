@@ -1,0 +1,15 @@
+module main {
+  var a, b : integer;
+
+  init {
+    a = 0;
+    b = 1;
+  }
+
+  next {
+    a' = b;
+    b' = a + b;
+  }
+
+  invariant a_le_b: a <= b;
+}

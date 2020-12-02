@@ -1,0 +1,28 @@
+textarea {
+    border: none;
+    overflow: auto;
+    font-family: Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+    font-size: 85%;
+    line-height: normal;
+    background-color: hsl(210, 20%, 98%);
+}
+
+#demoq0 {
+    height: 9em;
+}
+
+#demoq1 {
+    height: 9em;
+}
+
+#demoq2 {
+    height: 9em;
+}
+
+#demoq3 {
+    height: 15em;
+}
+
+#demofull {
+    height: 19em;
+}
