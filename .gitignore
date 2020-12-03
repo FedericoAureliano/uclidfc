@@ -14,15 +14,7 @@ project/target
 /target
 jvm/target
 shared/target
-
-js/target/.history
-js/target/streams
-js/target/scala-2.13/classes
-js/target/scala-2.13/uclid-opt
-js/target/scala-2.13/uclid-test-fastopt
-js/target/scala-2.13/uclid-opt.js.map
-js/target/scala-2.13/update
-js/target/scala-2.13/test-classes
+js/target
 
 node_modules
 
