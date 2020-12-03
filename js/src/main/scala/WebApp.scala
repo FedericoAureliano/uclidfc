@@ -65,14 +65,13 @@ object WebApp {
 
   def updateSMTLIB(text: String, id: String): Unit = {
     val result = document.querySelector(s"#$id").asInstanceOf[HTMLPreElement]
-    val term = new ArrayBuffer[Instruction]()
+
+    val program = new Program(ArrayBuffer[Instruction](), 0)
 
     try {
       for (line <- text.split("\n")) {
-        term.addOne(parse(line))
+        program.appendIncOne(parse(line))
       }
-      val program = new Program(term.toArray)
-
       result.textContent = toSmtString(program)
     } catch {
       case e: Throwable => result.textContent = e.toString()
@@ -81,15 +80,15 @@ object WebApp {
 
   def updateLetify(text: String, id: String): Unit = {
     val result = document.querySelector(s"#$id").asInstanceOf[HTMLPreElement]
-    val term = new ArrayBuffer[Instruction]()
+    val program = new Program(ArrayBuffer[Instruction](), 0)
 
     try {
       for (line <- text.split("\n")) {
-        term.addOne(parse(line))
+        program.appendIncOne(parse(line))
       }
-      val program = letify(new Program(term.toArray), "tmp")
+      val answer = letify(program, "tmp")
 
-      result.textContent = program.toString()
+      result.textContent = answer.toString()
     } catch {
       case e: Throwable => result.textContent = e.toString()
     }
@@ -97,15 +96,15 @@ object WebApp {
 
   def updateInline(text: String, id: String): Unit = {
     val result = document.querySelector(s"#$id").asInstanceOf[HTMLPreElement]
-    val term = new ArrayBuffer[Instruction]()
+    val program = new Program(ArrayBuffer[Instruction](), 0)
 
     try {
       for (line <- text.split("\n")) {
-        term.addOne(parse(line))
+        program.appendIncOne(parse(line))
       }
-      val program = inlineApplication(new Program(term.toArray), 0)
+      val answer = inlineApplication(program, 0)
 
-      result.textContent = program.toString()
+      result.textContent = answer.toString()
     } catch {
       case e: Throwable => result.textContent = e.toString()
     }
@@ -113,16 +112,14 @@ object WebApp {
 
   def updateCompact(text: String, id: String): Unit = {
     val result = document.querySelector(s"#$id").asInstanceOf[HTMLPreElement]
-    val term = new ArrayBuffer[Instruction]()
+    val program = new Program(ArrayBuffer[Instruction](), 0)
 
     try {
       for (line <- text.split("\n")) {
-        term.addOne(parse(line))
+        program.appendIncOne(parse(line))
       }
-      val program = new Program(term.toArray)
 
       reduceDuplicates(program)
-
       reduceIndirection(program)
 
       val cleaned = collectGarbage(program)
@@ -139,7 +136,7 @@ object WebApp {
     try {
       val parsed = UclidParser.parseModel("web", text)
 
-      val term = Translate.modelToProgram(parsed)
+      val term = Translate.modelToProgram(parsed, None)
 
       result.textContent = getSmtCtxString(term)
     } catch {

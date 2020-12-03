@@ -54,15 +54,8 @@ object UclidMain {
     try {
       val mainModuleName = Identifier(config.mainModuleName)
       val modules = compile(config.files, mainModuleName)
-      val mainModule = instantiate(config, modules, mainModuleName)
-      mainModule match {
-        case Some(m) => {
-          val term = Translate.modelToProgram(modules)
-          println(getSmtCtxString(term))
-        }
-        case None =>
-          throw new Utils.ParserError("Unable to find main module", None, None)
-      }
+      val term = Translate.modelToProgram(modules, Some(config.mainModuleName))
+      println(getSmtCtxString(term))
       println(
         "Finished execution for module: %s.".format(mainModuleName.toString)
       )
@@ -96,23 +89,5 @@ object UclidMain {
     }
 
     parsedModules
-  }
-
-  /** Instantiate modules.
-    *
-    * @param moduleList List of modules to be analyzed.
-    * @param mainModuleName Name of main module.
-    */
-  def instantiate(
-    config: Config,
-    moduleList: List[Module],
-    mainModuleName: Identifier
-  ): Option[Module] = {
-    if (moduleList.find(m => m.id == mainModuleName).isEmpty) {
-      return None
-    }
-
-    // return main module.
-    moduleList.find((m) => m.id == mainModuleName)
   }
 }

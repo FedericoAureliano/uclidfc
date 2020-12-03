@@ -203,7 +203,7 @@ package object rewrite {
     finalBuffer.addAll(callerBody.stmts)
     args.foreach(a => finalBuffer.addAll(a.stmts))
 
-    new Program(finalBuffer.toArray)
+    new Program(finalBuffer, 0)
   }
 
   def letify(term: Program, prefix: String): Program = {
@@ -254,13 +254,13 @@ package object rewrite {
 
     val newLocationMap: Map[Int, Int] = newLocations.toMap
 
-    val tmpTerm = new Program(term.stmts.clone())
+    val tmpTerm = new Program(term.stmts.clone(), 0)
     updateRefs(
       tmpTerm,
       (x: Int) => if (newLocationMap contains x) newLocationMap(x) else x
     )
 
-    val newTerm = new Program(tmpTerm.stmts ++ newMacros)
+    val newTerm = new Program(tmpTerm.stmts ++ newMacros, 0)
 
     newTerm
   }

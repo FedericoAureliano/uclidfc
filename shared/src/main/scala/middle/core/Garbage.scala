@@ -76,7 +76,8 @@ package object garbage {
     val newTerm = new Program(
       term.stmts.clone().zipWithIndex.filter { case (i, p) => marks(p) }.map {
         case (i, p) => i
-      }
+      },
+      0
     )
 
     updateRefs(newTerm, newLocations)

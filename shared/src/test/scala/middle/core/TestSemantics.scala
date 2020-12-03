@@ -2,6 +2,7 @@ package middle.core
 
 import org.junit.Test
 import org.junit.Assert._
+import scala.collection.mutable.ArrayBuffer
 
 class TestSemanctics {
 
@@ -13,7 +14,7 @@ class TestSemanctics {
     val plus = TheoryMacro("+") // 3
     val integer = TheorySort("Int") // 4
 
-    val f = new Program(Array(head, body, arg, plus, integer))
+    val f = new Program(ArrayBuffer(head, body, arg, plus, integer), 0)
 
     val check = semantics.checkRefBounds(f)
 
@@ -28,7 +29,7 @@ class TestSemanctics {
     val plus = TheoryMacro("+") // 3
     val integer = TheorySort("Int") // 4
 
-    val f = new Program(Array(head, body, arg, plus, integer))
+    val f = new Program(ArrayBuffer(head, body, arg, plus, integer), 0)
 
     val check = semantics.checkRefBounds(f)
 
@@ -43,7 +44,7 @@ class TestSemanctics {
     val plus = TheoryMacro("+") // 3
     val integer = TheorySort("Int") // 4
 
-    val f = new Program(Array(head, body, arg, plus, integer))
+    val f = new Program(ArrayBuffer(head, body, arg, plus, integer), 0)
 
     val check = semantics.checkRefBounds(f)
 

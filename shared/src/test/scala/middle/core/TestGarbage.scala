@@ -4,6 +4,7 @@ import org.junit.Test
 import org.junit.Assert._
 
 import interface.out.smt.toSmtString
+import scala.collection.mutable.ArrayBuffer
 
 class TestGarbage {
 
@@ -15,7 +16,7 @@ class TestGarbage {
     val plus = TheoryMacro("+", List()) // 3
     val integer = TheorySort("Int", List()) // 4
 
-    val f = new Program(Array(head, body, arg, plus, integer))
+    val f = new Program(ArrayBuffer(head, body, arg, plus, integer), 0)
 
     val marks = garbage.mark(f)
 
@@ -33,7 +34,7 @@ class TestGarbage {
     val integer = TheorySort("Int", List()) // 4
     val string = TheorySort("String", List()) // 5
 
-    val f = new Program(Array(head, body, arg, plus, integer, string))
+    val f = new Program(ArrayBuffer(head, body, arg, plus, integer, string), 0)
 
     val marks = garbage.mark(f)
 
@@ -53,7 +54,7 @@ class TestGarbage {
     val integer = TheorySort("Int") // 4
     val string = TheorySort("String") // 5
 
-    val f = new Program(Array(head, body, arg, plus, integer, string))
+    val f = new Program(ArrayBuffer(head, body, arg, plus, integer, string), 0)
 
     val marks = garbage.mark(f)
 

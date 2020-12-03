@@ -50,8 +50,6 @@ import front.{
   ModuleType,
   NextDecl,
   OperatorApplication,
-  ProcedureCallStmt,
-  ProcedureType,
   RecordType,
   SkipStmt,
   StringType,
@@ -164,7 +162,8 @@ package object smt {
       }
     }
 
-  def getSmtSortName(term: Program, position: Int): String =
+  def getSmtSortName(term: Program, position: Int): String = {
+    // println("here " + position + "\n" + term)
     term.stmts(position) match {
       case Ref(i) => getSmtSortName(term, i)
       case Numeral(j) =>
@@ -196,6 +195,7 @@ package object smt {
         }
       }
     }
+  }
 
   def toSmtString(term: Program): String = {
     val ctx = getSmtCtxString(term)

@@ -14,5 +14,5 @@ sbt "uclidJVM/run examples/fib.ucl"
 
 ```
 sbt fullOptJS
-open index.html
+open docs/index.html
 ```

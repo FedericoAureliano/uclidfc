@@ -79,8 +79,8 @@
   var a, b : integer;
 
   init {
-    a = 0;
-    b = 1;
+    a' = 0;
+    b' = 1;
   }
 
   next {
@@ -99,10 +99,10 @@
 
       </p>
 
-      <pre><code id="demofullanswer">(declare-datatypes ((main_t 0)) (((main (a Int) (b Int)))))
-(define-fun main_i ((in main_t)) main_t (main 0 1))
-(define-fun main_n ((in main_t)) main_t (main (b in) (+ (a in) (b in))))
-(define-fun main_s ((in main_t)) Bool (&lt;= (a in) (b in)))</code></pre>
+      <pre><code id="demofullanswer">(declare-datatypes ((main!type 0)) (((main (a Int) (b Int)))))
+(define-fun main!init ((in main!type)) main!type (main 0 1))
+(define-fun main!next ((in main!type)) main!type (main (b in) (+ (a in) (b in))))
+(define-fun main!spec ((in main!type)) Bool (&lt;= (a in) (b in)))</code></pre>
 
       <p>
 
@@ -115,18 +115,18 @@
 
       </p>
 
-      <pre><code>(declare-fun k () main_t)
+      <pre><code>(declare-fun k () main!type)
 
 ; look for counter example in base case
 (push)
-(assert (not (main_s (main_i k))))
+(assert (not (main!spec (main!init k))))
 (check-sat)
 (get-model)
 (pop)
 
 ; look for counter example in induction step
 (push)
-(assert (and (main_s k) (not (main_s (main_n k)))))
+(assert (and (main!spec k) (not (main!spec (main!next k)))))
 (check-sat)
 (get-model)
 (pop)</code></pre>
@@ -563,8 +563,8 @@ procedure[inline] p(x : integer, y : integer)
 }
 
 init {
-  a = 0;
-  b = 1;
+  a' = 0;
+  b' = 1;
 }
 
 next {
@@ -583,10 +583,10 @@ invariant a_le_b: a &lt;= b;</code></pre>
 <pre><code>(declare-datatypes ((p_t 0)) (((p (z Int)))))
 (define-fun f_p ((x Int) (y Int)) p_t (p (+ x y)))
 
-(declare-datatypes ((main_t 0)) (((main (a Int) (b Int)))))
-(define-fun main_i ((in main_t)) main_t (main 0 1))
-(define-fun main_n ((in main_t)) main_t (main (b in) (z (f_p (a in) (b in)))))
-(define-fun main_s ((in main_t)) Bool (&lt;= (a in) (b in)))</code></pre>
+(declare-datatypes ((main!type 0)) (((main (a Int) (b Int)))))
+(define-fun main!init ((in main!type)) main!type (main 0 1))
+(define-fun main!next ((in main!type)) main!type (main (b in) (z (f_p (a in) (b in)))))
+(define-fun main!spec ((in main!type)) Bool (&lt;= (a in) (b in)))</code></pre>
 
 <p>
 
@@ -599,10 +599,10 @@ invariant a_le_b: a &lt;= b;</code></pre>
 (declare-fun f_p (Int Int) p_t)
 (assert (forall ((i Int) (j Int)) (=> true (= (z (f_p i j)) (+ i j)))))
 
-(declare-datatypes ((main_t 0)) (((main (a Int) (b Int)))))
-(define-fun main_i ((in main_t)) main_t (main 0 1))
-(define-fun main_n ((in main_t)) main_t (main (b in) (z (f_p (a in) (b in)))))
-(define-fun main_s ((in main_t)) Bool (&lt;= (a in) (b in)))</code></pre>
+(declare-datatypes ((main!type 0)) (((main (a Int) (b Int)))))
+(define-fun main!init ((in main!type)) main!type (main 0 1))
+(define-fun main!next ((in main!type)) main!type (main (b in) (z (f_p (a in) (b in)))))
+(define-fun main!spec ((in main!type)) Bool (&lt;= (a in) (b in)))</code></pre>
 
 <p>
 

@@ -2,6 +2,8 @@ package interface.in
 
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.ListBuffer
+import scala.collection.mutable.HashMap
+import scala.collection.mutable.Stack
 
 import middle.core
 import middle.core.{
@@ -48,8 +50,6 @@ import front.{
   ModuleType,
   NextDecl,
   OperatorApplication,
-  ProcedureCallStmt,
-  ProcedureType,
   RecordType,
   SkipStmt,
   StringType,
@@ -64,306 +64,234 @@ import front.{
 
 package object Translate {
 
-  def modelToProgram(model: List[front.Module]): Program = {
-    val term = new ArrayBuffer[Instruction]()
-    var offset = 0
+  def modelToProgram(model: List[front.Module], main: Option[String]): Program = {
+
+    val program = new Program(ArrayBuffer[Instruction](), 0)
+
+    val moduleLocation = new HashMap[String, Ref]()
+    val typeLocation = new HashMap[String, Ref]()
+    val opLocation = new HashMap[String, Ref]()
+    val varLocation = new Stack[HashMap[String, Ref]]()
+
+    // 1. Add every module to the program. 
+    // 2. When we find the main module, point the head to it
     model.foreach { m =>
-      val t = moduleToTerm(m)
-      rewrite.incrementRefs(t, offset)
-      term.addAll(t.stmts)
-      offset += t.stmts.length
-    }
-    val program = new Program(term.toArray)
-    program
-  }
-
-  def typeUseToTerm(t: Type): Program = {
-    val term = new ArrayBuffer[Instruction]()
-    t match {
-      case UninterpretedType(name) => term.addOne(UserSort(name.name))
-      case BooleanType()           => term.addOne(TheorySort("Bool"))
-      case IntegerType()           => term.addOne(TheorySort("Int"))
-      case StringType()            => term.addOne(TheorySort("String"))
-      case BitVectorType(width) => {
-        term.addOne(TheorySort("_ BitVec", List(Ref(1))))
-        term.addOne(Numeral(width))
+      if (Some(m.id.name) == main) {
+        program.head = program.stmts.length
       }
-      case _ =>
-        throw new IllegalArgumentException(s"type not yet supported: ${t}")
-    }
-    val program = new Program(term.toArray)
-    program
-  }
-
-  def varDeclToTerm(v: (Identifier, Type)): Program = {
-    val term = new ArrayBuffer[Instruction]()
-
-    term.addOne(Selector(v._1.name, Ref(1)))
-    val t = typeUseToTerm(v._2)
-    rewrite.incrementRefs(t, 1)
-    term.addAll(t.stmts)
-
-    val program = new Program(term.toArray)
-    program
-  }
-
-  def moduleToTerm(m: front.Module): Program = {
-    val term = new ArrayBuffer[Instruction]()
-
-    val selectorRefs = new ListBuffer[Ref]()
-    val selectorsTerm = new ArrayBuffer[Instruction]()
-
-    var selectorsPos = 4 //module, constructor, datatype, boolean and then selectors
-    (m.vars ++ m.sharedVars ++ m.inputs ++ m.outputs ++ m.constants).foreach {
-      v =>
-        val t = varDeclToTerm(v)
-        rewrite.incrementRefs(t, selectorsPos)
-        selectorsTerm.addAll(t.stmts)
-        selectorRefs.addOne(Ref(selectorsPos))
-        selectorsPos += t.stmts.length
+      moduleToTerm(m)
     }
 
-    term.addAll(selectorsTerm)
-    term.prepend(TheorySort("Bool"))
-    term.prepend(Constructor(m.id.name, Ref(1), selectorRefs.toList))
-    term.prepend(DataType(m.id.name + "_t", List(Ref(2))))
-    term.prepend(
-      core.Module(m.id.name, Ref(1), Ref(-1), Ref(-1), Ref(-1))
-    ) // placeholder
+    // **** Helper Functions ****
+
+    def moduleToTerm(m: front.Module) = {
+
+      // add placeholder for module and remember where it is
+      val moduleRef = Ref(program.stmts.length)
+      program.stmts.addOne(core.Module(m.id.name, Ref(-1), Ref(-1), Ref(-1), Ref(-1)))
+
+      // add placeholder for datatype and remember where it is
+      val datatypeRef = Ref(program.stmts.length)
+      program.stmts.addOne(DataType(m.id.name + "!type", List(Ref(-1))))
+      typeLocation.addOne((m.id.name + "!type", datatypeRef))
+
+      // add placeholder for constructor and remember where it is
+      val constructorRef = Ref(program.stmts.length)
+      program.stmts.addOne(Constructor(m.id.name, Ref(-1), List.empty))
+
+      // spec needs Bool, so add Bool if it's not already there
+      typeLocation.getOrElseUpdate("Bool", {program.stmts.addOne(TheorySort("Bool")); Ref(program.stmts.length - 1)})
+
+      // create selectors and remember where they are
+      val selectorRefs = new ListBuffer[Ref]()
+      (m.vars ++ m.sharedVars ++ m.inputs ++ m.outputs ++ m.constants).foreach {
+        v => {
+          selectorRefs.addOne(Ref(program.stmts.length))
+          varDeclToTerm(v)
+        }
+      }
+
+      // update the datatype placeholder and the constructor placeholder
+      program.stmts.update(datatypeRef.loc, DataType(m.id.name + "!type", List(constructorRef)))
+      program.stmts.update(constructorRef.loc, Constructor(m.id.name, datatypeRef, selectorRefs.toList))
+
+      // add init and next
+      val initRef = Ref(program.stmts.length)
+      val initBlock = m.init match {
+        case Some(InitDecl(BlockStmt(vars, stmts))) => BlockStmt(vars, stmts)
+        case Some(_) => throw new IllegalArgumentException("must be a block statement")
+        case None => BlockStmt(List.empty, List.empty)
+      }
+      parseTransitionBlock(m.id.name + "!init", initBlock, datatypeRef, constructorRef, selectorRefs.toList)
+
+      val nextRef = Ref(program.stmts.length)
+      val nextBlock = m.next match {
+        case Some(NextDecl(BlockStmt(vars, stmts))) => BlockStmt(vars, stmts)
+        case Some(_) => throw new IllegalArgumentException("must be a block statement")
+        case None => BlockStmt(List.empty, List.empty)
+      }
+      parseTransitionBlock(m.id.name + "!next", nextBlock, datatypeRef, constructorRef, selectorRefs.toList)
+
+      // Add spec function
+      val specRef = Ref(program.stmts.length)
+
+      val specConjuncts = new ListBuffer[Ref]()
+      program.stmts.addOne(
+        UserMacro(
+          m.id.name + "!spec",
+          typeLocation.get("Bool").get,
+          Ref(specRef.loc + 2),
+          List(Ref(specRef.loc + 1))
+        )
+      )
+      
+      program.stmts.addOne(FunctionParameter("in", datatypeRef))
+      if (m.properties.length > 1) {
+        program.stmts.addOne(
+          Application(Ref(specRef.loc + 3), specConjuncts.toList)
+        ) // PLACEHOLDER
+        program.stmts.addOne(TheoryMacro("and"))
+        m.properties.foreach { d =>
+          specConjuncts.addOne(specRef)
+          exprToTerm(d.expr, Ref(specRef.loc + 1), selectorRefs.toList)
+        }
+        program.stmts.update(
+          specRef.loc + 2,
+          Application(Ref(specRef.loc + 3), specConjuncts.toList)
+        ) // UPDATING PLACEHOLDER
+      } else if (m.properties.length == 1) {
+        exprToTerm(
+          m.properties(0).expr,
+          Ref(specRef.loc + 1),
+          selectorRefs.toList
+        )
+      } else {
+        program.stmts.addOne(TheoryMacro("true"))
+      }
+
+      program.stmts.update(moduleRef.loc, core.Module(m.id.name, Ref(1), initRef, nextRef, specRef))
+    } // End Module to Term
+
+    // define a helper function that does the work
+    def parseTransitionBlock(funcName: String, block: BlockStmt, dtRef: Ref, ctRef: Ref, selectorRefs: List[Ref]) = {
+      val parseStartPos = program.stmts.length
+      // add the macro definition with forward references we will fill in later
+      program.stmts.addOne(
+        UserMacro(
+          funcName,
+          dtRef,
+          Ref(parseStartPos + 2),
+          List(Ref(parseStartPos + 1))
+        )
+      )
+
+      // add the function argument
+      program.stmts.addOne(FunctionParameter("in", dtRef))
+      // add placeholder for body (call to constructor and components, which will be filled in later)
+      program.stmts.addOne(
+        Application(ctRef, List.empty)
+      )
+
+      // save references for later (the arguments to the constructor returned by the init function)
+      val components = new ListBuffer[Ref]()
+      selectorRefs.map(r => program.stmts(r.loc)).zipWithIndex.foreach {
+        case (s: Selector, i: Int) => {
+          // find the assignment
+          val flat: List[(Lhs, Expr)] =
+            block.stmts.foldLeft(List[(Lhs, Expr)]())((acc, p) =>
+              p match {
+                case AssignStmt(lhss, rhss) => {
+                  acc ++ lhss.zip(rhss)
+                }
+                case _ =>
+                  throw new IllegalArgumentException(
+                    "must be an assignment"
+                  )
+              }
+            )
+          val found = flat.filter(p => p._1.ident.name == s.name)
+          if (found.length > 0) {
+            // once you have the assignment, put the term in the right slot
+            components.addOne(Ref(program.stmts.length))
+            exprToTerm(
+              found(0)._2,
+              Ref(parseStartPos + 1),
+              selectorRefs.toList
+            )
+          } else {
+            // if there is no term, then just keep whatever was in the input
+            components.addOne(Ref(program.stmts.length))
+            program.stmts.addOne(Application(selectorRefs(i), List(Ref(parseStartPos + 1))))
+          }
+        }
+        case (_, _) =>
+          throw new IllegalArgumentException("must be (s : Selector, i: Int)")
+      }
+      program.stmts.update(
+        parseStartPos + 2,
+        Application(ctRef, components.toList)
+      ) // apply constructor to the expressions above (FILLING-IN PLACEHOLDER)
+    }
 
     def exprToTerm(
       expr: Expr,
       in: Ref,
-      selectors: List[Ref],
-      offset: Int
-    ): Program = {
-      val outBuffer = new ArrayBuffer[Instruction]()
-      var termPos = offset
-
+      selectors: List[Ref]
+    ) : Unit = {
       expr match {
         case Identifier(name) => {
           // find selector
           val sel = selectors.filter(r =>
-            term(r.loc) match {
+            program.stmts(r.loc) match {
               case Selector(n, _) => name == n
               case _              => throw new IllegalArgumentException("must be selector")
             }
           )(0)
-          outBuffer.addOne(Application(sel, List(in)))
-          termPos += 1 // for application
+          program.stmts.addOne(Application(sel, List(in)))
         }
         case l: Literal => {
-          outBuffer.addOne(TheoryMacro(l.toString()))
-          termPos += 1 // for theory macro
+          program.stmts.addOne(TheoryMacro(l.toString()))
         }
         case OperatorApplication(op, operands) => {
-          termPos += 1 // for prepending application
           val operandRefs = new ListBuffer[Ref]()
+          val appRef = Ref(program.stmts.length)
+          program.stmts.addOne(Application(Ref(appRef.loc + 1), operandRefs.toList))
+          program.stmts.addOne(TheoryMacro(op.toString()))
 
           operands.foreach { x =>
-            val e = exprToTerm(x, in, selectors, termPos)
-            outBuffer.addAll(e.stmts)
-            operandRefs.addOne(Ref(termPos))
-            termPos += e.stmts.length
-            e
+            operandRefs.addOne(Ref(program.stmts.length))
+            exprToTerm(x, in, selectors)
           }
 
-          outBuffer.addOne(TheoryMacro(op.toString()))
-          outBuffer.prepend(Application(Ref(termPos), operandRefs.toList))
-          termPos += 1 // for theory macro
+          program.stmts.update(appRef.loc, Application(Ref(appRef.loc + 1), operandRefs.toList))
         }
 
         case _ => throw new IllegalArgumentException("not implemented yet")
       }
-
-      val out = new Program(outBuffer.toArray)
-      out
     }
 
-    // add init, next and spec
-    var initPos = 4 + selectorsTerm.length
-    val init = Ref(initPos)
-    val tmpInitTerm = new ArrayBuffer[Instruction]()
-    val initComponents = new ListBuffer[Ref]()
-    tmpInitTerm.addOne(
-      UserMacro(
-        m.id.name + "_i",
-        Ref(1),
-        Ref(init.loc + 2),
-        List(Ref(init.loc + 1))
-      )
-    )
-    tmpInitTerm.addOne(FunctionParameter("in", Ref(2)))
-    tmpInitTerm.addOne(
-      Application(Ref(2), initComponents.toList)
-    ) // PLACEHOLDER, update later
-    initPos += 3; // for prepending constructor application (+ user macro and function param above)
-    selectorRefs.map(r => term(r.loc)).zipWithIndex.foreach {
-      case (s: Selector, i: Int) => {
-        // find the assignment
-        m.init match {
-          case Some(InitDecl(BlockStmt(_, stmts))) => {
-            val flat: List[(Lhs, Expr)] =
-              stmts.foldLeft(List[(Lhs, Expr)]())((acc, p) =>
-                p match {
-                  case AssignStmt(lhss, rhss) => {
-                    acc ++ lhss.zip(rhss)
-                  }
-                  case _ =>
-                    throw new IllegalArgumentException("must be an assignment")
-                }
-              )
-            val found = flat.filter(p => p._1.ident.name == s.name)
-            if (found.length > 0) {
-              val e = exprToTerm(
-                found(0)._2,
-                Ref(init.loc + 1),
-                selectorRefs.toList,
-                initPos
-              )
-              tmpInitTerm.addAll(e.stmts)
-              initComponents.addOne(Ref(initPos))
-              initPos += e.stmts.length
-            } else {
-              tmpInitTerm
-                .addOne(Application(selectorRefs(i), List(Ref(init.loc + 1))))
-              initComponents.addOne(Ref(initPos))
-              initPos += 1
-            }
-          }
-          case None => {
-            tmpInitTerm
-              .addOne(Application(selectorRefs(i), List(Ref(init.loc + 1))))
-            initComponents.addOne(Ref(initPos))
-            initPos += 1
-          }
-          case _ => throw new IllegalArgumentException("must be a block stmt")
+    def typeUseToTerm(t: Type) : Ref = {
+      t match {
+        case UninterpretedType(name) => typeLocation.getOrElseUpdate(name.name, {program.stmts.addOne(UserSort(name.name)); Ref(program.stmts.length - 1)})
+        case BooleanType()           => typeLocation.getOrElseUpdate("Bool", {program.stmts.addOne(TheorySort("Bool")); Ref(program.stmts.length - 1)})
+        case IntegerType()           => typeLocation.getOrElseUpdate("Int", {program.stmts.addOne(TheorySort("Int")); Ref(program.stmts.length - 1)})
+        case StringType()            => typeLocation.getOrElseUpdate("String", {program.stmts.addOne(TheorySort("String")); Ref(program.stmts.length - 1)})
+        case BitVectorType(width) => {
+          typeLocation.getOrElseUpdate("String", {program.stmts.addOne(TheorySort("_ BitVec", List(Ref(1)))); program.stmts.addOne(Numeral(width)); Ref(program.stmts.length - 2)})
         }
+        case _ =>
+          throw new IllegalArgumentException(s"type not yet supported: ${t}")
       }
-      case (_, _) =>
-        throw new IllegalArgumentException("must be (s : Selector, i: Int)")
     }
-    tmpInitTerm.update(
-      2,
-      Application(Ref(2), initComponents.toList)
-    ) // apply constructor to the expressions above (FILLING-IN PLACEHOLDER)
-    term.addAll(tmpInitTerm)
 
-    var nextPos = init.loc + tmpInitTerm.length
-    val next = Ref(nextPos)
-    val tmpNextTerm = new ArrayBuffer[Instruction]()
-    val nextComponents = new ListBuffer[Ref]()
-    tmpNextTerm.addOne(
-      UserMacro(
-        m.id.name + "_n",
-        Ref(1),
-        Ref(next.loc + 2),
-        List(Ref(next.loc + 1))
-      )
-    )
-    tmpNextTerm.addOne(FunctionParameter("in", Ref(2)))
-    tmpNextTerm.addOne(
-      Application(Ref(2), nextComponents.toList)
-    ) // PLACEHOLDER, update later
-    nextPos += 3; // for prepending constructor application (+ user macro and function param above)
-    selectorRefs.map(r => term(r.loc)).zipWithIndex.foreach {
-      case (s: Selector, i: Int) => {
-        // find the assignment
-        m.next match {
-          case Some(NextDecl(BlockStmt(_, stmts))) => {
-            val flat: List[(Lhs, Expr)] =
-              stmts.foldLeft(List[(Lhs, Expr)]())((acc, p) =>
-                p match {
-                  case AssignStmt(lhss, rhss) => {
-                    acc ++ lhss.zip(rhss)
-                  }
-                  case _ =>
-                    throw new IllegalArgumentException("must be an assignment")
-                }
-              )
-            val found = flat.filter(p => p._1.ident.name == s.name)
-            if (found.length > 0) {
-              val e = exprToTerm(
-                found(0)._2,
-                Ref(next.loc + 1),
-                selectorRefs.toList,
-                nextPos
-              )
-              tmpNextTerm.addAll(e.stmts)
-              nextComponents.addOne(Ref(nextPos))
-              nextPos += e.stmts.length
-            } else {
-              tmpNextTerm
-                .addOne(Application(selectorRefs(i), List(Ref(next.loc + 1))))
-              nextComponents.addOne(Ref(nextPos))
-              nextPos += 1
-            }
-          }
-          case None => {
-            tmpNextTerm
-              .addOne(Application(selectorRefs(i), List(Ref(next.loc + 1))))
-            nextComponents.addOne(Ref(nextPos))
-            nextPos += 1
-          }
-          case _ => throw new IllegalArgumentException("must be a block stmt")
-        }
-      }
-      case (_, _) =>
-        throw new IllegalArgumentException("must be (s : Selector, i: Int)")
-    }
-    tmpNextTerm.update(
-      2,
-      Application(Ref(2), nextComponents.toList)
-    ) // apply constructor to the expressions above (FILLING-IN PLACEHOLDER)
-    term.addAll(tmpNextTerm)
+    def varDeclToTerm(v: (Identifier, Type)) = {
+      val loc = program.stmts.length
+      program.stmts.addOne(Selector(v._1.name, Ref(-1))) // placegolder
+      val placeholder = typeUseToTerm(v._2)
+      program.stmts.update(loc, Selector(v._1.name, placeholder))
+    } 
 
-    var specPos = next.loc + tmpNextTerm.length
-    val spec = Ref(specPos)
-    val tmpSpecTerm = new ListBuffer[Instruction]()
-    val specComponents = new ListBuffer[Ref]()
-    tmpSpecTerm.addOne(
-      UserMacro(
-        m.id.name + "_s",
-        Ref(3),
-        Ref(spec.loc + 2),
-        List(Ref(spec.loc + 1))
-      )
-    )
-    tmpSpecTerm.addOne(FunctionParameter("in", Ref(2)))
-    specPos += 2
-    if (m.properties.length > 1) {
-      tmpSpecTerm.addOne(
-        Application(Ref(spec.loc + 3), specComponents.toList)
-      ) // PLACEHOLDER
-      specPos += 1
-      tmpSpecTerm.addOne(TheoryMacro("and"))
-      specPos += 1
-      m.properties.foreach { d =>
-        val e =
-          exprToTerm(d.expr, Ref(spec.loc + 1), selectorRefs.toList, specPos)
-        specComponents.addOne(Ref(specPos))
-        tmpSpecTerm.addAll(e.stmts)
-        specPos += e.stmts.length
-      }
-      tmpSpecTerm.update(
-        2,
-        Application(Ref(spec.loc + 3), specComponents.toList)
-      ) // UPDATING PLACEHOLDER
-    } else if (m.properties.length == 1) {
-      val e = exprToTerm(
-        m.properties(0).expr,
-        Ref(spec.loc + 1),
-        selectorRefs.toList,
-        spec.loc + 2
-      )
-      tmpSpecTerm.addAll(e.stmts)
-    } else {
-      tmpSpecTerm.addOne(TheoryMacro("true"))
-    }
-    term.addAll(tmpSpecTerm)
-    term.update(0, core.Module(m.id.name, Ref(1), init, next, spec))
-
-    val program = new Program(term.toArray)
+    // End helper function definitions and return the middle.core program we built
     program
   }
 }

@@ -2,6 +2,7 @@ package middle.core
 
 import org.junit.Test
 import org.junit.Assert._
+import scala.collection.mutable.ArrayBuffer
 
 import interface.out.smt.{getSmtTermString}
 
@@ -15,15 +16,15 @@ class TestRewrite {
     val plus = TheoryMacro("+") // 3
     val integer = TheorySort("Int") // 4
 
-    val f = new Program(Array(head, body, arg, plus, integer))
+    val f = new Program(ArrayBuffer(head, body, arg, plus, integer), 0)
 
     // call it
-    val one = new Program(Array(TheoryMacro("1")))
-    val fone = f(one)
+    val one = new Program(ArrayBuffer(TheoryMacro("1")), 0)
+    f(one)
 
-    val inlined = rewrite.inlineApplication(fone, 0)
+    val inlined = rewrite.inlineApplication(f, 0)
 
-    assert(fone.toString != inlined.toString(), inlined)
+    assert(f.toString != inlined.toString(), inlined)
 
     val answerterm = "(+ 1 1)"
     assert(
@@ -40,11 +41,11 @@ class TestRewrite {
     val plus = TheoryMacro("+") // 3
     val integer = TheorySort("Int") // 4
 
-    val f = new Program(Array(head, body, arg, plus, integer))
-    val one = new Program(Array(TheoryMacro("1")))
-    val fone = f(one)
+    val f = new Program(ArrayBuffer(head, body, arg, plus, integer), 0)
+    val one = new Program(ArrayBuffer(TheoryMacro("1")), 0)
+    f(one)
 
-    val leted = rewrite.letify(fone, "test")
+    val leted = rewrite.letify(f, "test")
 
     val answerterm = "(f 1)"
     assert(
@@ -53,7 +54,7 @@ class TestRewrite {
     )
 
     assert(
-      leted.stmts.length == fone.stmts.length + 2,
+      leted.stmts.length == f.stmts.length + 2,
       s"${leted}\n${getSmtTermString(leted)}"
     )
   }
@@ -66,18 +67,19 @@ class TestRewrite {
     val plus = TheoryMacro("+") // 3
     val integer = TheorySort("Int") // 4
 
-    val f = new Program(Array(head, body, arg, plus, integer))
+    val f = new Program(ArrayBuffer(head, body, arg, plus, integer), 0)
 
     val yplusy = new Program(
-      Array(
+      ArrayBuffer(
         Application(Ref(1), List(Ref(2), Ref(2))),
         TheoryMacro("+"),
         UserFunction("y", Ref(3)),
         TheorySort("Int")
-      )
+      ),
+      0
     )
-    val fapp = f(yplusy)
-    val inlined = rewrite.inlineApplication(fapp, 0)
+    f(yplusy)
+    val inlined = rewrite.inlineApplication(f, 0)
 
     rewrite.reduceDuplicates(inlined)
 
@@ -96,18 +98,19 @@ class TestRewrite {
     val plus = TheoryMacro("+") // 3
     val integer = TheorySort("Int") // 4
 
-    val f = new Program(Array(head, body, arg, plus, integer))
+    val f = new Program(ArrayBuffer(head, body, arg, plus, integer), 0)
 
     val yplusy = new Program(
-      Array(
+      ArrayBuffer(
         Application(Ref(1), List(Ref(2), Ref(2))),
         TheoryMacro("+"),
         UserFunction("y", Ref(3)),
         TheorySort("Int")
-      )
+      ),
+      0
     )
-    val fapp = f(yplusy)
-    val inlined = rewrite.inlineApplication(fapp, 0)
+    f(yplusy)
+    val inlined = rewrite.inlineApplication(f, 0)
 
     rewrite.reduceDuplicates(inlined)
 
@@ -132,18 +135,19 @@ class TestRewrite {
     val plus = TheoryMacro("+") // 3
     val integer = TheorySort("Int") // 4
 
-    val f = new Program(Array(head, body, arg, plus, integer))
+    val f = new Program(ArrayBuffer(head, body, arg, plus, integer), 0)
 
     val yplusy = new Program(
-      Array(
+      ArrayBuffer(
         Application(Ref(1), List(Ref(2), Ref(2))),
         TheoryMacro("+"),
         UserFunction("y", Ref(3)),
         TheorySort("Int")
-      )
+      ),
+      0
     )
-    val fapp = f(yplusy)
-    val inlined = rewrite.inlineApplication(fapp, 0)
+    f(yplusy)
+    val inlined = rewrite.inlineApplication(f, 0)
 
     rewrite.reduceDuplicates(inlined)
 

@@ -98,20 +98,17 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
   lazy val OpNot = "!"
   lazy val OpMinus = "-"
   lazy val OpPrime = "'"
-  lazy val KwProcedure = "procedure"
   lazy val KwBoolean = "boolean"
   lazy val KwInteger = "integer"
   lazy val KwString = "string"
   lazy val KwEnum = "enum"
   lazy val KwRecord = "record"
-  lazy val KwReturns = "returns"
   lazy val KwAssume = "assume"
   lazy val KwAssert = "assert"
   lazy val KwHavoc = "havoc"
   lazy val KwVar = "var"
   lazy val KwSharedVar = "sharedvar"
   lazy val KwConst = "const"
-  lazy val KwCall = "call"
   lazy val KwIf = "if"
   lazy val KwThen = "then"
   lazy val KwElse = "else"
@@ -122,19 +119,16 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
   lazy val KwInit = "init"
   lazy val KwNext = "next"
   lazy val KwModule = "module"
-  lazy val KwLambda = "lambda"
   lazy val KwFunction = "function"
   lazy val KwControl = "control"
   lazy val KwForall = "forall"
   lazy val KwExists = "exists"
   lazy val KwSynthesis = "synthesis"
-  lazy val KwRequires = "requires"
   lazy val KwDefine = "define"
-  lazy val KwEnsures = "ensures"
   lazy val KwInvariant = "invariant"
   lazy val KwProperty = "property"
   lazy val KwDefineAxiom = "axiom"
-  lazy val KwModifies = "modifies"
+  lazy val KwEnsures = "ensures"
 
   lexical.delimiters ++= List(
     "(",
@@ -210,17 +204,14 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
     "false",
     "true",
     "bv",
-    KwProcedure,
     KwBoolean,
     KwInteger,
     KwString,
-    KwReturns,
     KwAssume,
     KwAssert,
     KwSharedVar,
     KwVar,
     KwHavoc,
-    KwCall,
     KwIf,
     KwThen,
     KwElse,
@@ -237,16 +228,13 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
     KwControl,
     KwInit,
     KwNext,
-    KwLambda,
-    KwModifies,
     KwProperty,
     KwDefineAxiom,
     KwForall,
     KwExists,
     KwSynthesis,
-    KwRequires,
-    KwEnsures,
-    KwInvariant
+    KwInvariant,
+    KwEnsures
   )
 
   lazy val ast_binary: Expr ~ String ~ Expr => Expr = {
@@ -607,8 +595,14 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
     }
   }
 
+  lazy val ModuleInstanceTypeParser: PackratParser[ModuleInstanceType] = positioned(
+    IdParser ^^ {
+      case id => ModuleInstanceType(id)
+    }
+  )
+
   lazy val TypeParser: PackratParser[Type] = positioned {
-    MapTypeParser | ArrayTypeParser | EnumTypeParser | TupleTypeParser | RecordTypeParser | ExternalTypeParser | SynonymTypeParser | PrimitiveTypeParser
+    MapTypeParser | ArrayTypeParser | EnumTypeParser | TupleTypeParser | RecordTypeParser | ExternalTypeParser | SynonymTypeParser | PrimitiveTypeParser | ModuleInstanceTypeParser
   }
 
   lazy val IdTypeParser: PackratParser[(Identifier, Type)] =
@@ -639,8 +633,7 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
         case id ~ rOp ~ rOps =>
           LhsRecordSelect(id, (rOp.id) :: (rOps.map(_.id)))
       } |
-      IdParser <~ OpPrime ^^ { case id => LhsId(id) } |
-      IdParser ^^ { case id            => LhsId(id) }
+      IdParser <~ OpPrime ^^ { case id => LhsId(id) }
   }
 
   lazy val LhsListParser: PackratParser[List[Lhs]] =
@@ -666,26 +659,11 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
   lazy val StatementParser: PackratParser[Statement] = positioned {
     KwAssert ~> ExprParser <~ ";" ^^ { case e   => AssertStmt(e, None) } |
       KwAssume ~> ExprParser <~ ";" ^^ { case e => AssumeStmt(e, None) } |
-      KwHavoc ~> IdParser <~ ";" ^^ { case id   => HavocStmt(HavocableId(id)) } |
+      KwHavoc ~> IdParser <~ ";" ^^ { case id   => HavocStmt(id) } |
       LhsParser ~ rep("," ~> LhsParser) ~ "=" ~ ExprParser ~ rep(
         "," ~> ExprParser
       ) <~ ";" ^^ {
         case l ~ ls ~ "=" ~ r ~ rs => AssignStmt(l :: ls, r :: rs)
-      } |
-      KwCall ~> IdParser ~ ExprListParser <~ ";" ^^ {
-        case id ~ args =>
-          ProcedureCallStmt(id, List.empty, args, None)
-      } |
-      KwCall ~> LhsListParser ~ ("=" ~> IdParser) ~ ExprListParser <~ ";" ^^ {
-        case lhss ~ id ~ args => ProcedureCallStmt(id, lhss, args, None)
-      } |
-      KwCall ~> IdParser ~ "." ~ IdParser ~ ExprListParser <~ ";" ^^ {
-        case instanceId ~ "." ~ procId ~ args =>
-          ProcedureCallStmt(procId, List.empty, args, Some(instanceId))
-      } |
-      KwCall ~> LhsListParser ~ ("=" ~> IdParser) ~ "." ~ IdParser ~ ExprListParser <~ ";" ^^ {
-        case lhss ~ instanceId ~ "." ~ procId ~ args =>
-          ProcedureCallStmt(procId, lhss, args, Some(instanceId))
       } |
       KwNext ~ "(" ~> IdParser <~ ")" ~ ";" ^^ {
         case id =>
@@ -738,93 +716,6 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
         case arg ~ args =>
           arg :: args
       }
-
-  lazy val RequiresExprsParser: PackratParser[List[ProcedureRequiresExpr]] = {
-    KwRequires ~> ExprParser <~ ";" ^^ {
-      case e =>
-        List(ProcedureRequiresExpr(e))
-    }
-  }
-
-  lazy val EnsuresExprsParser: PackratParser[List[ProcedureEnsuresExpr]] = {
-    KwEnsures ~> ExprParser <~ ";" ^^ {
-      case e =>
-        List(ProcedureEnsuresExpr(e))
-    }
-  }
-
-  lazy val ModifiesExprsParser: PackratParser[List[ProcedureModifiesExpr]] = {
-    KwModifies ~> IdParser ~ rep("," ~> IdParser) <~ ";" ^^ {
-      case id ~ ids => {
-        (id :: ids).map(i => ProcedureModifiesExpr(ModifiableId(i)))
-      }
-    }
-  }
-
-  lazy val ProcedureAnnotationListParser: PackratParser[List[Identifier]] = {
-    "[" ~> IdListParser <~ "]"
-  }
-
-  lazy val ProcedureVerifExpr =
-    RequiresExprsParser | EnsuresExprsParser | ModifiesExprsParser
-
-  def collectRequires(vs: List[ProcedureVerificationExpr]): List[Expr] =
-    vs.collect { case e: ProcedureRequiresExpr => e.expr }
-
-  def collectEnsures(vs: List[ProcedureVerificationExpr]): List[Expr] =
-    vs.collect { case e: ProcedureEnsuresExpr => e.expr }
-
-  def collectModifies(
-    vs: List[ProcedureVerificationExpr]
-  ): List[ModifiableEntity] =
-    vs.collect { case e: ProcedureModifiesExpr => e.modifiable }
-
-  lazy val ProcedureDeclParser: PackratParser[ProcedureDecl] = positioned {
-    KwProcedure ~> ProcedureAnnotationListParser.? ~ IdParser ~ IdTypeListParser ~ (KwReturns ~> IdTypeListParser) ~
-      rep(ProcedureVerifExpr) ~ BlkStmtParser ^^ {
-      case annotOpt ~ id ~ args ~ outs ~ verifExprs ~ body =>
-        val annotations = annotOpt match {
-          case Some(ids) => ProcedureAnnotations(ids.toSet)
-          case None      => ProcedureAnnotations(Set.empty)
-        }
-        val verifExprList = verifExprs.flatMap(v => v)
-        val requiresList = collectRequires(verifExprList)
-        val ensuresList = collectEnsures(verifExprList)
-        val modifiesList = collectModifies(verifExprList)
-        ProcedureDecl(
-          id,
-          ProcedureSig(args, outs),
-          body,
-          requiresList,
-          ensuresList,
-          modifiesList.toSet,
-          annotations
-        )
-    } |
-      // procedure with no return value
-      KwProcedure ~> ProcedureAnnotationListParser.? ~ IdParser ~ IdTypeListParser ~ rep(
-        ProcedureVerifExpr
-      ) ~ BlkStmtParser ^^ {
-        case annotOpt ~ id ~ args ~ verifExprs ~ body =>
-          val annotations = annotOpt match {
-            case Some(ids) => ProcedureAnnotations(ids.toSet)
-            case None      => ProcedureAnnotations(Set.empty)
-          }
-          val verifExprList = verifExprs.flatMap(v => v)
-          val requiresList = collectRequires(verifExprList)
-          val ensuresList = collectEnsures(verifExprList)
-          val modifiesList = collectModifies(verifExprList)
-          ProcedureDecl(
-            id,
-            ProcedureSig(args, List.empty),
-            body,
-            requiresList,
-            ensuresList,
-            modifiesList.toSet,
-            annotations
-          )
-      }
-  }
 
   lazy val TypeDeclParser: PackratParser[TypeDecl] = positioned {
     KwType ~> IdParser ~ ("=" ~> TypeParser) <~ ";" ^^ {
@@ -981,7 +872,7 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
         ModuleTypesImportDeclParser | ModuleFuncsImportDeclParser | ModuleConstsImportDeclParser |
         SynthFuncDeclParser | DefineDeclParser | ModuleDefsImportDeclParser |
         VarsDeclParser | InputsDeclParser | OutputsDeclParser | SharedVarsDeclParser |
-        ConstLitDeclParser | ConstDeclParser | ProcedureDeclParser |
+        ConstLitDeclParser | ConstDeclParser |
         InitDeclParser | NextDeclParser | SpecDeclParser | AxiomDeclParser
     )
 
@@ -1037,9 +928,9 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
   lazy val ModuleParser: PackratParser[Module] = positioned {
     KwModule ~> IdParser ~ ("{" ~> rep(DeclParser) ~ (CmdBlockParser.?) <~ "}") ^^ {
       case id ~ (decls ~ Some(cs)) =>
-        Module(id, decls, cs, Annotation.default)
+        Module(id, decls, cs)
       case id ~ (decls ~ None) =>
-        Module(id, decls, List.empty, Annotation.default)
+        Module(id, decls, List.empty)
     }
   }
 

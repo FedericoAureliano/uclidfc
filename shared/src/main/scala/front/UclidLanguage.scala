@@ -133,8 +133,7 @@ sealed trait Operator extends ASTNode {
   def isPolymorphic = false
 }
 
-// This is the polymorphic operator type. Typerchecker.rewrite converts these operators
-// to either the integer or bitvector versions.
+// This is the polymorphic operator type. They need to be re-written to the correct type
 sealed abstract class PolymorphicOperator extends Operator {
   override def isPolymorphic = true
   override def fixity = Operator.INFIX
@@ -508,7 +507,6 @@ case class ArrayUpdate(indices: List[Expr], value: Expr) extends Operator {
   override def fixity = Operator.POSTFIX
 }
 
-// Federico: I want to remove this
 case class GetNextValueOp() extends Operator {
   override def toString = "'"
   override def fixity = Operator.POSTFIX
@@ -529,12 +527,7 @@ case class Identifier(name: String) extends Expr {
   override def toString = name.toString
 }
 
-// case class ExternalIdentifier(moduleId: Identifier, id: Identifier)
-//     extends Expr {
-//   override def toString = moduleId.toString + "::" + id.toString
-// }
 sealed abstract class Literal extends Expr {
-
   /** All literals are constants. */
   override def isConstant = true
   def isNumeric = false
@@ -596,7 +589,6 @@ case class ConstArray(exp: Expr, typ: Type) extends Expr {
 
 case class Tuple(values: List[Expr]) extends Expr {
   override def toString = "{" + Utils.join(values.map(_.toString), ", ") + "}"
-  // FIXME: We should not have temporal values inside of a tuple.
 }
 
 //for symbols interpreted by underlying Theory solvers
@@ -624,7 +616,7 @@ case class OperatorApplication(op: Operator, operands: List[Expr])
     }
 }
 
-//for uninterpreted function symbols or anonymous functions defined by Lambda expressions
+//for uninterpreted function symbols
 case class FuncApplication(e: Expr, args: List[Expr]) extends Expr {
 
   override def toString =
@@ -827,14 +819,6 @@ case class MapType(inTypes: List[Type], outType: Type) extends Type {
   override def isMap = true
 }
 
-case class ProcedureType(inTypes: List[Type], outTypes: List[Type])
-    extends Type {
-
-  override def toString =
-    "procedure (" + Utils.join(inTypes.map(_.toString), ", ") + ") returns " +
-      "(" + Utils.join(outTypes.map(_.toString), ", ") + ")"
-}
-
 case class ArrayType(inTypes: List[Type], outType: Type) extends Type {
 
   override def toString =
@@ -855,18 +839,8 @@ case class ExternalType(moduleId: Identifier, typeId: Identifier) extends Type {
   override def toString = moduleId.toString + "." + typeId.toString
 }
 
-case class ModuleInstanceType(args: List[(Identifier, Option[Type])])
-    extends Type {
-  lazy val argMap = args.map(a => (a._1 -> a._2)).toMap
-
-  def argToString(arg: (Identifier, Option[Type])): String = {
-    val id = arg._1
-    arg._2 match {
-      case Some(t) => id.toString + " : (" + t.toString + ")"
-      case None    => id.toString + " : ()"
-    }
-  }
-  override def toString = "(" + Utils.join(args.map(argToString(_)), ", ") + ")"
+case class ModuleInstanceType(id : Identifier) extends Type {
+  override def toString = id.toString
 }
 
 case class ModuleType(
@@ -876,8 +850,7 @@ case class ModuleType(
   constLits: List[(Identifier, NumericLit)],
   constants: List[(Identifier, Type)],
   variables: List[(Identifier, Type)],
-  functions: List[(Identifier, FunctionSig)],
-  instances: List[(Identifier, Type)]
+  functions: List[(Identifier, FunctionSig)]
 ) extends Type {
 
   def argToString(arg: (Identifier, Type)): String =
@@ -911,13 +884,10 @@ case class ModuleType(
   lazy val funcMap: Map[Identifier, FunctionSig] =
     functions.map(a => (a._1 -> a._2)).toMap
 
-  lazy val instanceMap: Map[Identifier, Type] =
-    instances.map(a => (a._1 -> a._2)).toMap
-
   lazy val typeMap: Map[Identifier, Type] =
     inputMap ++ outputMap ++ constantMap ++ varMap ++ funcMap.map(f =>
       (f._1 -> f._2.typ)
-    ) ++ instanceMap
+    )
 
   lazy val externalTypeMap: Map[Identifier, Type] =
     constantMap ++ funcMap.map(f => (f._1 -> f._2.typ)) ++ constLitMap.map(f =>
@@ -931,29 +901,6 @@ case class ModuleType(
     "inputs (" + argsToString(inputs) + ") outputs (" + argsToString(
       outputs
     ) + ")"
-}
-
-/** Havocable entities. */
-sealed abstract class HavocableEntity extends ASTNode
-
-case class HavocableId(id: Identifier) extends HavocableEntity {
-  override def toString = id.toString()
-}
-
-case class HavocableNextId(id: Identifier) extends HavocableEntity {
-  override def toString = id.toString()
-}
-
-case class HavocableFreshLit(f: FreshLit) extends HavocableEntity {
-  override def toString = f.toString()
-}
-
-/* Introduced as an intermediate representation to denote havoc'ing
- * specific state variables within an instance.
- */
-case class HavocableInstanceId(opapp: OperatorApplication)
-    extends HavocableEntity {
-  override def toString = opapp.toString()
 }
 
 /** Statements * */
@@ -985,7 +932,7 @@ case class AssumeStmt(e: Expr, id: Option[Identifier]) extends Statement {
   override val hasInternalCall = false
 }
 
-case class HavocStmt(havocable: HavocableEntity) extends Statement {
+case class HavocStmt(havocable: Identifier) extends Statement {
 
   override def toLines = List(
     "havoc " + havocable.toString() + "; // " + position.toString
@@ -1090,27 +1037,6 @@ case class CaseStmt(body: List[(Expr, Statement)]) extends Statement {
   override val hasInternalCall = body.exists(b => b._2.hasInternalCall)
 }
 
-case class ProcedureCallStmt(
-  id: Identifier,
-  callLhss: List[Lhs],
-  args: List[Expr],
-  instanceId: Option[Identifier],
-  moduleId: Option[Identifier] = None
-) extends Statement {
-
-  override def toLines = List(
-    "call (" +
-      Utils
-        .join(callLhss.map(_.toString), ", ") + ") = " + (if (instanceId.isEmpty)
-                                                            ""
-                                                          else
-                                                            (instanceId.get.name + ".")) + id + "(" +
-      Utils.join(args.map(_.toString), ", ") + ") // " + id.position.toString
-  )
-  override val hasCall = true
-  override val hasInternalCall = instanceId.isEmpty
-}
-
 case class ModuleCallStmt(id: Identifier) extends Statement {
   override def toLines = List("next (" + id.toString + ")")
   override val hasCall = false
@@ -1134,19 +1060,6 @@ sealed abstract class IOSig(
   lazy val printfn = { (a: T) => a._1.toString + ": " + a._2 }
 }
 
-/** Procedure signatures.
-  */
-case class ProcedureSig(
-  inParams: List[(Identifier, Type)],
-  outParams: List[(Identifier, Type)]
-) extends IOSig(inParams, outParams) {
-
-  override def toString =
-    "(" + Utils.join(inParams.map(printfn(_)), ", ") + ")" +
-      " returns " + "(" + Utils.join(outParams.map(printfn(_)), ", ") + ")"
-  lazy val typ = ProcedureType(inParams.map(_._2), outParams.map(_._2))
-}
-
 /** Function signatures.
   */
 case class FunctionSig(args: List[(Identifier, Type)], retType: Type)
@@ -1162,155 +1075,6 @@ case class FunctionSig(args: List[(Identifier, Type)], retType: Type)
 sealed abstract class Decl extends ASTNode {
   def declNames: List[Identifier]
   // val hashId : Int
-}
-
-case class InstanceDecl(
-  instanceId: Identifier,
-  moduleId: Identifier,
-  arguments: List[(Identifier, Option[Expr])],
-  instType: Option[ModuleInstanceType],
-  modType: Option[ModuleType]
-) extends Decl {
-
-  lazy val argMap = arguments.foldLeft(Map.empty[Identifier, Expr]) {
-    (acc, arg) =>
-      arg._2 match {
-        case Some(expr) => acc + (arg._1 -> expr)
-        case None       => acc
-      }
-  }
-
-  lazy val inputMap = modType.get.inputs.map { p =>
-    argMap.get(p._1) match {
-      case Some(expr) => Some(p._1, p._2, expr)
-      case None       => None
-    }
-  }.flatten
-
-  lazy val sharedVarMap = modType.get.sharedVars.map { p =>
-    argMap.get(p._1) match {
-      case Some(expr) => Some(p._1, p._2, expr)
-      case None       => None
-    }
-  }.flatten
-
-  lazy val outputMap = modType.get.outputs.map { p =>
-    argMap.get(p._1) match {
-      case Some(expr) => Some(p._1, p._2, expr)
-      case None       => None
-    }
-  }.flatten
-
-  def argToString(arg: (Identifier, Option[Expr])) = arg._2 match {
-    case Some(e) => arg._1.toString + ":" + e.toString
-    case None    => arg._1.toString + ": ()"
-  }
-  lazy val argsToString = Utils.join(arguments.map(argToString(_)), ", ")
-
-  override def toString =
-    "instance " + instanceId.toString + " : " + moduleId.toString + "(" + argsToString + "); // " + position.toString
-  override def declNames = List(instanceId)
-
-  def instanceType: Type = instType match {
-    case None        => UndefinedType()
-    case Some(instT) => instT
-  }
-
-  def moduleType: Type = modType match {
-    case None       => UndefinedType()
-    case Some(modT) => modT
-  }
-}
-
-/* Modifiable entities. */
-/* All modifiable entities found by the parser can only be ModifiableId */
-sealed abstract class ModifiableEntity extends ASTNode {
-  val expr: Expr
-}
-
-case class ModifiableId(id: Identifier) extends ModifiableEntity {
-  override val expr = id
-  override def toString = id.toString()
-}
-
-sealed abstract class ProcedureVerificationExpr extends ASTNode {
-  val expr: Expr
-}
-
-case class ProcedureRequiresExpr(e: Expr) extends ProcedureVerificationExpr {
-  override val expr = e
-  override val toString = "requires " + e.toString()
-}
-
-case class ProcedureEnsuresExpr(e: Expr) extends ProcedureVerificationExpr {
-  override val expr = e
-  override val toString = "ensures " + e.toString()
-}
-
-case class ProcedureModifiesExpr(modifiable: ModifiableEntity)
-    extends ProcedureVerificationExpr {
-  override val expr = modifiable.expr
-  override val toString = "modifies " + modifiable.toString
-}
-
-case class ProcedureAnnotations(ids: Set[Identifier]) extends ASTNode {
-
-  override val toString = {
-    if (ids.size > 0) {
-      "[" + Utils.join(ids.map(id => id.toString()).toList, ", ") + "] "
-    } else {
-      ""
-    }
-  }
-}
-
-case class ProcedureDecl(
-  id: Identifier,
-  sig: ProcedureSig,
-  body: Statement,
-  requires: List[Expr],
-  ensures: List[Expr],
-  modifies: Set[ModifiableEntity],
-  annotations: ProcedureAnnotations
-) extends Decl {
-
-  override def toString = {
-    val modifiesString = if (modifies.size > 0) {
-      PrettyPrinter.indent(2) + "modifies " + Utils.join(
-        modifies.map(_.toString).toList,
-        ", "
-      ) + ";\n"
-    } else { "" }
-    "procedure " + annotations.toString + id + sig + "\n" +
-      modifiesString +
-      Utils.join(
-        requires.map(
-          PrettyPrinter.indent(2) + "requires " + _.toString + ";\n"
-        ),
-        ""
-      ) +
-      Utils.join(
-        ensures.map(PrettyPrinter.indent(2) + "ensures " + _.toString + "; \n"),
-        ""
-      ) +
-      Utils.join(body.toLines.map(PrettyPrinter.indent(2) + _), "\n")
-  }
-  override def declNames = List(id)
-
-  lazy val shouldInline = {
-    if (annotations.ids.contains(Identifier("noinline"))) {
-      if (ensures.size == 0)
-        println(
-          "Warning: noinlining procedure " + id + " even though it has no ensures statement"
-        )
-      if (annotations.ids.contains(Identifier("inline")))
-        throw new Utils.RuntimeError(
-          "Procedure " + id + " has both inline and noinline annotations."
-        )
-      false;
-    } else
-      true;
-  }
 }
 
 case class TypeDecl(id: Identifier, typ: Type) extends Decl {
@@ -1511,27 +1275,6 @@ case class GenericProofCommand(
   argObj: Option[Identifier]
 ) extends ProofCommand {
 
-  // def getContext(context : Scope) : Scope = {
-  //   argObj match {
-  //     case Some(arg) =>
-  //       try {
-  //         val mod = context.module.get
-  //         val verifCmd = context.get(arg).get.asInstanceOf[Scope.VerifResultVar].cmd
-  //         if (verifCmd.isVerify) {
-  //           val procName = verifCmd.args(0)._1.asInstanceOf[Identifier]
-  //           val proc = mod.procedures.find(p => p.id == procName).get
-  //           context + proc
-  //         } else {
-  //           context
-  //         }
-  //       } catch {
-  //         // if something goes wrong return context unchanged.
-  //         case _ : java.util.NoSuchElementException => context
-  //         case _ : scala.ClassCastException => context
-  //       }
-  //     case None => context
-  //   }
-  // }
   def isVerify: Boolean = name == Identifier("verify")
 
   override def toString = {
@@ -1552,84 +1295,15 @@ case class GenericProofCommand(
   }
 }
 
-sealed abstract class Annotation extends ASTNode
-
-case class InstanceVarMapAnnotation(iMap: Map[List[Identifier], Identifier])
-    extends Annotation {
-
-  lazy val rMap: Map[Identifier, String] = {
-    iMap.map(p => p._2 -> Utils.join(p._1.map(id => id.toString()), "."))
-  }
-
-  override def toString: String = {
-    val start = PrettyPrinter.indent(1) + "// instance_var_map { "
-    val lines = iMap.map(p =>
-      PrettyPrinter.indent(1) + "//   " + Utils.join(
-        p._1.map(_.toString),
-        "."
-      ) + " ::==> " + p._2.toString
-    )
-    val end = PrettyPrinter.indent(1) + "// } end_instance_var_map"
-    Utils.join(List(start) ++ lines ++ List(end), "\n") + "\n"
-  }
-}
-
-case class InstanceProcMapAnnotation(iMap: Map[List[Identifier], ProcedureDecl])
-    extends Annotation {
-
-  override def toString: String = {
-    val start = PrettyPrinter.indent(1) + "// instance_proc_map { "
-    val lines = iMap.map(p =>
-      PrettyPrinter.indent(1) + "//   " + Utils.join(
-        p._1.map(_.toString),
-        "."
-      ) + " ::==> " + p._2.toString
-    )
-    val end = PrettyPrinter.indent(1) + "// } end_instance_proc_map"
-    Utils.join(List(start) ++ lines ++ List(end), "\n") + "\n"
-  }
-}
-
-case class ExprRenameMapAnnotation(
-  renameMap_ : MutableMap[Expr, BigInt],
-  enumVarTypeMap_ : MutableMap[Identifier, Type],
-  enumTypeRangeMap_ : MutableMap[Type, (BigInt, BigInt)]
-) extends Annotation {
-  lazy val enumVarTypeMap: MutableMap[Identifier, Type] = enumVarTypeMap_
-
-  lazy val enumTypeRangeMap: MutableMap[Type, (BigInt, BigInt)] =
-    enumTypeRangeMap_
-  lazy val renameMap: MutableMap[Expr, BigInt] = renameMap_
-
-  lazy val bvSize: Int =
-    math.ceil(math.log(renameMap_.size) / math.log(2.0)).toInt + 1
-
-  override def toString: String = {
-    val start = PrettyPrinter.indent(1) + "// expr_rename_map { "
-    val lines = renameMap_.map(p =>
-      PrettyPrinter.indent(
-        1
-      ) + "//   " + (p._1.toString + " => " + p._2.toString)
-    )
-    val end = PrettyPrinter.indent(1) + "// } end_expr_rename_map"
-    Utils.join(List(start) ++ lines ++ List(end), "\n") + "\n"
-  }
-}
-
-object Annotation {
-  val default = List(InstanceVarMapAnnotation(Map.empty))
-}
-
 case class Module(
   id: Identifier,
   decls: List[Decl],
-  cmds: List[GenericProofCommand],
-  notes: List[Annotation]
+  cmds: List[GenericProofCommand]
 ) extends ASTNode {
 
   // create a new module with with the filename set.
   def withFilename(name: String): Module = {
-    val newModule = Module(id, decls, cmds, notes)
+    val newModule = Module(id, decls, cmds)
     newModule.filename = Some(name)
     return newModule
   }
@@ -1694,33 +1368,6 @@ case class Module(
       spec
   }
 
-  lazy val externalMap: Map[Identifier, ModuleExternal] =
-    (functions.map(f => (f.id -> f)) ++ (
-      constantDecls
-        .flatMap(c => c.ids.map(id => (id, c)))
-        .map(p => p._1 -> p._2)
-      )).toMap
-
-  // module procedures.
-  lazy val procedures: List[ProcedureDecl] = decls
-    .filter(_.isInstanceOf[ProcedureDecl])
-    .map(_.asInstanceOf[ProcedureDecl])
-
-  // inlineable procedures.
-  lazy val inlineableProcedures: Set[Identifier] = decls.collect {
-    case p: ProcedureDecl => p.id
-  }.toSet
-
-  // helper method for inlineableProcedures.
-  def isInlineableProcedure(id: Identifier): Boolean =
-    inlineableProcedures.contains(id)
-
-  // module instances of other modules.
-  lazy val instances: List[InstanceDecl] =
-    decls.filter(_.isInstanceOf[InstanceDecl]).map(_.asInstanceOf[InstanceDecl])
-  // set of instance names (for easy searching.)
-  lazy val instanceNames: Set[Identifier] = instances.map(_.instanceId).toSet
-
   // set of type declarations.
   lazy val typeDeclarationMap: Map[Identifier, Type] = decls
     .filter(_.isInstanceOf[TypeDecl])
@@ -1736,8 +1383,7 @@ case class Module(
     constLits,
     constants,
     vars,
-    functions.map(c => (c.id, c.sig)),
-    instances.map(inst => (inst.instanceId, inst.moduleType))
+    functions.map(c => (c.id, c.sig))
   )
 
   // the init block.
@@ -1759,38 +1405,6 @@ case class Module(
     decls.filter(_.isInstanceOf[AxiomDecl]).map(_.asInstanceOf[AxiomDecl])
   }
 
-  // return a specific annotation.
-  def getAnnotation[T <: Annotation]()(implicit tag: ClassTag[T]): Option[T] = {
-    val matchingNotes: List[T] = notes.collect { case n: T => n }
-    if (matchingNotes.size == 0) {
-      None
-    } else {
-      Utils.assert(
-        matchingNotes.size == 1,
-        "Too many annotations of type: " + tag.toString()
-      )
-      Some(matchingNotes(0))
-    }
-  }
-
-  // replace the first occurrence of a specific annotation.
-  def withReplacedAnnotation[T <: Annotation](
-    note: T
-  )(implicit tag: ClassTag[T]): Module = {
-    val oldNoteOption = getAnnotation[T]()
-    val newNotes: List[Annotation] = oldNoteOption match {
-      case None => notes :+ note
-      case Some(_) =>
-        notes.map { n =>
-          n match {
-            case _: T => note
-            case _    => n
-          }
-        }
-    }
-    Module(id, decls, cmds, newNotes)
-  }
-
   override def toString =
     "\nmodule " + id + " {\n" +
       decls.foldLeft("") {
@@ -1802,7 +1416,5 @@ case class Module(
         case (acc, i) =>
           acc + PrettyPrinter.indent(2) + i + "\n"
       } +
-      PrettyPrinter.indent(1) + "}\n" +
-      notes.foldLeft("")((acc, i) => acc + i) +
       "}\n"
 }
