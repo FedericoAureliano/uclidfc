@@ -30,12 +30,10 @@ import front.{
   BitVectorType,
   BlockStmt,
   BooleanType,
-  CaseStmt,
   ConstArray,
   EnumType,
   Expr,
   ExternalType,
-  ForStmt,
   FuncApplication,
   HavocStmt,
   Identifier,
@@ -45,6 +43,7 @@ import front.{
   Lhs,
   Literal,
   MapType,
+  ModuleCallExpr,
   ModuleCallStmt,
   ModuleInstanceType,
   ModuleType,
@@ -58,22 +57,29 @@ import front.{
   TupleType,
   Type,
   UndefinedType,
-  UninterpretedType,
-  WhileStmt
+  UninterpretedType
 }
+import front.LhsId
 
 package object Translate {
 
-  def modelToProgram(model: List[front.Module], main: Option[String]): Program = {
+  def modelToProgram(
+    model: List[front.Module],
+    main: Option[String]
+  ): Program = {
 
     val program = new Program(ArrayBuffer[Instruction](), 0)
 
+    // point module names to the modules
     val moduleLocation = new HashMap[String, Ref]()
+    // point type name to type location
     val typeLocation = new HashMap[String, Ref]()
+    // point operator name to operator location
     val opLocation = new HashMap[String, Ref]()
-    val varLocation = new Stack[HashMap[String, Ref]]()
+    // point variable name to variable location
+    val varLocation = new HashMap[String, Ref]()
 
-    // 1. Add every module to the program. 
+    // 1. Add every module to the program.
     // 2. When we find the main module, point the head to it
     model.foreach { m =>
       if (Some(m.id.name) == main) {
@@ -88,7 +94,10 @@ package object Translate {
 
       // add placeholder for module and remember where it is
       val moduleRef = Ref(program.stmts.length)
-      program.stmts.addOne(core.Module(m.id.name, Ref(-1), Ref(-1), Ref(-1), Ref(-1)))
+      program.stmts.addOne(
+        core.Module(m.id.name, Ref(-1), Ref(-1), Ref(-1), Ref(-1))
+      )
+      moduleLocation.addOne((m.id.name, moduleRef))
 
       // add placeholder for datatype and remember where it is
       val datatypeRef = Ref(program.stmts.length)
@@ -100,37 +109,58 @@ package object Translate {
       program.stmts.addOne(Constructor(m.id.name, Ref(-1), List.empty))
 
       // spec needs Bool, so add Bool if it's not already there
-      typeLocation.getOrElseUpdate("Bool", {program.stmts.addOne(TheorySort("Bool")); Ref(program.stmts.length - 1)})
+      typeLocation.getOrElseUpdate("Bool", {
+        program.stmts.addOne(TheorySort("Bool")); Ref(program.stmts.length - 1)
+      })
 
       // create selectors and remember where they are
       val selectorRefs = new ListBuffer[Ref]()
       (m.vars ++ m.sharedVars ++ m.inputs ++ m.outputs ++ m.constants).foreach {
-        v => {
+        v =>
           selectorRefs.addOne(Ref(program.stmts.length))
           varDeclToTerm(v)
-        }
       }
 
       // update the datatype placeholder and the constructor placeholder
-      program.stmts.update(datatypeRef.loc, DataType(m.id.name + "!type", List(constructorRef)))
-      program.stmts.update(constructorRef.loc, Constructor(m.id.name, datatypeRef, selectorRefs.toList))
+      program.stmts.update(
+        datatypeRef.loc,
+        DataType(m.id.name + "!type", List(constructorRef))
+      )
+      program.stmts.update(
+        constructorRef.loc,
+        Constructor(m.id.name, datatypeRef, selectorRefs.toList)
+      )
 
       // add init and next
       val initRef = Ref(program.stmts.length)
       val initBlock = m.init match {
         case Some(InitDecl(BlockStmt(vars, stmts))) => BlockStmt(vars, stmts)
-        case Some(_) => throw new IllegalArgumentException("must be a block statement")
+        case Some(_) =>
+          throw new IllegalArgumentException("must be a block statement")
         case None => BlockStmt(List.empty, List.empty)
       }
-      parseTransitionBlock(m.id.name + "!init", initBlock, datatypeRef, constructorRef, selectorRefs.toList)
+      parseTransitionBlock(
+        m.id.name + "!init",
+        initBlock,
+        datatypeRef,
+        constructorRef,
+        selectorRefs.toList
+      )
 
       val nextRef = Ref(program.stmts.length)
       val nextBlock = m.next match {
         case Some(NextDecl(BlockStmt(vars, stmts))) => BlockStmt(vars, stmts)
-        case Some(_) => throw new IllegalArgumentException("must be a block statement")
+        case Some(_) =>
+          throw new IllegalArgumentException("must be a block statement")
         case None => BlockStmt(List.empty, List.empty)
       }
-      parseTransitionBlock(m.id.name + "!next", nextBlock, datatypeRef, constructorRef, selectorRefs.toList)
+      parseTransitionBlock(
+        m.id.name + "!next",
+        nextBlock,
+        datatypeRef,
+        constructorRef,
+        selectorRefs.toList
+      )
 
       // Add spec function
       val specRef = Ref(program.stmts.length)
@@ -144,7 +174,7 @@ package object Translate {
           List(Ref(specRef.loc + 1))
         )
       )
-      
+
       program.stmts.addOne(FunctionParameter("in", datatypeRef))
       if (m.properties.length > 1) {
         program.stmts.addOne(
@@ -152,7 +182,7 @@ package object Translate {
         ) // PLACEHOLDER
         program.stmts.addOne(TheoryMacro("and"))
         m.properties.foreach { d =>
-          specConjuncts.addOne(specRef)
+          specConjuncts.addOne(Ref(program.stmts.length))
           exprToTerm(d.expr, Ref(specRef.loc + 1), selectorRefs.toList)
         }
         program.stmts.update(
@@ -169,11 +199,20 @@ package object Translate {
         program.stmts.addOne(TheoryMacro("true"))
       }
 
-      program.stmts.update(moduleRef.loc, core.Module(m.id.name, Ref(1), initRef, nextRef, specRef))
+      program.stmts.update(
+        moduleRef.loc,
+        core.Module(m.id.name, Ref(1), initRef, nextRef, specRef)
+      )
     } // End Module to Term
 
     // define a helper function that does the work
-    def parseTransitionBlock(funcName: String, block: BlockStmt, dtRef: Ref, ctRef: Ref, selectorRefs: List[Ref]) = {
+    def parseTransitionBlock(
+      funcName: String,
+      block: BlockStmt,
+      dtRef: Ref,
+      ctRef: Ref,
+      selectorRefs: List[Ref]
+    ) = {
       val parseStartPos = program.stmts.length
       // add the macro definition with forward references we will fill in later
       program.stmts.addOne(
@@ -200,12 +239,12 @@ package object Translate {
           val flat: List[(Lhs, Expr)] =
             block.stmts.foldLeft(List[(Lhs, Expr)]())((acc, p) =>
               p match {
-                case AssignStmt(lhss, rhss) => {
-                  acc ++ lhss.zip(rhss)
-                }
+                case AssignStmt(lhss, rhss) => acc ++ lhss.zip(rhss)
+                case ModuleCallStmt(id) =>
+                  acc ++ List(Tuple2(LhsId(id), ModuleCallExpr(id)))
                 case _ =>
                   throw new IllegalArgumentException(
-                    "must be an assignment"
+                    s"statement not supported yet: ${p}"
                   )
               }
             )
@@ -221,7 +260,9 @@ package object Translate {
           } else {
             // if there is no term, then just keep whatever was in the input
             components.addOne(Ref(program.stmts.length))
-            program.stmts.addOne(Application(selectorRefs(i), List(Ref(parseStartPos + 1))))
+            program.stmts.addOne(
+              Application(selectorRefs(i), List(Ref(parseStartPos + 1)))
+            )
           }
         }
         case (_, _) =>
@@ -233,11 +274,12 @@ package object Translate {
       ) // apply constructor to the expressions above (FILLING-IN PLACEHOLDER)
     }
 
+    // we will point to the first location, so make sure you put the right thing first.
     def exprToTerm(
       expr: Expr,
       in: Ref,
       selectors: List[Ref]
-    ) : Unit = {
+    ): Unit =
       expr match {
         case Identifier(name) => {
           // find selector
@@ -255,7 +297,9 @@ package object Translate {
         case OperatorApplication(op, operands) => {
           val operandRefs = new ListBuffer[Ref]()
           val appRef = Ref(program.stmts.length)
-          program.stmts.addOne(Application(Ref(appRef.loc + 1), operandRefs.toList))
+          program.stmts.addOne(
+            Application(Ref(appRef.loc + 1), operandRefs.toList)
+          )
           program.stmts.addOne(TheoryMacro(op.toString()))
 
           operands.foreach { x =>
@@ -263,33 +307,96 @@ package object Translate {
             exprToTerm(x, in, selectors)
           }
 
-          program.stmts.update(appRef.loc, Application(Ref(appRef.loc + 1), operandRefs.toList))
+          program.stmts.update(
+            appRef.loc,
+            Application(Ref(appRef.loc + 1), operandRefs.toList)
+          )
         }
 
+        case ModuleCallExpr(id) => {
+          // find next function location
+          val nref = varLocation.get(id.name) match {
+            case Some(r) => {
+              // get the selector
+              val sl = program.stmts(r.loc).asInstanceOf[Selector]
+              // get the datatype
+              val dt = program.stmts(sl.sort.loc).asInstanceOf[DataType]
+              // get the module name
+              val mname = dt.name.substring(0, dt.name.length() - "!type".length())
+              // find the module
+              val modRef = moduleLocation(mname)
+              // return the next location
+              program.stmts(modRef.loc).asInstanceOf[core.Module].next
+            }
+            case None =>
+              throw new IllegalArgumentException(s"module not found: ${id}")
+          }
+
+          // apply the next function
+          val nextcall = Ref(program.stmts.length)
+          program.stmts.addOne(Application(nref, List.empty)) // fill in this empty list next
+
+          // find selector
+          val sel = varLocation.get(id.name).get
+          val arg = Ref(program.stmts.length)
+          program.stmts.addOne(Application(sel, List(in)))
+
+          // fill in the placeholder from before
+          program.stmts.update(nextcall.loc, Application(nref, List(arg)))
+
+        }
         case _ => throw new IllegalArgumentException("not implemented yet")
       }
-    }
 
-    def typeUseToTerm(t: Type) : Ref = {
+    def typeUseToTerm(t: Type): Ref =
       t match {
-        case UninterpretedType(name) => typeLocation.getOrElseUpdate(name.name, {program.stmts.addOne(UserSort(name.name)); Ref(program.stmts.length - 1)})
-        case BooleanType()           => typeLocation.getOrElseUpdate("Bool", {program.stmts.addOne(TheorySort("Bool")); Ref(program.stmts.length - 1)})
-        case IntegerType()           => typeLocation.getOrElseUpdate("Int", {program.stmts.addOne(TheorySort("Int")); Ref(program.stmts.length - 1)})
-        case StringType()            => typeLocation.getOrElseUpdate("String", {program.stmts.addOne(TheorySort("String")); Ref(program.stmts.length - 1)})
+        case UninterpretedType(name) =>
+          typeLocation.getOrElseUpdate(name.name, {
+            program.stmts.addOne(UserSort(name.name));
+            Ref(program.stmts.length - 1)
+          })
+        case BooleanType() =>
+          typeLocation.getOrElseUpdate("Bool", {
+            program.stmts.addOne(TheorySort("Bool"));
+            Ref(program.stmts.length - 1)
+          })
+        case IntegerType() =>
+          typeLocation.getOrElseUpdate("Int", {
+            program.stmts.addOne(TheorySort("Int"));
+            Ref(program.stmts.length - 1)
+          })
+        case StringType() =>
+          typeLocation.getOrElseUpdate("String", {
+            program.stmts.addOne(TheorySort("String"));
+            Ref(program.stmts.length - 1)
+          })
         case BitVectorType(width) => {
-          typeLocation.getOrElseUpdate("String", {program.stmts.addOne(TheorySort("_ BitVec", List(Ref(1)))); program.stmts.addOne(Numeral(width)); Ref(program.stmts.length - 2)})
+          typeLocation.getOrElseUpdate("String", {
+            program.stmts.addOne(TheorySort("_ BitVec", List(Ref(1))));
+            program.stmts.addOne(Numeral(width)); Ref(program.stmts.length - 2)
+          })
         }
+        case SynonymType(id) =>
+          typeLocation.get(id.name) match {
+            case Some(value) => value
+            case None =>
+              typeLocation.get(id.name + "!type") match {
+                case Some(value) => value
+                case None =>
+                  throw new IllegalArgumentException(s"type not declared: ${t}")
+              }
+          }
         case _ =>
           throw new IllegalArgumentException(s"type not yet supported: ${t}")
       }
-    }
 
     def varDeclToTerm(v: (Identifier, Type)) = {
       val loc = program.stmts.length
+      varLocation.addOne(v._1.name, Ref(loc))
       program.stmts.addOne(Selector(v._1.name, Ref(-1))) // placegolder
       val placeholder = typeUseToTerm(v._2)
       program.stmts.update(loc, Selector(v._1.name, placeholder))
-    } 
+    }
 
     // End helper function definitions and return the middle.core program we built
     program

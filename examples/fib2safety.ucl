@@ -1,0 +1,31 @@
+module fib
+{
+    var a, b : integer;
+
+    init {
+        a' = 0;
+        b' = 1;
+    }
+
+    next {
+        a' = b;
+        b' = a + b;
+    }
+}
+
+module main
+{
+    var fib1 : fib;
+    var fib2 : fib;
+
+    next {
+        next (fib1);
+        next (fib2);
+    }
+
+    property b_are_eq : fib1.b == fib2.b;
+    property a_are_eq : fib1.a == fib2.a;
+    property b_gt_0  : fib1.b > 0 && fib2.b > 0;
+    property a_ge_0  : fib1.a >= 0 && fib2.a >= 0;
+    property a_le_b  : fib1.a <= fib1.b && fib2.a <= fib2.b;
+}

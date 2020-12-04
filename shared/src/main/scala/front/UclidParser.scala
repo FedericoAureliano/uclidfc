@@ -582,6 +582,7 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
     }
   }
 
+  // also handles module instance types
   lazy val SynonymTypeParser: PackratParser[SynonymType] = positioned(
     IdParser ^^ {
       case id => SynonymType(id)
@@ -595,14 +596,8 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
     }
   }
 
-  lazy val ModuleInstanceTypeParser: PackratParser[ModuleInstanceType] = positioned(
-    IdParser ^^ {
-      case id => ModuleInstanceType(id)
-    }
-  )
-
   lazy val TypeParser: PackratParser[Type] = positioned {
-    MapTypeParser | ArrayTypeParser | EnumTypeParser | TupleTypeParser | RecordTypeParser | ExternalTypeParser | SynonymTypeParser | PrimitiveTypeParser | ModuleInstanceTypeParser
+    MapTypeParser | ArrayTypeParser | EnumTypeParser | TupleTypeParser | RecordTypeParser | ExternalTypeParser | SynonymTypeParser | PrimitiveTypeParser
   }
 
   lazy val IdTypeParser: PackratParser[(Identifier, Type)] =
@@ -687,9 +682,6 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
       KwIf ~> (ExprParser ~ BlkStmtParser) ^^ {
         case e ~ f =>
           IfElseStmt(e, f, BlockStmt(List.empty, List.empty))
-      } |
-      KwWhile ~> ("(" ~> ExprParser <~ ")") ~ rep(InvariantParser) ~ BlkStmtParser ^^ {
-        case expr ~ invs ~ body => WhileStmt(expr, body, invs)
       } |
       BlkStmtParser |
       ";" ^^ { case _ => SkipStmt() }

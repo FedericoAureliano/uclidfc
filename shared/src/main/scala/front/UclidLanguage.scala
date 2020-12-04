@@ -398,7 +398,7 @@ sealed abstract class ComparisonOperator() extends Operator {
 }
 
 case class EqualityOp() extends ComparisonOperator {
-  override def toString = "=="
+  override def toString = "="
 }
 
 case class InequalityOp() extends ComparisonOperator {
@@ -473,19 +473,19 @@ sealed abstract class SelectorOperator extends Operator {
 
 case class PolymorphicSelect(id: Identifier) extends SelectorOperator {
   override val ident = id
-  override def toString = "." + id
+  override def toString = id.toString()
   override def fixity = Operator.POSTFIX
 }
 
 case class RecordSelect(id: Identifier) extends SelectorOperator {
   override val ident = id
-  override def toString = "." + id
+  override def toString = id.toString()
   override def fixity = Operator.POSTFIX
 }
 
 case class SelectFromInstance(varId: Identifier) extends SelectorOperator {
   override val ident = varId
-  override def toString = "." + varId
+  override def toString = varId.toString()
   override def fixity = Operator.INFIX
 }
 
@@ -528,6 +528,7 @@ case class Identifier(name: String) extends Expr {
 }
 
 sealed abstract class Literal extends Expr {
+
   /** All literals are constants. */
   override def isConstant = true
   def isNumeric = false
@@ -621,6 +622,10 @@ case class FuncApplication(e: Expr, args: List[Expr]) extends Expr {
 
   override def toString =
     e.toString + "(" + Utils.join(args.map(_.toString), ", ") + ")"
+}
+
+case class ModuleCallExpr(id: Identifier) extends Expr {
+  override def toString = "next (" + id.toString + ")"
 }
 
 sealed abstract class Lhs(val ident: Identifier) extends ASTNode
@@ -839,7 +844,7 @@ case class ExternalType(moduleId: Identifier, typeId: Identifier) extends Type {
   override def toString = moduleId.toString + "." + typeId.toString
 }
 
-case class ModuleInstanceType(id : Identifier) extends Type {
+case class ModuleInstanceType(id: Identifier) extends Type {
   override def toString = id.toString
 }
 
@@ -984,57 +989,6 @@ case class IfElseStmt(cond: Expr, ifblock: Statement, elseblock: Statement)
 
   override val hasInternalCall =
     ifblock.hasInternalCall || elseblock.hasInternalCall
-}
-
-case class ForStmt(
-  id: Identifier,
-  typ: Type,
-  range: (Expr, Expr),
-  body: Statement
-) extends Statement {
-  override def hasStmtBlock = true
-  override val isLoop = true
-  override val hasLoop = true
-
-  override val toLines = {
-    val forLine =
-      "for " + id + " in range(" + range._1 + "," + range._2 + ") {  // " + position.toString
-    List(forLine) ++ body.toLines.map(PrettyPrinter.indent(1) + _) ++ List("}")
-  }
-  override val hasCall = body.hasCall
-  override val hasInternalCall = body.hasInternalCall
-}
-
-case class WhileStmt(cond: Expr, body: Statement, invariants: List[Expr])
-    extends Statement {
-  override def hasStmtBlock = true
-  override val isLoop = true
-  override val hasLoop = true
-
-  override val toLines = {
-    val headLine =
-      "while(%s)  // %s".format(cond.toString(), position.toString())
-    val invLines = invariants.map(inv =>
-      PrettyPrinter.indent(1) + "invariant " + inv
-        .toString() + "; // " + inv.position.toString()
-    )
-    List(headLine) ++ invLines ++ body.toLines.map(PrettyPrinter.indent(1) + _)
-  }
-  override val hasCall = body.hasCall
-  override val hasInternalCall = body.hasInternalCall
-}
-
-case class CaseStmt(body: List[(Expr, Statement)]) extends Statement {
-  override def hasStmtBlock = true
-
-  override def toLines =
-    List("case") ++
-      body.flatMap { (i) =>
-        List(PrettyPrinter.indent(1) + i._1.toString + " : ") ++ i._2.toLines
-      } ++
-      List("esac")
-  override val hasCall = body.exists(b => b._2.hasCall)
-  override val hasInternalCall = body.exists(b => b._2.hasInternalCall)
 }
 
 case class ModuleCallStmt(id: Identifier) extends Statement {

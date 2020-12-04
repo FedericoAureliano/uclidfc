@@ -13,6 +13,6 @@ sbt "uclidJVM/run examples/fib.ucl"
 ## JS
 
 ```
-sbt fullOptJS
+sbt fullOptJS; cp js/target/scala-2.13/uclid-opt.js docs/js/uclid-opt.js
 open docs/index.html
 ```

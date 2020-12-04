@@ -30,12 +30,10 @@ import front.{
   BitVectorType,
   BlockStmt,
   BooleanType,
-  CaseStmt,
   ConstArray,
   EnumType,
   Expr,
   ExternalType,
-  ForStmt,
   FuncApplication,
   HavocStmt,
   Identifier,
@@ -58,8 +56,7 @@ import front.{
   TupleType,
   Type,
   UndefinedType,
-  UninterpretedType,
-  WhileStmt
+  UninterpretedType
 }
 
 package object smt {
@@ -162,7 +159,7 @@ package object smt {
       }
     }
 
-  def getSmtSortName(term: Program, position: Int): String = {
+  def getSmtSortName(term: Program, position: Int): String =
     // println("here " + position + "\n" + term)
     term.stmts(position) match {
       case Ref(i) => getSmtSortName(term, i)
@@ -195,7 +192,6 @@ package object smt {
         }
       }
     }
-  }
 
   def toSmtString(term: Program): String = {
     val ctx = getSmtCtxString(term)
