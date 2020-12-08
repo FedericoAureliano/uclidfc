@@ -129,6 +129,9 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
   lazy val KwProperty = "property"
   lazy val KwDefineAxiom = "axiom"
   lazy val KwEnsures = "ensures"
+  lazy val KwCase = "case"
+  lazy val KwEsac = "esac"
+  lazy val KwDefault = "default"
 
   lexical.delimiters ++= List(
     "(",
@@ -234,7 +237,10 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
     KwExists,
     KwSynthesis,
     KwInvariant,
-    KwEnsures
+    KwEnsures,
+    KwCase,
+    KwEsac,
+    KwDefault
   )
 
   lazy val ast_binary: Expr ~ String ~ Expr => Expr = {
@@ -640,13 +646,6 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
   lazy val IdListParser: PackratParser[List[Identifier]] =
     IdParser ~ rep("," ~> IdParser) ^^ { case id ~ ids => id :: ids }
 
-  lazy val BlockVarsDeclParser: PackratParser[BlockVarsDecl] = positioned {
-    KwVar ~> IdListParser ~ (":" ~> TypeParser) <~ ";" ^^ {
-      case ids ~ typ =>
-        BlockVarsDecl(ids, typ)
-    }
-  }
-
   lazy val InvariantParser: PackratParser[Expr] = positioned {
     KwInvariant ~> ExprParser <~ ";"
   }
@@ -673,7 +672,7 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
           IfElseStmt(
             FreshLit(BooleanType()),
             blk,
-            BlockStmt(List.empty, List.empty)
+            BlockStmt(List.empty)
           )
       } |
       KwIf ~ "(" ~> (ExprParser <~ ")") ~ BlkStmtParser ~ (KwElse ~> BlkStmtParser) ^^ {
@@ -681,16 +680,21 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
       } |
       KwIf ~> (ExprParser ~ BlkStmtParser) ^^ {
         case e ~ f =>
-          IfElseStmt(e, f, BlockStmt(List.empty, List.empty))
+          IfElseStmt(e, f, BlockStmt(List.empty))
       } |
+      KwCase ~> rep(CaseBlockStmtParser) <~ KwEsac ^^ { case i => CaseStmt(i) } |
       BlkStmtParser |
       ";" ^^ { case _ => SkipStmt() }
   }
 
+  lazy val CaseBlockStmtParser: PackratParser[(Expr, Statement)] =
+    (ExprParser ~ ":" ~ BlkStmtParser) ^^ { case e ~ ":" ~ ss => (e, ss) } |
+      (KwDefault ~ ":" ~> BlkStmtParser) ^^ { case ss         => (BoolLit(true), ss) }
+
   lazy val BlkStmtParser: PackratParser[BlockStmt] =
-    "{" ~> rep(BlockVarsDeclParser) ~ rep(StatementParser) <~ "}" ^^ {
-      case vars ~ stmts =>
-        BlockStmt(vars, stmts)
+    "{" ~> rep(StatementParser) <~ "}" ^^ {
+      case stmts =>
+        BlockStmt(stmts)
     }
 
   lazy val OptionalExprParser: PackratParser[Option[Expr]] =

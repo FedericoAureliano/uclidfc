@@ -62,6 +62,7 @@ import front.{
   UninterpretedType
 }
 import front.ITEOp
+import front.CaseStmt
 
 package object ast {
 
@@ -130,10 +131,10 @@ package object ast {
       // add init and next
       val initRef = Ref(program.stmts.length)
       val initBlock = m.init match {
-        case Some(InitDecl(BlockStmt(vars, stmts))) => BlockStmt(vars, stmts)
+        case Some(InitDecl(BlockStmt(stmts))) => BlockStmt(stmts)
         case Some(_) =>
           throw new IllegalArgumentException("must be a block statement")
-        case None => BlockStmt(List.empty, List.empty)
+        case None => BlockStmt(List.empty)
       }
       transitionBlockToTerm(
         m.id.name + "!init",
@@ -145,10 +146,10 @@ package object ast {
 
       val nextRef = Ref(program.stmts.length)
       val nextBlock = m.next match {
-        case Some(NextDecl(BlockStmt(vars, stmts))) => BlockStmt(vars, stmts)
+        case Some(NextDecl(BlockStmt(stmts))) => BlockStmt(stmts)
         case Some(_) =>
           throw new IllegalArgumentException("must be a block statement")
-        case None => BlockStmt(List.empty, List.empty)
+        case None => BlockStmt(List.empty)
       }
       transitionBlockToTerm(
         m.id.name + "!next",
@@ -253,42 +254,55 @@ package object ast {
     def findAssignment(stmts: List[Statement], s: Selector): (Lhs, Expr) = {
       // find the assignment
       val found: List[(Lhs, Expr)] =
-        stmts.foldLeft(List[(Lhs, Expr)]())((acc, p) =>
-          p match {
-            case AssignStmt(lhss, rhss) =>
-              acc ++ lhss.zip(rhss).filter(xy => xy._1.ident.name == s.name)
-            case ModuleCallStmt(id) =>
-              acc ++ List(Tuple2(LhsId(id), ModuleCallExpr(id))).filter(xy =>
-                id.name == s.name
-              )
-            case IfElseStmt(cond, ifblock, elseblock) => {
-              // get the one on the left
-              val left = findAssignment(List(ifblock), s)
-              val right = findAssignment(List(elseblock), s)
-              assert(left._1 == right._1)
+        stmts
+          .foldLeft(List[(Lhs, Expr)]())((acc, p) =>
+            p match {
+              case AssignStmt(lhss, rhss) =>
+                acc ++ lhss.zip(rhss)
+              case ModuleCallStmt(id) =>
+                acc ++ List(Tuple2(LhsId(id), ModuleCallExpr(id)))
+              case IfElseStmt(cond, ifblock, elseblock) => {
+                val left = findAssignment(List(ifblock), s)
+                val right = findAssignment(List(elseblock), s)
+                assert(
+                  left._1 == right._1,
+                  "left hand side must equal right hand side"
+                )
 
-              val expr = if (left._2 == right._2) {
-                left._2
-              } else {
-                OperatorApplication(ITEOp(), List(cond, left._2, right._2))
-              }
+                val expr = if (left._2 == right._2) {
+                  left._2
+                } else {
+                  OperatorApplication(ITEOp(), List(cond, left._2, right._2))
+                }
 
-              if (expr == Identifier(s.name)) {
-                acc
-              } else {
                 acc ++ List(Tuple2(LhsId(Identifier(s.name)), expr))
               }
+              case CaseStmt(body) => {
+                val nested = body.reverse.foldLeft(
+                  BlockStmt(List.empty): Statement
+                )((acc, f) =>
+                  IfElseStmt(f._1, BlockStmt(List(f._2)), BlockStmt(List(acc)))
+                )
+                acc ++ List(findAssignment(List(nested), s))
+              }
+              case BlockStmt(bstmts) =>
+                acc ++ List(findAssignment(bstmts, s))
+              case _ =>
+                throw new IllegalArgumentException(
+                  s"statement not supported yet: ${p}"
+                )
             }
-            case BlockStmt(vars, bstmts) => List(findAssignment(bstmts, s))
-            case _ =>
-              throw new IllegalArgumentException(
-                s"statement not supported yet: ${p}"
-              )
-          }
-        )
+          )
+          .filter(xy =>
+            xy._1.ident.name == s.name && xy._2 != Identifier(s.name)
+          )
+          .distinct
 
       if (found.length >= 1) {
-        // TODO: should we throw an error if not exactly 1?
+        assert(
+          found.length == 1,
+          "there must only be one assignment to each variable"
+        )
         found(0)
       } else {
         Tuple2(LhsId(Identifier(s.name)), Identifier(s.name))
