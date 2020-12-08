@@ -935,8 +935,7 @@ case class AssignStmt(lhss: List[Lhs], rhss: List[Expr]) extends Statement {
     )
 }
 
-case class BlockStmt(stmts: List[Statement])
-    extends Statement {
+case class BlockStmt(stmts: List[Statement]) extends Statement {
 
   override def toLines =
     List("{") ++
