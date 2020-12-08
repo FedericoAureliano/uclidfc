@@ -153,7 +153,7 @@ package object smt {
 
     def theorysortToSmtTerm(t: TheorySort): String =
       if (t.params.length > 0) {
-        s"${t.name} (${t.params.map(p => dispatch(p)).mkString(" ")})"
+        s"(${t.name} ${t.params.map(p => dispatch(p)).mkString(" ")})"
       } else {
         t.name
       }

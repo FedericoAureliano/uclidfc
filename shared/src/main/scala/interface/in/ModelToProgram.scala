@@ -353,29 +353,42 @@ package object ast {
     def typeUseToTerm(t: Type): Ref =
       t match {
         case UninterpretedType(name) =>
-          typeLocation.getOrElseUpdate(name.name, {
-            program.stmts.addOne(UserSort(name.name));
+          typeLocation.getOrElseUpdate(t.toString(), {
+            program.stmts.addOne(UserSort(name.name))
+            typeLocation.put(t.toString(), Ref(program.stmts.length - 1))
             Ref(program.stmts.length - 1)
           })
         case BooleanType() =>
-          typeLocation.getOrElseUpdate("Bool", {
-            program.stmts.addOne(TheorySort("Bool"));
+          typeLocation.getOrElseUpdate(t.toString(), {
+            program.stmts.addOne(TheorySort("Bool"))
+            typeLocation.put(t.toString(), Ref(program.stmts.length - 1))
             Ref(program.stmts.length - 1)
           })
         case IntegerType() =>
-          typeLocation.getOrElseUpdate("Int", {
-            program.stmts.addOne(TheorySort("Int"));
+          typeLocation.getOrElseUpdate(t.toString(), {
+            program.stmts.addOne(TheorySort("Int"))
+            typeLocation.put(t.toString(), Ref(program.stmts.length - 1))
             Ref(program.stmts.length - 1)
           })
         case StringType() =>
-          typeLocation.getOrElseUpdate("String", {
-            program.stmts.addOne(TheorySort("String"));
+          typeLocation.getOrElseUpdate(t.toString(), {
+            program.stmts.addOne(TheorySort("String"))
+            typeLocation.put(t.toString(), Ref(program.stmts.length - 1))
             Ref(program.stmts.length - 1)
           })
         case BitVectorType(width) => {
-          typeLocation.getOrElseUpdate("String", {
-            program.stmts.addOne(TheorySort("_ BitVec", List(Ref(1))));
-            program.stmts.addOne(Numeral(width)); Ref(program.stmts.length - 2)
+          typeLocation.getOrElseUpdate(t.toString(), {
+            program.stmts.addOne(TheorySort("_ BitVec", List(Ref(program.stmts.length + 1))))
+            program.stmts.addOne(Numeral(width))
+            typeLocation.put(t.toString(), Ref(program.stmts.length - 2))
+            Ref(program.stmts.length - 2)
+          })
+        }
+        case ArrayType(inTypes, outType) => {
+          typeLocation.getOrElseUpdate(t.toString(), {
+            val args = (inTypes ++ List(outType)).map(arg => typeUseToTerm(arg))
+            program.stmts.addOne(TheorySort("Array", args))
+            Ref(program.stmts.length - 1)
           })
         }
         case SynonymType(id) =>
