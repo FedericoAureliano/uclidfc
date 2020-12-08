@@ -52,6 +52,7 @@ import front.{
   OperatorApplication,
   RecordType,
   SkipStmt,
+  Statement,
   StringType,
   SynonymType,
   Tuple,
@@ -60,6 +61,7 @@ import front.{
   UndefinedType,
   UninterpretedType
 }
+import front.ITEOp
 
 package object ast {
 
@@ -229,40 +231,16 @@ package object ast {
 
       // save references for later (the arguments to the constructor returned by the init function)
       val components = new ListBuffer[Ref]()
-      selectorRefs.map(r => program.stmts(r.loc)).zipWithIndex.foreach {
-        case (s: Selector, i: Int) => {
-          // find the assignment
-          val flat: List[(Lhs, Expr)] =
-            block.stmts.foldLeft(List[(Lhs, Expr)]())((acc, p) =>
-              p match {
-                case AssignStmt(lhss, rhss) => acc ++ lhss.zip(rhss)
-                case ModuleCallStmt(id) =>
-                  acc ++ List(Tuple2(LhsId(id), ModuleCallExpr(id)))
-                case _ =>
-                  throw new IllegalArgumentException(
-                    s"statement not supported yet: ${p}"
-                  )
-              }
-            )
-          val found = flat.filter(p => p._1.ident.name == s.name)
-          if (found.length > 0) {
-            // once you have the assignment, put the term in the right slot
-            components.addOne(Ref(program.stmts.length))
-            exprToTerm(
-              found(0)._2,
-              Ref(transitionBlockPos + 1),
-              selectorRefs.toList
-            )
-          } else {
-            // if there is no term, then just keep whatever was in the input
-            components.addOne(Ref(program.stmts.length))
-            program.stmts.addOne(
-              Application(selectorRefs(i), List(Ref(transitionBlockPos + 1)))
-            )
-          }
-        }
-        case (_, _) =>
-          throw new IllegalArgumentException("must be (s : Selector, i: Int)")
+      selectorRefs.map(r => program.stmts(r.loc)).foreach { inst =>
+        val s = inst.asInstanceOf[Selector]
+        val found = findAssignment(block.stmts, s)
+        // once you have the assignment, put the term in the right slot
+        components.addOne(Ref(program.stmts.length))
+        exprToTerm(
+          found._2,
+          Ref(transitionBlockPos + 1),
+          selectorRefs.toList
+        )
       }
       program.stmts.update(
         transitionBlockPos + 2,
@@ -270,6 +248,51 @@ package object ast {
       ) // apply constructor to the expressions above (FILLING-IN PLACEHOLDER)
 
       Ref(transitionBlockPos)
+    }
+
+    def findAssignment(stmts: List[Statement], s: Selector): (Lhs, Expr) = {
+      // find the assignment
+      val found: List[(Lhs, Expr)] =
+        stmts.foldLeft(List[(Lhs, Expr)]())((acc, p) =>
+          p match {
+            case AssignStmt(lhss, rhss) =>
+              acc ++ lhss.zip(rhss).filter(xy => xy._1.ident.name == s.name)
+            case ModuleCallStmt(id) =>
+              acc ++ List(Tuple2(LhsId(id), ModuleCallExpr(id))).filter(xy =>
+                id.name == s.name
+              )
+            case IfElseStmt(cond, ifblock, elseblock) => {
+              // get the one on the left
+              val left = findAssignment(List(ifblock), s)
+              val right = findAssignment(List(elseblock), s)
+              assert(left._1 == right._1)
+
+              val expr = if (left._2 == right._2) {
+                left._2
+              } else {
+                OperatorApplication(ITEOp(), List(cond, left._2, right._2))
+              }
+
+              if (expr == Identifier(s.name)) {
+                acc
+              } else {
+                acc ++ List(Tuple2(LhsId(Identifier(s.name)), expr))
+              }
+            }
+            case BlockStmt(vars, bstmts) => List(findAssignment(bstmts, s))
+            case _ =>
+              throw new IllegalArgumentException(
+                s"statement not supported yet: ${p}"
+              )
+          }
+        )
+
+      if (found.length >= 1) {
+        // TODO: should we throw an error if not exactly 1?
+        found(0)
+      } else {
+        Tuple2(LhsId(Identifier(s.name)), Identifier(s.name))
+      }
     }
 
     // encode a term and return a pointer to the start of the term
@@ -377,12 +400,16 @@ package object ast {
             Ref(program.stmts.length - 1)
           })
         case BitVectorType(width) => {
-          typeLocation.getOrElseUpdate(t.toString(), {
-            program.stmts.addOne(TheorySort("_ BitVec", List(Ref(program.stmts.length + 1))))
-            program.stmts.addOne(Numeral(width))
-            typeLocation.put(t.toString(), Ref(program.stmts.length - 2))
-            Ref(program.stmts.length - 2)
-          })
+          typeLocation.getOrElseUpdate(
+            t.toString(), {
+              program.stmts.addOne(
+                TheorySort("_ BitVec", List(Ref(program.stmts.length + 1)))
+              )
+              program.stmts.addOne(Numeral(width))
+              typeLocation.put(t.toString(), Ref(program.stmts.length - 2))
+              Ref(program.stmts.length - 2)
+            }
+          )
         }
         case ArrayType(inTypes, outType) => {
           typeLocation.getOrElseUpdate(t.toString(), {
