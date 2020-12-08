@@ -4,7 +4,7 @@ import org.junit.Test
 import org.junit.Assert._
 import scala.collection.mutable.ArrayBuffer
 
-import interface.out.smt.{getSmtCtxString, getSmtTermString, toSmtString}
+import interface.out.smt.{programToSmtCtx, programToSmtTerm}
 
 class TestLang {
 
@@ -22,16 +22,16 @@ class TestLang {
     val one = new Program(ArrayBuffer(TheoryMacro("1")), 0)
     f(one)
 
-    val answerterm = "(f 1)"
-    val answerdef = "(define-fun f ((x Int)) Int (+ x x))"
+    val answerterm = "(f1)"
+    val answerdef = "(define-funf((xInt))Int(+xx))"
 
     assert(
-      getSmtTermString(f) == answerterm,
-      s"\n1\n${f}\n${toSmtString(f)}\n"
+      programToSmtTerm(f, 0).replaceAll("( |\t|\n)+", "") == answerterm,
+      s"\n1\n${f}\n${programToSmtTerm(f, 0).replaceAll("( |\t|\n)+", "")}\n"
     )
     assert(
-      getSmtCtxString(f) == answerdef,
-      s"\n2\n${f}\n${toSmtString(f)}\n"
+      programToSmtCtx(f).replaceAll("( |\t|\n)+", "") == answerdef,
+      s"\n2\n${f}\n${programToSmtCtx(f).replaceAll("( |\t|\n)+", "")}\n"
     )
   }
 }

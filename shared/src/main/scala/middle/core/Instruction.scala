@@ -151,12 +151,13 @@ case class DataType(name: String, constructors: List[Ref]) extends Instruction {
     s"[adt]\t$name\t${constructors.mkString("\t")}"
 }
 
-case class Module(name: String, dt: Ref, init: Ref, next: Ref, spec: Ref)
+// ct is a constructor, so Module is often just treated like a datatype
+case class Module(name: String, ct: Ref, init: Ref, next: Ref, spec: Ref)
     extends Instruction {
   /*
   A module is a record with associated init function, next function, and spec function.
    */
-  override def toString(): String = s"[mod]\t$name\t$dt\t$init\t$next\t$spec"
+  override def toString(): String = s"[mod]\t$name\t$ct\t$init\t$next\t$spec"
 }
 
 case class Application(caller: Ref, args: List[Ref]) extends Instruction {

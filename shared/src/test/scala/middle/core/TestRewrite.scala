@@ -4,7 +4,7 @@ import org.junit.Test
 import org.junit.Assert._
 import scala.collection.mutable.ArrayBuffer
 
-import interface.out.smt.{getSmtTermString}
+import interface.out.smt.programToSmtTerm
 
 class TestRewrite {
 
@@ -26,10 +26,10 @@ class TestRewrite {
 
     assert(f.toString != inlined.toString(), inlined)
 
-    val answerterm = "(+ 1 1)"
+    val answerterm = "(+11)"
     assert(
-      getSmtTermString(inlined) == answerterm,
-      s"${inlined}\n${getSmtTermString(inlined)}"
+      programToSmtTerm(inlined, 0).replaceAll("( |\t|\n)+", "") == answerterm,
+      s"${inlined}\n${programToSmtTerm(inlined, 0).replaceAll("( |\t|\n)+", "")}"
     )
   }
 
@@ -47,15 +47,15 @@ class TestRewrite {
 
     val leted = rewrite.letify(f, "test")
 
-    val answerterm = "(f 1)"
+    val answerterm = "(f1)"
     assert(
-      getSmtTermString(leted) == answerterm,
-      s"${leted}\n${getSmtTermString(leted)}"
+      programToSmtTerm(leted, 0).replaceAll("( |\t|\n)+", "") == answerterm,
+      s"${leted}\n${programToSmtTerm(leted, 0).replaceAll("( |\t|\n)+", "")}"
     )
 
     assert(
       leted.stmts.length == f.stmts.length + 2,
-      s"${leted}\n${getSmtTermString(leted)}"
+      s"${leted}\n${programToSmtTerm(leted, 0).replaceAll("( |\t|\n)+", "")}"
     )
   }
 
@@ -83,10 +83,10 @@ class TestRewrite {
 
     rewrite.reduceDuplicates(inlined)
 
-    val answerterm = "(+ (+ y y) (+ y y))"
+    val answerterm = "(+(+yy)(+yy))"
     assert(
-      getSmtTermString(inlined) == answerterm,
-      s"${inlined}\n${getSmtTermString(inlined)}"
+      programToSmtTerm(inlined, 0).replaceAll("( |\t|\n)+", "") == answerterm,
+      s"${inlined}\n${programToSmtTerm(inlined, 0).replaceAll("( |\t|\n)+", "")}"
     )
   }
 
@@ -114,16 +114,16 @@ class TestRewrite {
 
     rewrite.reduceDuplicates(inlined)
 
-    val answerterm = "(+ (+ y y) (+ y y))"
+    val answerterm = "(+(+yy)(+yy))"
     assert(
-      getSmtTermString(inlined) == answerterm,
-      s"${inlined}\n${getSmtTermString(inlined)}"
+      programToSmtTerm(inlined, 0).replaceAll("( |\t|\n)+", "") == answerterm,
+      s"${inlined}\n${programToSmtTerm(inlined, 0).replaceAll("( |\t|\n)+", "")}"
     )
 
     rewrite.reduceIndirection(inlined)
     assert(
-      getSmtTermString(inlined) == answerterm,
-      s"${inlined}\n${getSmtTermString(inlined)}"
+      programToSmtTerm(inlined, 0).replaceAll("( |\t|\n)+", "") == answerterm,
+      s"${inlined}\n${programToSmtTerm(inlined, 0).replaceAll("( |\t|\n)+", "")}"
     )
   }
 
@@ -151,27 +151,27 @@ class TestRewrite {
 
     rewrite.reduceDuplicates(inlined)
 
-    val answerterm = "(+ (+ y y) (+ y y))"
+    val answerterm = "(+(+yy)(+yy))"
     assert(
-      getSmtTermString(inlined) == answerterm,
-      s"${inlined}\n${getSmtTermString(inlined)}"
+      programToSmtTerm(inlined, 0).replaceAll("( |\t|\n)+", "") == answerterm,
+      s"${inlined}\n${programToSmtTerm(inlined, 0).replaceAll("( |\t|\n)+", "")}"
     )
 
     rewrite.reduceIndirection(inlined)
     assert(
-      getSmtTermString(inlined) == answerterm,
-      s"${inlined}\n${getSmtTermString(inlined)}"
+      programToSmtTerm(inlined, 0).replaceAll("( |\t|\n)+", "") == answerterm,
+      s"${inlined}\n${programToSmtTerm(inlined, 0).replaceAll("( |\t|\n)+", "")}"
     )
 
     val cleaned = garbage.collectGarbage(inlined)
     assert(
-      getSmtTermString(cleaned) == answerterm,
-      s"${cleaned}\n${getSmtTermString(cleaned)}"
+      programToSmtTerm(cleaned, 0).replaceAll("( |\t|\n)+", "") == answerterm,
+      s"${cleaned}\n${programToSmtTerm(cleaned, 0).replaceAll("( |\t|\n)+", "")}"
     )
 
     assert(
       cleaned.stmts.length < inlined.stmts.length,
-      s"${cleaned}\n${getSmtTermString(cleaned)}"
+      s"${cleaned}\n${programToSmtTerm(cleaned, 0).replaceAll("( |\t|\n)+", "")}"
     )
   }
 }

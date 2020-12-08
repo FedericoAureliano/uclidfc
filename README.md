@@ -4,15 +4,23 @@
 
 [Install SBT](https://www.scala-lang.org/download/)
 
-## JVM
+## Run JVM
 
 ```
 sbt "uclidJVM/run examples/fib.ucl"
 ```
 
-## JS
+## Run JS
 
 ```
 sbt fullOptJS; cp js/target/scala-2.13/uclid-opt.js docs/js/uclid-opt.js
 open docs/index.html
+```
+
+## Developers
+
+### Check Format
+
+```
+sbt scalafmtSbtCheck scalafmtCheck test:scalafmtCheck
 ```

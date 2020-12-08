@@ -3,7 +3,7 @@ package middle.core
 import org.junit.Test
 import org.junit.Assert._
 
-import interface.out.smt.toSmtString
+import interface.out.smt.programToSmt
 import scala.collection.mutable.ArrayBuffer
 
 class TestGarbage {
@@ -60,7 +60,7 @@ class TestGarbage {
 
     val sweeped = garbage.sweep(f, marks)
 
-    assert(toSmtString(sweeped) == toSmtString(f), sweeped)
+    assert(programToSmt(sweeped) == programToSmt(f), sweeped)
     assert(sweeped.toString != f.toString, sweeped)
   }
 }

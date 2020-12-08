@@ -3,7 +3,7 @@ package middle.core
 import middle.core.rewrite.{incrementInstructionRefs, incrementRefs, updateRefs}
 
 package object garbage {
-  def mark(term: Program): Array[Boolean] = mark_i(term, 0)
+  def mark(term: Program): Array[Boolean] = mark_i(term, term.head)
 
   def mark_i(term: Program, position: Int): Array[Boolean] = {
     val length = term.stmts.length

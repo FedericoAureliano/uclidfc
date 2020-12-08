@@ -5,8 +5,8 @@ import scala.collection.immutable._
 import front.{Identifier, Module, _}
 import front.Utils.ParserErrorList
 
-import interface.out.smt.getSmtCtxString
-import interface.in.Translate
+import interface.out.smt.programToSmt
+import interface.in.ast.modelToProgram
 
 /** This is the main class for Uclid.
   *
@@ -54,8 +54,8 @@ object UclidMain {
     try {
       val mainModuleName = Identifier(config.mainModuleName)
       val modules = compile(config.files, mainModuleName)
-      val term = Translate.modelToProgram(modules, Some(config.mainModuleName))
-      println(getSmtCtxString(term))
+      val term = modelToProgram(modules, Some(config.mainModuleName))
+      println(programToSmt(term))
       println(
         "Finished execution for module: %s.".format(mainModuleName.toString)
       )

@@ -7,8 +7,8 @@ import org.scalajs.dom.raw.{HTMLPreElement, HTMLTextAreaElement}
 
 import scala.collection.mutable.ArrayBuffer
 
-import interface.out.smt.{getSmtCtxString, toSmtString}
-import interface.in.Translate
+import interface.out.smt.programToSmt
+import interface.in.ast
 
 import middle.core.{
   Application,
@@ -72,7 +72,7 @@ object WebApp {
       for (line <- text.split("\n")) {
         program.appendIncOne(parse(line))
       }
-      result.textContent = toSmtString(program)
+      result.textContent = programToSmt(program)
     } catch {
       case e: Throwable => result.textContent = e.toString()
     }
@@ -136,9 +136,9 @@ object WebApp {
     try {
       val parsed = UclidParser.parseModel("web", text)
 
-      val term = Translate.modelToProgram(parsed, None)
+      val term = ast.modelToProgram(parsed, Some("main"))
 
-      result.textContent = getSmtCtxString(term)
+      result.textContent = programToSmt(term)
     } catch {
       case e: Utils.SyntaxError =>
         result.textContent = s"${e.pos.get}: ${e.msg}"
