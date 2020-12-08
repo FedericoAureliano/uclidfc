@@ -5,12 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Trilingual Uclid</title>
   <link rel="stylesheet" href="https://latex.now.sh/style.css">
-  <link rel="stylesheet" href="css/main.css">    
+  <link rel="stylesheet" href="css/main.css">
 </head>
 
 <body id="top">
   <header>
-    <h1>Decomposing Uclid5 Into Three Languages</h1>
+    <h1>Trilingual Uclid5</h1>
     <p class="author">
       Federico Mora
     </p>
@@ -27,12 +27,12 @@
         core language and demonstrate a useful intermediate representation,
         logic assembly. The core language interacts with the procedure language
         and the proof language. We do not define these other languages here,
-        but we do describe the interface between the languages. 
-      
+        but we do describe the interface between the languages.
+
       </p>
-        
+
       <p>
-        
+
         Ultimately, we have three goals. First, we want to support first-class
         modules natively and then use this support to verify P programs.
         Second, we want to separate Uclid5 components so that they can be
@@ -94,15 +94,35 @@
       <p>
 
         is semantically equivalent to<label for="sn-1" class="sidenote-toggle
-        sidenote-number"></label> <input type="checkbox" id="sn-1"
-        class="sidenote-toggle" /> <span class="sidenote">Interactive translation is a work in progress: don't expect too much.</span>
+        sidenote-number"></label> <input type="checkbox" id="sn-1" class="sidenote-toggle" /> <span
+          class="sidenote">Interactive translation is a work in progress: don't expect too much.</span>
 
       </p>
 
-      <pre><code id="demofullanswer">(declare-datatypes ((main!type 0)) (((main (a Int) (b Int)))))
-(define-fun main!init ((in main!type)) main!type (main 0 1))
-(define-fun main!next ((in main!type)) main!type (main (b in) (+ (a in) (b in))))
-(define-fun main!spec ((in main!type)) Bool (&lt;= (a in) (b in)))</code></pre>
+      <pre><code id="demofullanswer">(declare-datatypes ((main 0)) (((main!cntr
+  (a Int)
+  (b Int)))))
+
+(define-fun main!init ((in main)) main
+  (main!cntr
+    ; assigning to a
+    0
+    ; assigning to b
+    1))
+
+(define-fun main!next ((in main)) main
+  (main!cntr
+    ; assigning to a
+    (b in)
+    ; assigning to b
+    (+
+      (a in)
+      (b in))))
+
+(define-fun main!spec ((in main)) Bool
+  (&lt;=
+    (a in)
+    (b in)))</code></pre>
 
       <p>
 
@@ -110,12 +130,13 @@
         language will manipulate the symbols defined by modules. There will be
         more on the proof language later, but for now, consider the following
         example proof by induction attempt for the above Uclid5 module.<label for="sn-1" class="sidenote-toggle
-        sidenote-number"></label> <input type="checkbox" id="sn-1"
-        class="sidenote-toggle" /> <span class="sidenote">Check the query with CVC4's online interface [<a href="https://cvc4.github.io/app/#temp_be5b8691-1e6e-405a-8053-f6c47abd9607" target="_blank">2</a>].</span>
+        sidenote-number"></label> <input type="checkbox" id="sn-1" class="sidenote-toggle" /> <span
+          class="sidenote">Check the query with CVC4's online interface [<a
+            href="https://cvc4.github.io/app/#temp_be5b8691-1e6e-405a-8053-f6c47abd9607" target="_blank">2</a>].</span>
 
       </p>
 
-      <pre><code>(declare-fun k () main!type)
+      <pre><code>(declare-fun k () main)
 
 ; look for counter example in base case
 (push)
@@ -142,7 +163,7 @@
 
       <p>
 
-        First-class modules do have some semantic subtleties. Namely, 
+        First-class modules do have some semantic subtleties. Namely,
         all fresh instances of a module are the term $i(k)$ for some arbitrary argument $k$.
         Similarly, taking a step of a module instance means to apply
         $n$ to it; updating the value of an instance's variable
@@ -151,7 +172,7 @@
 
       </p>
       <p>
-        
+
         In other words, module instances are terms of sort $t$, and vice
         versa. For example, $i(k)$ and
         $n(i(k))$ are module instances. This means
@@ -159,32 +180,32 @@
         the domain of $t$: module instances use extensional equality on
         their state. Users should be aware of this when using modules to, e.g.,
         index into an array.
-        
+
       </p>
 
       <h3 id="extensions">Core Extensions</h3>
 
       <p>
 
-      <b>Module Interfaces. </b> Core modules, unlike the algebraic data-types
-      that we have reduced them to, have an interface. This interface is
-      defined by the keywords <code>var</code>, <code>input</code>, <code>output</code>, and
-      <code>shared</code> that are used to declare module variables. Consider two
-      modules, $m_1$ and $m_2$, where $m_1$ has an instance of $m_2$. In this
-      situation, <code>var</code>s in $m_2$ are visible only to $m_2$; <code>input</code>s
-      in $m_2$ are visible by both $m_1$ and $m_2$ but can only be written to
-      by $m_1$; <code>output</code>s in $m_2$ are visible by both $m_1$ and $m_2$ but
-      can only be written to by $m_2$; and <code>shared</code>s in $m_2$ are visible
-      by both $m_1$ and $m_2$, and can be written to by both. Checking that the
-      module interfaces are respected can be done at "compile-time" and
-      erased for "execution-time," like generics in Java. Note that, because instance
-      equality is extensional on state, checking equality on instances of $m_2$
-      in $m_1$ requires that all variables in $m_2$ be visible to $m_1$.
-      
+        <b>Module Interfaces. </b> Core modules, unlike the algebraic data-types
+        that we have reduced them to, have an interface. This interface is
+        defined by the keywords <code>var</code>, <code>input</code>, <code>output</code>, and
+        <code>shared</code> that are used to declare module variables. Consider two
+        modules, $m_1$ and $m_2$, where $m_1$ has an instance of $m_2$. In this
+        situation, <code>var</code>s in $m_2$ are visible only to $m_2$; <code>input</code>s
+        in $m_2$ are visible by both $m_1$ and $m_2$ but can only be written to
+        by $m_1$; <code>output</code>s in $m_2$ are visible by both $m_1$ and $m_2$ but
+        can only be written to by $m_2$; and <code>shared</code>s in $m_2$ are visible
+        by both $m_1$ and $m_2$, and can be written to by both. Checking that the
+        module interfaces are respected can be done at "compile-time" and
+        erased for "execution-time," like generics in Java. Note that, because instance
+        equality is extensional on state, checking equality on instances of $m_2$
+        in $m_1$ requires that all variables in $m_2$ be visible to $m_1$.
+
       </p>
 
       <p>
-        
+
         <b>Finite Linear Temporal Logic. </b>
         To support finite linear temporal logic (LTL) all we need to do is extend
         core language modules with a label sort $\tau$, a labeling function
@@ -196,35 +217,36 @@
         (traces). Note that we can automatically generate $f_{\text{label}}$ and
         $f_{\text{ltl}}$ from the existing Uclid5 LTL syntax by treating atomic
         predicates as labels.
-        
+
       </p>
-      
+
       <p>
-        
-        Later we will see how we can bounded model check LTL properties using these module extensions in the proof language.
-      
+
+        Later we will see how we can bounded model check LTL properties using these module extensions in the proof
+        language.
+
       </p>
-      
+
       <p>
-        
+
         <b>Functions. </b>
         Core language modules can declare functions with the <code>define</code> keyword. These
         functions are immutable and are irrelevant to the state of a module, like
         $i$, $n$, and $s$. We keep track of
         <code>define</code> functions in a global context and they can be used freely by
         their module owner.
-        
+
       </p>
-      
+
       <p>
-        
+
         <b>Inline Specifications. </b>
         Inline specifications in core language are lifted into $s$. Assertions
         are conjuncted to the existing specification, assumptions are negated and
         disjuncted (added as the antecedent of an implication). This is simple
         because the position of an inline specification in the core language is
         irrelevant (every line of code is "executed" in parallel).
-      
+
       </p>
 
       <h3 id="assembly">Intermediate Representation</h3>
@@ -233,13 +255,13 @@
         We make the modularity possible with an intermediate representation for
         the core language that is easy to manipulate from the proof language
         and has a clear interface to the procedure language. The intermediate
-        representation is like an assembly language for <span
-        style="font-variant: small-caps;">smt-lib</span> with Uclid5 modules,
+        representation is like an assembly language for <span style="font-variant: small-caps;">smt-lib</span> with
+        Uclid5 modules,
         procedure calls, and synthesis functions. It consists of the following
-        16 commands.<label for="sn-1" class="sidenote-toggle
-        sidenote-number"></label> <input type="checkbox" id="sn-1"
-        class="sidenote-toggle" /> <span class="sidenote">We do not yet support
-        parametric datatypes (but neither does Uclid5)</span>
+        15 commands.<label for="sn-1" class="sidenote-toggle
+        sidenote-number"></label> <input type="checkbox" id="sn-1" class="sidenote-toggle" /> <span class="sidenote">We
+          do not yet support
+          parametric datatypes (but neither does Uclid5)</span>
 
       </p>
 
@@ -271,7 +293,7 @@
               <td></td>
               <td></td>
               <td></td>
-              <td>Numeral</td>
+              <td>Numeral (value)</td>
             </tr>
             <tr>
               <th scope="row"><code>[tst]</code></th>
@@ -397,46 +419,39 @@
               <td><code>Ref</code></td>
               <td><code>Ref</code></td>
               <td><code>Ref</code></td>
-              <td>Module (name, datatype, init, next, spec)</td>
-            </tr>
-            <tr>
-              <th scope="row"><code>[cal]</code></th>
-              <td><code>Str</code></td>
-              <td><code>Pgrm</code></td>
-              <td><code>Ref*</code></td>
-              <td></td>
-              <td></td>
-              <td>Procedure Call (name, program, args)</td>
+              <td>Mod (name, constructor, init, next, spec)</td>
             </tr>
             <tr>
               <th scope="row"><code>[syn]</code></th>
               <td><code>Str</code></td>
-              <td><code>Pgrm</code></td>
+              <td><code>Ref</code></td>
+              <td><code>Ref*</code></td>
               <td></td>
               <td></td>
-              <td></td>
-              <td>Synthesis (name, program)</td>
+              <td>Synthesis (name, sort, params)</td>
             </tr>
           </tbody>
         </table>
       </div>
 
       <p>
-        
+
         Logic assembly programs are essentially logical terms with all
-        necessary context included. 
+        necessary context included.
         In other words, you can think of logic assembly programs as a linear
         representation of an abstract-syntax graph of a term.
-        
+
         The best thing about it is that any traversal or
-        rewrite just needs to account for 16 commands<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+        rewrite just needs to account for 15 commands<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
         <input type="checkbox" id="sn-1" class="sidenote-toggle" />
-        <span class="sidenote">For comparison, the existing Uclid5 uses more than 150 language elements for its internal representation.</span>
-        
+        <span class="sidenote">For comparison, the existing Uclid5 uses more than 150 language elements for its internal
+          representation.</span>
+
         and we never need to touch auxiliary
         data structures, like symbol tables.<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
         <input type="checkbox" id="sn-1" class="sidenote-toggle" />
-        <span class="sidenote">This will solve our value numbering problems: the number for a value is its location and this is always consistent.</span>
+        <span class="sidenote">This will solve our value numbering problems: the number for a value is its location and
+          this is always consistent.</span>
 
       </p>
 
@@ -453,8 +468,8 @@
 [tmo] forall  #5
 [fpr] x       #6
 [tst] Int</textarea>
-<pre id="demoa0"><code>(forall ((x Int)) (> 0 x))</code></pre>
-        
+      <pre id="demoa0"><code>(forall ((x Int)) (> 0 x))</code></pre>
+
       <p>
 
         We now demonstrate three rewrites: letification, function call
@@ -521,40 +536,43 @@
 [tmo]	+
 [tmo]	1</code></pre>
 
-<h2 id="procedure">2. Procedure Language</h2>
-<p>
+      <h2 id="procedure">2. Procedure Language</h2>
+      <p>
 
-  The procedure language handles all sequential code. To deal with constructs
-  like loops we define the semantics of the procedure language using
-  Floyd-Hoare logic.
-</p>
+        The procedure language handles all sequential code. To deal with constructs
+        like loops we define the semantics of the procedure language using
+        Floyd-Hoare logic.
+      </p>
 
-<p>
+      <p>
 
-  Procedure calls are the only interface between the procedure language and the
-  core language. There are three special cases for a procedure call denoted by
-  the annotations "inline," "noinline," and "infer." In all three cases, each
-  procedure $p$ is associated with a record type $p_t$ and a function $f_p$ that
-  returns an element of $p_t$. The parameters of $f_p$ are the same as the
-  parameters of $p$ and the elements of $p_t$ are the <code>return</code>s and
-  <code>modifies</code>s of $p$. When inlining, the function $f_p$ is actually
-  a macro, this is only possible when the procedure has no loops or cyclic
-  procedure calls. When not inlining, the function $f_p$ is an uninterpreted
-  function with associated assertions: "noinline" will use the
-  <code>require</code>s and <code>ensure</code>s; "infer" will use the
-  <code>require</code>s and a strongest-post-condition.
+        Procedure declarations are the only interface between the procedure
+        language and the core language. There are three special cases for a
+        procedure declaration, denoted by the annotations "inline," "noinline,"
+        and "infer." In all three cases, a procedure $p$ is associated with
+        a record type $p_t$ and a function $f_p$ that returns an element of
+        $p_t$. The parameters of $f_p$ are the same as the parameters of $p$
+        plus the module type, and the elements of $p_t$ are the
+        <code>return</code>s and <code>modifies</code>s of $p$. When inlining,
+        the function $f_p$ is actually a macro, this is only possible when the
+        procedure has no loops or cyclic procedure calls. When not inlining,
+        the function $f_p$ is an uninterpreted function with associated
+        assertions: "noinline" will use the <code>require</code>s and
+        <code>ensure</code>s; "infer" will use the <code>require</code>s and a
+        strongest-post-condition.
 
-</p>
+      </p>
 
-<p>
+      <p>
 
-  To use procedure calls in the core language, all we need to do is call the
-  function $f_p$ and select the appropriate outputs when constructing the new
-  module instance. For example, the Uclid5 module
+        To use procedure calls in the core language, all we need to do is call the
+        function $f_p$ and select the appropriate outputs when constructing the new
+        module instance. For example, the Uclid5 module
 
-</p>
+      </p>
 
-<pre><code>var a, b : integer;
+      <pre><code>module main {
+var a, b : integer;
 
 procedure[inline] p(x : integer, y : integer)
   returns (z : integer)
@@ -572,64 +590,65 @@ next {
   call (b') = p(a, b);
 }
 
-invariant a_le_b: a &lt;= b;</code></pre>
+invariant a_le_b: a &lt;= b;
+}</code></pre>
 
-<p>
+      <p>
 
-  is encoded as
+        is encoded as
 
-</p>
+      </p>
 
-<pre><code>(declare-datatypes ((p_t 0)) (((p (z Int)))))
-(define-fun f_p ((x Int) (y Int)) p_t (p (+ x y)))
+      <pre><code>(declare-datatypes ((main 0)) (((main!cntr (a Int) (b Int)))))
+(declare-datatypes ((p_t 0)) (((p (z Int)))))
+(define-fun f_p ((x Int) (y Int) (in main)) p_t (p (+ x y)))
 
-(declare-datatypes ((main!type 0)) (((main (a Int) (b Int)))))
-(define-fun main!init ((in main!type)) main!type (main 0 1))
-(define-fun main!next ((in main!type)) main!type (main (b in) (z (f_p (a in) (b in)))))
-(define-fun main!spec ((in main!type)) Bool (&lt;= (a in) (b in)))</code></pre>
+(define-fun main!init ((in main)) main (main!cntr 0 1))
+(define-fun main!next ((in main)) main (main!cntr (b in) (z (f_p (a in) (b in) in))))
+(define-fun main!spec ((in main)) Bool (&lt;= (a in) (b in)))</code></pre>
 
-<p>
+      <p>
 
-  and with "inline" replaced by "infer," the same module is encoded as
+        and with "inline" replaced by "infer," the same module is encoded as
 
-</p>
-
-
-<pre><code>(declare-datatypes ((p_t 0)) (((p (z Int)))))
-(declare-fun f_p (Int Int) p_t)
-(assert (forall ((i Int) (j Int)) (=> true (= (z (f_p i j)) (+ i j)))))
-
-(declare-datatypes ((main!type 0)) (((main (a Int) (b Int)))))
-(define-fun main!init ((in main!type)) main!type (main 0 1))
-(define-fun main!next ((in main!type)) main!type (main (b in) (z (f_p (a in) (b in)))))
-(define-fun main!spec ((in main!type)) Bool (&lt;= (a in) (b in)))</code></pre>
-
-<p>
-
-  The responsibility of the procedure language is to provide the core language
-  with the function body in the case of "inline" and the pre- and
-  post-conditions otherwise.
-
-</p>
+      </p>
 
 
-<h2 id="proof">3. Proof Language</h2>
-<p>
+      <pre><code>(declare-datatypes ((main 0)) (((main!cntr (a Int) (b Int)))))
+(declare-datatypes ((p_t 0)) (((p (z Int)))))
+(declare-fun f_p (Int Int main) p_t)
+(assert (forall ((i Int) (j Int) (m main)) (=> true (= (z (f_p i j m)) (+ i j)))))
 
-  The proof language is the subset of Uclid5 that covers the control block. The
-  control block of a module represents a sequential program over the symbols
-  $t$, $i$, $n$, and $s$ of the module in question. For complete flexibility,
-  we will define the proof language using operational semantics.
-  
-</p>
+(define-fun main!init ((in main)) main (main!cntr 0 1))
+(define-fun main!next ((in main)) main (main!cntr (b in) (z (f_p (a in) (b in) in))))
+(define-fun main!spec ((in main)) Bool (&lt;= (a in) (b in)))</code></pre>
 
-<p>
+      <p>
 
-  For example, bounded model checking could be defined as a library function in the proof language like this
+        The responsibility of the procedure language is to provide the core language
+        with the function body in the case of "inline" and the pre- and
+        post-conditions otherwise.
 
-</p>
+      </p>
 
-<pre><code>def bmc(k):
+
+      <h2 id="proof">3. Proof Language</h2>
+      <p>
+
+        The proof language is the subset of Uclid5 that covers the control block. The
+        control block of a module represents a sequential program over the symbols
+        $t$, $i$, $n$, and $s$ of the module in question. For complete flexibility,
+        we will define the proof language using operational semantics.
+
+      </p>
+
+      <p>
+
+        For example, bounded model checking could be defined as a library function in the proof language like this
+
+      </p>
+
+      <pre><code>def bmc(k):
   current = init
   for i in range(0, k+1):
       solver.push()
@@ -641,55 +660,60 @@ invariant a_le_b: a &lt;= b;</code></pre>
       current = next(current)
 </code></pre>
 
-<p>
+      <p>
 
-  and Uclid5 users would then use this library function to check their programs or build more interesting proof procedures, like synthesis procedures. 
+        and Uclid5 users would then use this library function to check their programs or build more interesting proof
+        procedures, like synthesis procedures.
 
-</p>
+      </p>
 
-<p>
-  
-  <b>Synthesis Functions. </b>
-  The core language interfaces with the proof language through synthesis
-  function declarations. These are empty functions that must be filled in by
-  the proof program. The requirement for how these empty functions must be
-  filled in is given by a proof procedure, like bound model checking.
-  
-</p>
+      <p>
 
-<p>
+        <b>Synthesis Functions. </b>
+        The core language interfaces with the proof language through synthesis
+        function declarations. These are empty functions that must be filled in by
+        the proof program. The requirement for how these empty functions must be
+        filled in is given by a proof procedure, like bound model checking.
 
-  In other words, synthesis function declarations act as placeholders in the core language that the proof language can fill-in as desired.
+      </p>
 
-</p>
+      <p>
 
-<h3>Other Oracles</h3>
+        In other words, synthesis function declarations act as placeholders in the core language that the proof language
+        can fill-in as desired.
 
-<p>
+      </p>
 
-The proof language is flexible enough to incorporate arbitrary oracles. For
-example, consider how we might implement specification mining. Specification
-mining is one technique for proof programs to fill in the bodies of synthesis
-functions. This technique relies on observations (data) that are imported into
-the proof program but may come from anywhere. To realize specification mining,
-we extend the proof language with an <code>import</code> keyword. The intuition
-is that <code>import</code> gives us access to an external database of
-observations.
+      <h3>Other Oracles</h3>
 
-</p>
+      <p>
 
-  <h2>Conclusions and Future Work</h2>
-  <p>
-    <ul>
-      <li>Small syntax changes</li>
-      <li>Composition and simulation in core language</li>
-      <li>Formal definition of procedure language</li>
-      <li>Formal definition of proof language</li>
-      <li>Implementation including fuzzing with equivalence checks on transformations</li>
-      <li>Update P to Uclid5 translation</li>
-      <li>Prove things about P programs; write a paper</li>
-    </ul>  
-  </p>
+        The proof language is flexible enough to incorporate arbitrary oracles. For
+        example, consider how we might implement specification mining. Specification
+        mining is one technique for proof programs to fill in the bodies of synthesis
+        functions. This technique relies on observations (data) that are imported into
+        the proof program but may come from anywhere. To realize specification mining,
+        we extend the proof language with an <code>import</code> keyword. The intuition
+        is that <code>import</code> gives us access to an external database of
+        observations.
+
+      </p>
+
+      <h2>TODO</h2>
+      <p>
+      <ul>
+        <li>Support bitvectors, arrays, and strings</li>
+        <li>Instance initializations</li>
+        <li>Inline assumptions and assertions</li>
+        <li>Havocs</li>
+        <li>Composition and simulation in core language</li>
+        <li>Formal definition of proof language</li>
+        <li>Support procedure and proof language</li>
+        <li>Implementation including fuzzing with equivalence checks on transformations</li>
+        <li>Update P to Uclid5 translation</li>
+        <li>Prove things about P programs; write a paper</li>
+      </ul>
+      </p>
 
     </article>
   </main>
