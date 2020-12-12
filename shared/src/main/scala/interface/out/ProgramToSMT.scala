@@ -186,7 +186,8 @@ package object smt {
           case s: SortMacro    => Some(sortmacroToSmtCtx(s))
           case u: UserFunction => Some(userfunctionToSmtCtx(u))
           case u: UserMacro => {
-            val dispatched = List(dispatch(u.body), Some(usermacroToSmtCtx(u))).flatten
+            val dispatched =
+              List(dispatch(u.body), Some(usermacroToSmtCtx(u))).flatten
             if (dispatched.length > 0) {
               Some(dispatched.mkString("\n"))
             } else {

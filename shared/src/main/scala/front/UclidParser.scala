@@ -635,7 +635,7 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
           LhsPolymorphicSelect(id, (rOp.id) :: (rOps.map(_.id)))
       } |
       IdParser <~ OpPrime ^^ { case id => LhsId(id) } |
-      IdParser ^^ { case id => LhsId(id) }
+      IdParser ^^ { case id            => LhsId(id) }
   }
 
   lazy val LhsListParser: PackratParser[List[Lhs]] =

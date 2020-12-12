@@ -72,7 +72,11 @@ import front.{
 
 package object ast {
 
-  class ScopeFrame(val getters: Map[String, Ref], val inModParam: Ref, val outMod: Ref)
+  class ScopeFrame(
+    val getters: Map[String, Ref],
+    val inModParam: Ref,
+    val outMod: Ref
+  )
 
   class Scope() {
     val stack = new Stack[ScopeFrame]()
@@ -131,7 +135,9 @@ package object ast {
             selRef
         }
 
-      scope.stack.push(new ScopeFrame(selectorTerms.toMap, inputStateRef, moduleRef))
+      scope.stack.push(
+        new ScopeFrame(selectorTerms.toMap, inputStateRef, moduleRef)
+      )
 
       // add constructor and remember where it is
       val constructorRef = Ref(program.stmts.length)
@@ -406,12 +412,12 @@ package object ast {
 
       if (flattened.length > 0) {
         val firstFuncRef = stmtToTerm(flattened.head)
-  
+
         val startRef = Ref(program.stmts.length)
         program.stmts.addOne(
           Application(firstFuncRef, List(scope.stack.top.inModParam))
         )
-  
+
         flattened.tail.foldLeft(startRef) { (acc, stmt) =>
           val funcRef = stmtToTerm(stmt)
           val appRef = Ref(program.stmts.length)
@@ -424,127 +430,156 @@ package object ast {
     }
 
     def stmtToTerm(stmt: Statement): Ref =
-      scope.opLocation.getOrElse(stmt.astNodeId.toString(), {
-      stmt match {
-        case AssignStmt(lhss, rhss) => {
-          assert(lhss.length == 1, "lhss must be flattened by now")
-          assert(rhss.length == 1, "rhss must be flattened by now")
-          val lhs = lhss(0)
-          val rhs = rhss(0)
+      scope.opLocation.getOrElse(
+        stmt.astNodeId.toString(), {
+          stmt match {
+            case AssignStmt(lhss, rhss) => {
+              assert(lhss.length == 1, "lhss must be flattened by now")
+              assert(rhss.length == 1, "rhss must be flattened by now")
+              val lhs = lhss(0)
+              val rhs = rhss(0)
 
-          lhs match {
-            case LhsId(id) => {
-              // get the constructor
-              val modRef = scope.stack.top.outMod
-              val ctrRef = program
-                .stmts(modRef.loc)
-                .asInstanceOf[core.Module]
-                .ct
-              val selRefs =
-                program.stmts(ctrRef.loc).asInstanceOf[Constructor].selectors
+              lhs match {
+                case LhsId(id) => {
+                  // get the constructor
+                  val modRef = scope.stack.top.outMod
+                  val ctrRef = program
+                    .stmts(modRef.loc)
+                    .asInstanceOf[core.Module]
+                    .ct
+                  val selRefs =
+                    program
+                      .stmts(ctrRef.loc)
+                      .asInstanceOf[Constructor]
+                      .selectors
 
-              val components = selRefs.map { s =>
-                val sel = program.stmts(s.loc).asInstanceOf[Selector]
-                if (sel.name == lhs.ident.name) {
-                  exprToTerm(rhs)
-                } else {
-                  scope.stack.top.getters(sel.name)
+                  val components = selRefs.map { s =>
+                    val sel = program.stmts(s.loc).asInstanceOf[Selector]
+                    if (sel.name == lhs.ident.name) {
+                      exprToTerm(rhs)
+                    } else {
+                      scope.stack.top.getters(sel.name)
+                    }
+                  }
+
+                  val bodyRef = Ref(program.stmts.length)
+                  program.stmts.addOne(Application(ctrRef, components))
+
+                  val macroRef = Ref(program.stmts.length)
+                  program.stmts.addOne(
+                    UserMacro(
+                      s"stmt!${stmt.astNodeId}",
+                      scope.stack.top.outMod,
+                      bodyRef,
+                      List(scope.stack.top.inModParam)
+                    )
+                  )
+
+                  scope.opLocation.addOne((stmt.astNodeId.toString(), macroRef))
+
+                  macroRef
                 }
-              }
+                case LhsPolymorphicSelect(id, fields) => {
+                  val innerStateRef = scope.stack.top.getters(id.name)
+                  val innerModRef = getTermTypeRef(innerStateRef)
+                  val innerMod =
+                    program.stmts(innerModRef.loc).asInstanceOf[core.Module]
 
-              val bodyRef = Ref(program.stmts.length)
-              program.stmts.addOne(Application(ctrRef, components))
+                  val innerCtr =
+                    program.stmts(innerMod.ct.loc).asInstanceOf[Constructor]
+                  val innerGetters = (innerCtr.selectors.map { selRef =>
+                    val getterRef = Ref(program.stmts.length)
+                    program.stmts.addOne(
+                      Application(
+                        selRef,
+                        List(scope.stack.top.getters(id.name))
+                      )
+                    )
 
-              val macroRef = Ref(program.stmts.length)
-              program.stmts.addOne(
-                UserMacro(
-                  s"stmt!${stmt.astNodeId}",
-                  scope.stack.top.outMod,
-                  bodyRef,
-                  List(scope.stack.top.inModParam)
-                )
-              )
+                    val name =
+                      program.stmts(selRef.loc).asInstanceOf[Selector].name
 
-              scope.opLocation.addOne((stmt.astNodeId.toString(), macroRef))
+                    (name, getterRef)
+                  } ++ scope.stack.top.getters).toMap
 
-              macroRef
-            }
-            case LhsPolymorphicSelect(id, fields) => {
-              val innerStateRef = scope.stack.top.getters(id.name)
-              val innerModRef = getTermTypeRef(innerStateRef)
-              val innerMod = program.stmts(innerModRef.loc).asInstanceOf[core.Module]
+                  scope.stack.push(
+                    new ScopeFrame(
+                      innerGetters,
+                      scope.stack.top.inModParam,
+                      innerModRef
+                    )
+                  )
 
-              val innerCtr = program.stmts(innerMod.ct.loc).asInstanceOf[Constructor]
-              val innerGetters = (innerCtr.selectors.map(selRef => {
-                val getterRef = Ref(program.stmts.length)
-                program.stmts.addOne(Application(selRef, List(scope.stack.top.getters(id.name))))
-                
-                val name = program.stmts(selRef.loc).asInstanceOf[Selector].name
+                  val newLhs: Lhs = if (fields.length > 1) {
+                    LhsPolymorphicSelect(fields.head, fields.tail)
+                  } else {
+                    LhsId(fields.head)
+                  }
 
-                (name, getterRef)
-              }) ++ scope.stack.top.getters).toMap
+                  // create the inner function call
+                  val innerFuncRef =
+                    stmtToTerm(AssignStmt(List(newLhs), List(rhs)))
 
-              scope.stack.push(new ScopeFrame(innerGetters, scope.stack.top.inModParam, innerModRef))
+                  scope.stack.pop()
 
-              val newLhs : Lhs = if (fields.length > 1) {
-                LhsPolymorphicSelect(fields.head, fields.tail)
-              } else {
-                LhsId(fields.head)
-              }
+                  val modRef = scope.stack.top.outMod
+                  val ctrRef = program
+                    .stmts(modRef.loc)
+                    .asInstanceOf[core.Module]
+                    .ct
+                  val selRefs =
+                    program
+                      .stmts(ctrRef.loc)
+                      .asInstanceOf[Constructor]
+                      .selectors
 
-              // create the inner function call
-              val innerFuncRef = stmtToTerm(AssignStmt(List(newLhs), List(rhs)))
+                  val components = selRefs.map {
+                    s =>
+                      val sel = program.stmts(s.loc).asInstanceOf[Selector]
+                      if (sel.name == lhs.ident.name) {
+                        val exprRef = Ref(program.stmts.length)
+                        program.stmts.addOne(
+                          Application(
+                            innerFuncRef,
+                            List(scope.stack.top.inModParam)
+                          )
+                        )
+                        exprRef
+                      } else {
+                        scope.stack.top.getters(sel.name)
+                      }
+                  }
 
-              scope.stack.pop()
+                  val bodyRef = Ref(program.stmts.length)
+                  program.stmts.addOne(Application(ctrRef, components))
 
+                  val macroRef = Ref(program.stmts.length)
+                  program.stmts.addOne(
+                    UserMacro(
+                      s"stmt!${stmt.astNodeId}",
+                      scope.stack.top.outMod,
+                      bodyRef,
+                      List(scope.stack.top.inModParam)
+                    )
+                  )
 
-              val modRef = scope.stack.top.outMod
-              val ctrRef = program
-                .stmts(modRef.loc)
-                .asInstanceOf[core.Module]
-                .ct
-              val selRefs =
-                program.stmts(ctrRef.loc).asInstanceOf[Constructor].selectors
+                  scope.opLocation.addOne((stmt.astNodeId.toString(), macroRef))
 
-              val components = selRefs.map { s =>
-                val sel = program.stmts(s.loc).asInstanceOf[Selector]
-                if (sel.name == lhs.ident.name) {
-                  val exprRef = Ref(program.stmts.length)
-                  program.stmts.addOne(Application(innerFuncRef, List(scope.stack.top.inModParam)))
-                  exprRef
-                } else {
-                  scope.stack.top.getters(sel.name)
+                  macroRef
                 }
+                case _ =>
+                  throw new IllegalArgumentException(
+                    s"lhs not supported yet: ${stmt}"
+                  )
               }
-
-              val bodyRef = Ref(program.stmts.length)
-              program.stmts.addOne(Application(ctrRef, components))
-
-              val macroRef = Ref(program.stmts.length)
-              program.stmts.addOne(
-                UserMacro(
-                  s"stmt!${stmt.astNodeId}",
-                  scope.stack.top.outMod,
-                  bodyRef,
-                  List(scope.stack.top.inModParam)
-                )
-              )
-
-              scope.opLocation.addOne((stmt.astNodeId.toString(), macroRef))
-
-              macroRef
             }
-            case _ => throw new IllegalArgumentException(
-                s"lhs not supported yet: ${stmt}"
+            case _ =>
+              throw new IllegalArgumentException(
+                s"should not be reachable: ${stmt}"
               )
           }
         }
-        case _ =>
-          throw new IllegalArgumentException(
-            s"should not be reachable: ${stmt}"
-          )
-      }
-    })
+      )
 
     def flattenStmts(
       stmts: List[Statement]
@@ -561,46 +596,50 @@ package object ast {
               val left = flattenStmts(List(ifblock))
               val right = flattenStmts(List(elseblock))
 
-              val identifiers : List[Lhs] = (left++right).map(p => p._1)
+              val identifiers: List[Lhs] = (left ++ right).map(p => p._1)
 
-              val total = identifiers.foldLeft(List.empty: List[(Lhs, Expr)])((acc1, lhs) => {
-                val leftTmp = left.filter(pair2 => pair2._1 == lhs)
-                val rightTmp = right.filter(pair2 => pair2._1 == lhs)
+              val total = identifiers.foldLeft(List.empty: List[(Lhs, Expr)]) {
+                (acc1, lhs) =>
+                  val leftTmp = left.filter(pair2 => pair2._1 == lhs)
+                  val rightTmp = right.filter(pair2 => pair2._1 == lhs)
 
-                val leftFiltered = if (leftTmp.length == 0) {
-                  List(Tuple2(lhs, lhs.ident))
-                } else {
-                  leftTmp
-                }
-                val rightFiltered = if (rightTmp.length == 0) {
-                  List(Tuple2(lhs, lhs.ident))
-                } else {
-                  rightTmp
-                }
-
-                val zipped: List[(Lhs, Expr)] =
-                  leftFiltered.foldLeft(List.empty: List[(Lhs, Expr)]) { (acc2, l) =>
-                    val inner: List[(Lhs, Expr)] =
-                      rightFiltered.foldLeft(List.empty: List[(Lhs, Expr)]) { (acc3, r) =>
-                        val e = if (l._2 == r._2) {
-                          Tuple2(l._1, l._2)
-                        } else {
-                          Tuple2(
-                            l._1,
-                            OperatorApplication(
-                              ITEOp(),
-                              List(cond, l._2, r._2)
-                            )
-                          )
-                        }
-                        acc3 ++ List(e)
-                      }
-  
-                    acc2 ++ inner
+                  val leftFiltered = if (leftTmp.length == 0) {
+                    List(Tuple2(lhs, lhs.ident))
+                  } else {
+                    leftTmp
                   }
-  
-                acc1 ++ zipped
-              })
+                  val rightFiltered = if (rightTmp.length == 0) {
+                    List(Tuple2(lhs, lhs.ident))
+                  } else {
+                    rightTmp
+                  }
+
+                  val zipped: List[(Lhs, Expr)] =
+                    leftFiltered.foldLeft(List.empty: List[(Lhs, Expr)]) {
+                      (acc2, l) =>
+                        val inner: List[(Lhs, Expr)] =
+                          rightFiltered
+                            .foldLeft(List.empty: List[(Lhs, Expr)]) {
+                              (acc3, r) =>
+                                val e = if (l._2 == r._2) {
+                                  Tuple2(l._1, l._2)
+                                } else {
+                                  Tuple2(
+                                    l._1,
+                                    OperatorApplication(
+                                      ITEOp(),
+                                      List(cond, l._2, r._2)
+                                    )
+                                  )
+                                }
+                                acc3 ++ List(e)
+                            }
+
+                        acc2 ++ inner
+                    }
+
+                  acc1 ++ zipped
+              }
 
               acc ++ total
 
