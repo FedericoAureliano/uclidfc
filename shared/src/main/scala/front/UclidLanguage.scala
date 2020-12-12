@@ -202,112 +202,110 @@ case class IntUnaryMinusOp() extends IntArgOperator {
 }
 
 // These operators take bitvector operands and return bitvector results.
-sealed abstract class BVArgOperator(val w: Int) extends Operator {
+sealed abstract class BVArgOperator() extends Operator {
   override def fixity = Operator.INFIX
   val arity = 2
 }
 
-case class BVLTOp(override val w: Int) extends BVArgOperator(w) {
+case class BVLTOp() extends BVArgOperator() {
   override def toString = "<"
 }
 
-case class BVLEOp(override val w: Int) extends BVArgOperator(w) {
+case class BVLEOp() extends BVArgOperator() {
   override def toString = "<="
 }
 
-case class BVGTOp(override val w: Int) extends BVArgOperator(w) {
+case class BVGTOp() extends BVArgOperator() {
   override def toString = ">"
 }
 
-case class BVGEOp(override val w: Int) extends BVArgOperator(w) {
+case class BVGEOp() extends BVArgOperator() {
   override def toString = ">="
 }
 
-case class BVLTUOp(override val w: Int) extends BVArgOperator(w) {
+case class BVLTUOp() extends BVArgOperator() {
   override def toString = "<_u"
 }
 
-case class BVLEUOp(override val w: Int) extends BVArgOperator(w) {
+case class BVLEUOp() extends BVArgOperator() {
   override def toString = "<=_u"
 }
 
-case class BVGTUOp(override val w: Int) extends BVArgOperator(w) {
+case class BVGTUOp() extends BVArgOperator() {
   override def toString = ">_u"
 }
 
-case class BVGEUOp(override val w: Int) extends BVArgOperator(w) {
+case class BVGEUOp() extends BVArgOperator() {
   override def toString = ">=_u"
 }
 
-case class BVAddOp(override val w: Int) extends BVArgOperator(w) {
+case class BVAddOp() extends BVArgOperator() {
   override def toString = "+"
 }
 
-case class BVSubOp(override val w: Int) extends BVArgOperator(w) {
+case class BVSubOp() extends BVArgOperator() {
   override def toString = "-"
 }
 
-case class BVMulOp(override val w: Int) extends BVArgOperator(w) {
+case class BVMulOp() extends BVArgOperator() {
   override def toString = "*"
 }
 
-case class BVAndOp(override val w: Int) extends BVArgOperator(w) {
+case class BVAndOp() extends BVArgOperator() {
   override def toString = "&"
 }
 
-case class BVOrOp(override val w: Int) extends BVArgOperator(w) {
+case class BVOrOp() extends BVArgOperator() {
   override def toString = "|"
 }
 
-case class BVXorOp(override val w: Int) extends BVArgOperator(w) {
+case class BVXorOp() extends BVArgOperator() {
   override def toString = "^"
 }
 
-case class BVNotOp(override val w: Int) extends BVArgOperator(w) {
+case class BVNotOp() extends BVArgOperator() {
   override def toString = "~"
   override val arity = 1
 }
 
-case class BVUnaryMinusOp(override val w: Int) extends BVArgOperator(w) {
+case class BVUnaryMinusOp() extends BVArgOperator() {
   override def fixity = Operator.PREFIX
   override def toString = "-"
   override val arity = 1
 }
 
-case class BVSignExtOp(override val w: Int, val e: Int)
-    extends BVArgOperator(w) {
+case class BVSignExtOp(val e: Int) extends BVArgOperator() {
   override def fixity = Operator.PREFIX
   override def toString = "bv_sign_extend"
   override val arity = 1
 }
 
-case class BVZeroExtOp(override val w: Int, val e: Int)
-    extends BVArgOperator(w) {
+case class BVZeroExtOp(val e: Int) extends BVArgOperator() {
   override def fixity = Operator.PREFIX
   override def toString = "bv_zero_extend"
   override val arity = 1
 }
 
-case class BVLeftShiftBVOp(override val w: Int) extends BVArgOperator(w) {
+case class BVLeftShiftBVOp() extends BVArgOperator() {
   override def fixity = Operator.PREFIX
   override def toString = "bv_left_shift"
 }
 
-case class BVLRightShiftBVOp(override val w: Int) extends BVArgOperator(w) {
+case class BVLRightShiftBVOp() extends BVArgOperator() {
   override def fixity = Operator.PREFIX
   override def toString = "bv_l_right_shift"
 }
 
-case class BVARightShiftBVOp(override val w: Int) extends BVArgOperator(w) {
+case class BVARightShiftBVOp() extends BVArgOperator() {
   override def fixity = Operator.PREFIX
   override def toString = "bv_a_right_shift"
 }
 
-case class BVUremOp(override val w: Int) extends BVArgOperator(w) {
+case class BVUremOp() extends BVArgOperator() {
   override def toString = "%_u"
 }
 
-case class BVSremOp(override val w: Int) extends BVArgOperator(w) {
+case class BVSremOp() extends BVArgOperator() {
   override def toString = "%"
 }
 
@@ -458,26 +456,10 @@ case class ConcatOp() extends Operator {
   override def fixity = Operator.INFIX
 }
 
-sealed abstract class SelectorOperator extends Operator {
-  val ident: Identifier
-}
-
-case class PolymorphicSelect(id: Identifier) extends SelectorOperator {
-  override val ident = id
+case class PolymorphicSelect(id: Identifier) extends Operator {
+  val ident = id
   override def toString = id.toString()
   override def fixity = Operator.POSTFIX
-}
-
-case class RecordSelect(id: Identifier) extends SelectorOperator {
-  override val ident = id
-  override def toString = id.toString()
-  override def fixity = Operator.POSTFIX
-}
-
-case class SelectFromInstance(varId: Identifier) extends SelectorOperator {
-  override val ident = varId
-  override def toString = varId.toString()
-  override def fixity = Operator.INFIX
 }
 
 case class ArraySelect(indices: List[Expr]) extends Operator {
@@ -591,10 +573,6 @@ case class OperatorApplication(op: Operator, operands: List[Expr])
     op match {
       case PolymorphicSelect(r) =>
         operands(0).toString + "." + r.toString()
-      case RecordSelect(r) =>
-        operands(0).toString + "." + r.toString
-      case SelectFromInstance(f) =>
-        operands(0).toString + "." + f.toString
       case ForallOp(_, _) | ExistsOp(_, _) =>
         "(" + op.toString + operands(0).toString + ")"
       case _ =>
@@ -631,7 +609,7 @@ case class LhsArraySelect(id: Identifier, indices: List[Expr]) extends Lhs(id) {
     id.toString + "[" + Utils.join(indices.map(_.toString), ", ") + "]"
 }
 
-case class LhsRecordSelect(id: Identifier, fields: List[Identifier])
+case class LhsPolymorphicSelect(id: Identifier, fields: List[Identifier])
     extends Lhs(id) {
 
   override def toString =

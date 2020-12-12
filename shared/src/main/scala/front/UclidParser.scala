@@ -248,19 +248,19 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
     case x ~ OpImpl ~ y   => OperatorApplication(ImplicationOp(), List(x, y))
     case x ~ OpAnd ~ y    => OperatorApplication(ConjunctionOp(), List(x, y))
     case x ~ OpOr ~ y     => OperatorApplication(DisjunctionOp(), List(x, y))
-    case x ~ OpBvAnd ~ y  => OperatorApplication(BVAndOp(0), List(x, y))
-    case x ~ OpBvOr ~ y   => OperatorApplication(BVOrOp(0), List(x, y))
-    case x ~ OpBvXor ~ y  => OperatorApplication(BVXorOp(0), List(x, y))
-    case x ~ OpBvUrem ~ y => OperatorApplication(BVUremOp(0), List(x, y))
-    case x ~ OpBvSrem ~ y => OperatorApplication(BVSremOp(0), List(x, y))
+    case x ~ OpBvAnd ~ y  => OperatorApplication(BVAndOp(), List(x, y))
+    case x ~ OpBvOr ~ y   => OperatorApplication(BVOrOp(), List(x, y))
+    case x ~ OpBvXor ~ y  => OperatorApplication(BVXorOp(), List(x, y))
+    case x ~ OpBvUrem ~ y => OperatorApplication(BVUremOp(), List(x, y))
+    case x ~ OpBvSrem ~ y => OperatorApplication(BVSremOp(), List(x, y))
     case x ~ OpLT ~ y     => OperatorApplication(LTOp(), List(x, y))
     case x ~ OpGT ~ y     => OperatorApplication(GTOp(), List(x, y))
     case x ~ OpLE ~ y     => OperatorApplication(LEOp(), List(x, y))
     case x ~ OpGE ~ y     => OperatorApplication(GEOp(), List(x, y))
-    case x ~ OpULT ~ y    => OperatorApplication(BVLTUOp(0), List(x, y))
-    case x ~ OpUGT ~ y    => OperatorApplication(BVGTUOp(0), List(x, y))
-    case x ~ OpULE ~ y    => OperatorApplication(BVLEUOp(0), List(x, y))
-    case x ~ OpUGE ~ y    => OperatorApplication(BVGEUOp(0), List(x, y))
+    case x ~ OpULT ~ y    => OperatorApplication(BVLTUOp(), List(x, y))
+    case x ~ OpUGT ~ y    => OperatorApplication(BVGTUOp(), List(x, y))
+    case x ~ OpULE ~ y    => OperatorApplication(BVLEUOp(), List(x, y))
+    case x ~ OpUGE ~ y    => OperatorApplication(BVGEUOp(), List(x, y))
     case x ~ OpEQ ~ y     => OperatorApplication(EqualityOp(), List(x, y))
     case x ~ OpNE ~ y     => OperatorApplication(InequalityOp(), List(x, y))
     case x ~ OpConcat ~ y => OperatorApplication(ConcatOp(), List(x, y))
@@ -271,16 +271,16 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
 
   lazy val LLOpParser: Parser[Operator] = positioned {
     OpLT ^^ { case _    => LTOp() } |
-      OpULT ^^ { case _ => BVLTUOp(0) } |
+      OpULT ^^ { case _ => BVLTUOp() } |
       OpLE ^^ { case _  => LEOp() } |
-      OpULE ^^ { case _ => BVLEUOp(0) }
+      OpULE ^^ { case _ => BVLEUOp() }
   }
 
   lazy val RelOpParser: Parser[String] =
     OpGT | OpUGT | OpLT | OpULT | OpEQ | OpNE | OpGE | OpUGE | OpLE | OpULE
   lazy val UnOpParser: Parser[String] = OpNot | OpMinus
 
-  lazy val RecordSelectOpParser: Parser[PolymorphicSelect] = positioned {
+  lazy val PolymorphicSelectOpParser: Parser[PolymorphicSelect] = positioned {
     ("." ~> IdParser) ^^ { case id => PolymorphicSelect(id) }
   }
 
@@ -491,14 +491,14 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
         case e => OperatorApplication(NegationOp(), List(e))
       } |
       OpBvNot ~> E12Parser ^^ {
-        case e => OperatorApplication(BVNotOp(0), List(e))
+        case e => OperatorApplication(BVNotOp(), List(e))
       } |
       E12Parser
   }
 
   /** ExpressionSuffixes. */
   lazy val ExprSuffixParser: PackratParser[Operator] = positioned {
-    ArraySelectOpParser | ArrayStoreOpParser | ExtractOpParser | RecordSelectOpParser
+    ArraySelectOpParser | ArrayStoreOpParser | ExtractOpParser | PolymorphicSelectOpParser
   }
 
   /** E12Parser = E12Parser (ExprList) | E12Parser ExprSuffix | E15Parser */
@@ -630,11 +630,12 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
         case id ~ mapOp =>
           LhsArraySelect(id, mapOp.indices)
       } |
-      IdParser ~ RecordSelectOpParser ~ rep(RecordSelectOpParser) ^^ {
+      IdParser ~ PolymorphicSelectOpParser ~ rep(PolymorphicSelectOpParser) ^^ {
         case id ~ rOp ~ rOps =>
-          LhsRecordSelect(id, (rOp.id) :: (rOps.map(_.id)))
+          LhsPolymorphicSelect(id, (rOp.id) :: (rOps.map(_.id)))
       } |
-      IdParser <~ OpPrime ^^ { case id => LhsId(id) }
+      IdParser <~ OpPrime ^^ { case id => LhsId(id) } |
+      IdParser ^^ { case id => LhsId(id) }
   }
 
   lazy val LhsListParser: PackratParser[List[Lhs]] =

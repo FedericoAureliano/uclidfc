@@ -185,10 +185,26 @@ package object smt {
           case d: DataType     => Some(datatypeToSmtCtx(d))
           case s: SortMacro    => Some(sortmacroToSmtCtx(s))
           case u: UserFunction => Some(userfunctionToSmtCtx(u))
-          case u: UserMacro    => Some(usermacroToSmtCtx(u))
-          case u: UserSort     => Some(usersortToSmtCtx(u))
-          case m: core.Module  => Some(moduleToSmtCtx(m))
-          case _               => None
+          case u: UserMacro => {
+            val dispatched = List(dispatch(u.body), Some(usermacroToSmtCtx(u))).flatten
+            if (dispatched.length > 0) {
+              Some(dispatched.mkString("\n"))
+            } else {
+              None
+            }
+          }
+          case u: UserSort    => Some(usersortToSmtCtx(u))
+          case m: core.Module => Some(moduleToSmtCtx(m))
+          case a: Application => {
+            val dispatched =
+              (List(a.caller) ++ a.args).map(a => dispatch(a)).flatten
+            if (dispatched.length > 0) {
+              Some(dispatched.mkString("\n"))
+            } else {
+              None
+            }
+          }
+          case _ => None
         }
       } else {
         None

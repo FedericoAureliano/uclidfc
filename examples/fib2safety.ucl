@@ -3,8 +3,8 @@ module fib
     var a, b : integer;
 
     init {
-        a' = 0;
-        b' = 1;
+        a = 0;
+        b = 1;
     }
 
     next {
@@ -19,7 +19,7 @@ module main
     var fib2 : fib;
 
     next {
-        next (fib1);
+        fib1.a = fib1.b;
         next (fib2);
     }
 
