@@ -1,0 +1,1 @@
+java -jar jvm/target/scala-2.13/uclid-assembly-1.0.jar "$@"

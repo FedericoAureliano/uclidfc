@@ -15,8 +15,12 @@ object UclidMain {
 
   def main(args: Array[String]): Unit =
     parseOptions(args) match {
-      case None         =>
-      case Some(config) => main(config)
+      case None => sys.exit(1)
+      case Some(config) => {
+        val pair = main(config)
+        println(pair._1)
+        sys.exit(pair._2)
+      }
     }
 
   /** Command-line configuration flags for uclid5.
@@ -50,22 +54,24 @@ object UclidMain {
 
   /** This version of 'main' does all the real work.
     */
-  def main(config: Config): Unit =
+  def main(config: Config): (String, Int) =
     try {
       val mainModuleName = Identifier(config.mainModuleName)
       val modules = compile(config.files, mainModuleName)
       val term = modelToProgram(modules, Some(config.mainModuleName))
-      println(programToSmt(term))
-      println(
-        "Finished execution for module: %s.".format(mainModuleName.toString)
+      Tuple2(
+        programToSmt(term) + "\n" +
+          "Finished execution for module: %s.".format(mainModuleName.toString),
+        0
       )
     } catch {
       case (e: java.io.FileNotFoundException) =>
-        println("Error: " + e.getMessage() + ".")
+        Tuple2("Error: " + e.getMessage() + ".", 1)
       case (p: Utils.ParserError) =>
-        println(
+        Tuple2(
           "%s error %s: %s.\n%s"
-            .format(p.errorName, p.positionStr, p.getMessage, p.fullStr)
+            .format(p.errorName, p.positionStr, p.getMessage, p.fullStr),
+          1
         )
     }
 

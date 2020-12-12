@@ -13,10 +13,25 @@ lazy val uclid = crossProject(JSPlatform, JVMPlatform)
   .settings(
     name := "uclid",
     version := "1.0",
-    scalacOptions += "-deprecation",
+    javacOptions ++= Seq("-source", "1.6", "-target", "1.6"),
+    scalacOptions ++= Seq("-unchecked", "-deprecation", "-feature"),
     libraryDependencies += ("org.scala-lang.modules" %%% "scala-parser-combinators" % "1.1.2")
       .withSources(),
-    libraryDependencies += "com.novocode" % "junit-interface" % "0.11" % "test"
+    libraryDependencies += "com.novocode" % "junit-interface" % "0.11" % "test",
+    jacocoReportSettings := JacocoReportSettings(
+      "Jacoco Coverage Report",
+      None,
+      JacocoThresholds(
+        instruction = 80,
+        method = 100,
+        branch = 100,
+        complexity = 100,
+        line = 90,
+        clazz = 100
+      ),
+      Seq(JacocoReportFormats.ScalaHTML, JacocoReportFormats.XML),
+      "utf-8"
+    )
   )
   .jvmSettings(
     // JVM-specific settings

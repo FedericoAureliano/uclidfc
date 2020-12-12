@@ -17,10 +17,29 @@ sbt fullOptJS; cp js/target/scala-2.13/uclid-opt.js docs/js/uclid-opt.js
 open docs/index.html
 ```
 
+## Compile
+
+```
+sbt assembly
+```
+
+## Run Jar
+
+```
+./tri-uclid examples/fib.ucl
+```
+
 ## Developers
 
 ### Check Format
 
 ```
 sbt scalafmtSbtCheck scalafmtCheck test:scalafmtCheck
+```
+
+### Check Coverage
+
+```
+sbt jacoco
+open jvm/target/scala-2.13/jacoco/report/html/index.html
 ```
