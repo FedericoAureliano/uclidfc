@@ -1,0 +1,23 @@
+module fib
+{
+    var a, b : integer;
+
+    init {
+        a = 0;
+        b = 1;
+    }
+
+    next {
+        a' = b;
+        b' = a + b;
+    }
+}
+
+module main
+{
+    var fibs : [integer]fib;
+
+    next {
+        // next(fibs[0]);
+    }
+}

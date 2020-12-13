@@ -593,8 +593,12 @@ case class FuncApplication(e: Expr, args: List[Expr]) extends Expr {
     e.toString + "(" + Utils.join(args.map(_.toString), ", ") + ")"
 }
 
-case class ModuleCallExpr(id: Identifier) extends Expr {
+case class ModuleNextCallExpr(id: Identifier) extends Expr {
   override def toString = "next (" + id.toString + ")"
+}
+
+case class ModuleInitCallExpr(id: Identifier) extends Expr {
+  override def toString = "init (" + id.toString + ")"
 }
 
 sealed abstract class Lhs(val ident: Identifier) extends ASTNode
@@ -809,74 +813,6 @@ case class SynonymType(id: Identifier) extends Type {
   }
 }
 
-case class ExternalType(moduleId: Identifier, typeId: Identifier) extends Type {
-  override def toString = moduleId.toString + "." + typeId.toString
-}
-
-case class ModuleInstanceType(id: Identifier) extends Type {
-  override def toString = id.toString
-}
-
-case class ModuleType(
-  inputs: List[(Identifier, Type)],
-  outputs: List[(Identifier, Type)],
-  sharedVars: List[(Identifier, Type)],
-  constLits: List[(Identifier, NumericLit)],
-  constants: List[(Identifier, Type)],
-  variables: List[(Identifier, Type)],
-  functions: List[(Identifier, FunctionSig)]
-) extends Type {
-
-  def argToString(arg: (Identifier, Type)): String =
-    arg._1.toString + ": (" + arg._2.toString + ")"
-
-  def argsToString(args: List[(Identifier, Type)]) =
-    Utils.join(args.map(argToString(_)), ", ")
-
-  lazy val inputMap: Map[Identifier, Type] = inputs.toMap
-  lazy val outputMap: Map[Identifier, Type] = outputs.toMap
-  lazy val sharedVarMap: Map[Identifier, Type] = sharedVars.toMap
-
-  lazy val argSet =
-    inputs
-      .map(_._1)
-      .toSet
-      .union(outputs.map(_._1).toSet)
-      .union(
-        sharedVars
-          .map(_._1)
-          .toSet
-      )
-  lazy val constLitMap: Map[Identifier, NumericLit] = constLits.toMap
-
-  lazy val constantMap: Map[Identifier, Type] =
-    constants.map(a => (a._1 -> a._2)).toMap
-
-  lazy val varMap: Map[Identifier, Type] =
-    variables.map(a => (a._1 -> a._2)).toMap
-
-  lazy val funcMap: Map[Identifier, FunctionSig] =
-    functions.map(a => (a._1 -> a._2)).toMap
-
-  lazy val typeMap: Map[Identifier, Type] =
-    inputMap ++ outputMap ++ constantMap ++ varMap ++ funcMap.map(f =>
-      (f._1 -> f._2.typ)
-    )
-
-  lazy val externalTypeMap: Map[Identifier, Type] =
-    constantMap ++ funcMap.map(f => (f._1 -> f._2.typ)) ++ constLitMap.map(f =>
-      (f._1 -> f._2.typeOf)
-    )
-
-  def typeOf(id: Identifier): Option[Type] =
-    typeMap.get(id)
-
-  override def toString =
-    "inputs (" + argsToString(inputs) + ") outputs (" + argsToString(
-      outputs
-    ) + ")"
-}
-
 /** Statements * */
 sealed abstract class Statement extends ASTNode {
   override def toString = Utils.join(toLines, "\n") + "\n"
@@ -943,7 +879,7 @@ case class CaseStmt(body: List[(Expr, Statement)]) extends Statement {
       List("esac")
 }
 
-case class ModuleCallStmt(id: Identifier) extends Statement {
+case class ModuleNextCallStmt(id: Identifier) extends Statement {
   override def toLines = List("next (" + id.toString + ")")
 }
 
@@ -986,13 +922,6 @@ case class TypeDecl(id: Identifier, typ: Type) extends Decl {
   override def toString =
     "type " + id + " = " + typ + "; // " + position.toString
   override def declNames = List(id)
-}
-
-case class ModuleTypesImportDecl(id: Identifier) extends Decl {
-
-  override def toString =
-    "type * = %s.*; // %s".format(id.toString(), position.toString())
-  override def declNames = List.empty
 }
 
 case class StateVarsDecl(ids: List[Identifier], typ: Type) extends Decl {
@@ -1278,17 +1207,6 @@ case class Module(
     .map(_.asInstanceOf[TypeDecl])
     .map(t => (t.id -> t.typ))
     .toMap
-
-  // compute the "type" of this module.
-  lazy val moduleType: ModuleType = ModuleType(
-    inputs,
-    outputs,
-    sharedVars,
-    constLits,
-    constants,
-    vars,
-    functions.map(c => (c.id, c.sig))
-  )
 
   // the init block.
   lazy val init: Option[InitDecl] = {

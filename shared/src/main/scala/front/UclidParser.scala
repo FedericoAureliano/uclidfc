@@ -595,15 +595,8 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
     }
   )
 
-  lazy val ExternalTypeParser: PackratParser[ExternalType] = positioned {
-    IdParser ~ ("." ~> IdParser) ^^ {
-      case moduleId ~ typeId =>
-        ExternalType(moduleId, typeId)
-    }
-  }
-
   lazy val TypeParser: PackratParser[Type] = positioned {
-    MapTypeParser | ArrayTypeParser | EnumTypeParser | TupleTypeParser | RecordTypeParser | ExternalTypeParser | SynonymTypeParser | PrimitiveTypeParser
+    MapTypeParser | ArrayTypeParser | EnumTypeParser | TupleTypeParser | RecordTypeParser | SynonymTypeParser | PrimitiveTypeParser
   }
 
   lazy val IdTypeParser: PackratParser[(Identifier, Type)] =
@@ -662,7 +655,7 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
       } |
       KwNext ~ "(" ~> IdParser <~ ")" ~ ";" ^^ {
         case id =>
-          ModuleCallStmt(id)
+          ModuleNextCallStmt(id)
       } |
       KwIf ~ "(" ~ "*" ~ ")" ~> (BlkStmtParser <~ KwElse) ~ BlkStmtParser ^^ {
         case tblk ~ fblk =>
@@ -724,14 +717,6 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
           TypeDecl(id, UninterpretedType(id))
       }
   }
-
-  lazy val ModuleTypesImportDeclParser: PackratParser[ModuleTypesImportDecl] =
-    positioned {
-      KwType ~ "*" ~ "=" ~> IdParser <~ "." ~ "*" ~ ";" ^^ {
-        case id =>
-          ModuleTypesImportDecl(id)
-      }
-    }
 
   lazy val VarsDeclParser: PackratParser[StateVarsDecl] = positioned {
     KwVar ~> IdListParser ~ ":" ~ TypeParser <~ ";" ^^ {
@@ -866,7 +851,7 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
   lazy val DeclParser: PackratParser[Decl] =
     positioned(
       TypeDeclParser | ConstDeclParser | FuncDeclParser |
-        ModuleTypesImportDeclParser | ModuleFuncsImportDeclParser | ModuleConstsImportDeclParser |
+        ModuleFuncsImportDeclParser | ModuleConstsImportDeclParser |
         SynthFuncDeclParser | DefineDeclParser | ModuleDefsImportDeclParser |
         VarsDeclParser | InputsDeclParser | OutputsDeclParser | SharedVarsDeclParser |
         ConstLitDeclParser | ConstDeclParser |

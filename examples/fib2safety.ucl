@@ -19,8 +19,8 @@ module main
     var fib2 : fib;
 
     next {
-        fib1.a = fib1.b;
-        next (fib2);
+        next(fib1);
+        next(fib2);
     }
 
     property b_are_eq : fib1.b == fib2.b;

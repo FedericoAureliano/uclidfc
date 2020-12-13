@@ -3,61 +3,9 @@ package interface.out
 import middle.core.garbage
 
 import middle.core
-import middle.core.{
-  Application,
-  Constructor,
-  DataType,
-  FunctionParameter,
-  Instruction,
-  Numeral,
-  Program,
-  Ref,
-  Selector,
-  SortMacro,
-  SortParameter,
-  TheoryMacro,
-  TheorySort,
-  UserFunction,
-  UserMacro,
-  UserSort
-}
+import middle.core._
 import middle.core.rewrite
-import front.{
-  ArrayType,
-  AssertStmt,
-  AssignStmt,
-  AssumeStmt,
-  BitVectorType,
-  BlockStmt,
-  BooleanType,
-  ConstArray,
-  EnumType,
-  Expr,
-  ExternalType,
-  FuncApplication,
-  HavocStmt,
-  Identifier,
-  IfElseStmt,
-  InitDecl,
-  IntegerType,
-  Lhs,
-  Literal,
-  MapType,
-  ModuleCallStmt,
-  ModuleInstanceType,
-  ModuleType,
-  NextDecl,
-  OperatorApplication,
-  RecordType,
-  SkipStmt,
-  StringType,
-  SynonymType,
-  Tuple,
-  TupleType,
-  Type,
-  UndefinedType,
-  UninterpretedType
-}
+import front._
 import scala.collection.mutable.HashSet
 
 package object smt {
