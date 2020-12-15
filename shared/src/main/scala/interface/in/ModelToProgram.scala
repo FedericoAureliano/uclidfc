@@ -76,6 +76,9 @@ package object ast {
     def addFieldRef(name: String, term: Ref): Unit =
       frame.fieldRefs.addOne((name, term))
 
+    def removeFieldRef(name: String): Unit =
+      frame.fieldRefs.remove(name)
+
     def getFieldRef(name: String): Ref =
       frame.fieldRefs(name)
 
@@ -385,6 +388,7 @@ package object ast {
         }
 
         case ModuleInitCallExpr(id) => {
+          println("here", id)
           // get the instance
           val instanceRef = scope.getFieldRef(id.name)
           // get the module it belongs to
@@ -399,6 +403,7 @@ package object ast {
         }
 
         case ConstArray(exp, typ) => {
+          // BTW: Z3 can handle a non constant argument to the as const function, but CVC4 can't (Dec. 14, 2020)
           val expRef = exprToTerm(exp)
 
           val asConstRef = scope.getOrAddOp("as const", {
@@ -408,8 +413,11 @@ package object ast {
 
           val typeRef = typeUseToTerm(typ)
 
+          val asConstAppRef = Ref(program.stmts.length)
+          program.stmts.addOne(Application(asConstRef, List(typeRef)))
+
           val appRef = Ref(program.stmts.length)
-          program.stmts.addOne(Application(asConstRef, List(expRef, typeRef)))
+          program.stmts.addOne(Application(asConstAppRef, List(expRef)))
 
           appRef
         }
@@ -484,7 +492,7 @@ package object ast {
         if (inputSort == scope.getOutputSort()) {
           scope.getStateParam()
         } else {
-          // TODO: build up your output
+          // TODO: we can't just return the input because the output state is different
           scope.getStateParam()
         }
       }
@@ -578,7 +586,7 @@ package object ast {
                     stmtToTerm(AssignStmt(List(newLhs), List(rhs)))
 
                   scope.setOutputSort(oldOutputRef)
-                  // TODO: remove inner getters?
+                  innerGetters.map(p => scope.removeFieldRef(p._1))
 
                   val modRef = scope.getOutputSort()
                   val ctrRef = program
@@ -741,11 +749,27 @@ package object ast {
           val sortRef = scope.getType(id.name).get
           program.stmts(sortRef.loc) match {
             case _: core.Module =>
-              // TODO: handle case when we have no pre existing instance (e.g. when we want to init an array of instances)
-              // the solution should be to create a fresh instance and pipe it in
-              Some(
-                ModuleInitCallExpr(pair._1)
-              )
+              // get the sort to see if we need to create a new instance
+              val fieldRef = scope.getFieldRef(pair._1.name)
+              val fieldSortRef = getTermTypeRef(fieldRef)
+              program.stmts(fieldSortRef.loc) match {
+                case _: core.Module =>
+                  Some(
+                    ModuleInitCallExpr(pair._1)
+                  )
+                case _ => {
+                  // anything else, create an instance and pipe it in
+                  // add a function parameter
+                  val tmpName = scope.newNondetName()
+                  val fp = Ref(program.stmts.length)
+                  program.stmts.addOne(FunctionParameter(tmpName, sortRef))
+                  scope.addNondetParam(fp)
+                  scope.addFieldRef(tmpName, fp)
+                  Some(
+                    ModuleInitCallExpr(Identifier(tmpName))
+                  )
+                }
+              }
             case _ => None
           }
         }

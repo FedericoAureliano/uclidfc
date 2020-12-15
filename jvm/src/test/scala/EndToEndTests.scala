@@ -13,4 +13,7 @@ class TestEndToEnd {
 
   @Test def testExamplefib2safety(): Unit =
     assertEquals(0, endToEnd("examples/fib2safety.ucl"))
+
+  @Test def testExamplefibarraysafety(): Unit =
+    assertEquals(0, endToEnd("examples/fibarraysafety.ucl"))
 }
