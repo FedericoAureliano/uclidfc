@@ -2,20 +2,20 @@ package uclid
 
 import org.junit.Test
 import org.junit.Assert.assertEquals
-import middle.ProofState
+import back.ProofResult
 
 class TestEndToEnd {
   // TODO: add control blocks and Z3/CVC4 in CI
 
-  def endToEnd(filename: String): ProofState =
+  def endToEnd(filename: String): List[ProofResult] =
     UclidMain.main(UclidMain.parseOptions(Array(filename)).get)
 
   @Test def testExamplefib(): Unit =
-    assertEquals(Some(false), endToEnd("examples/fib.ucl").result)
+    assertEquals(Some(true), endToEnd("examples/fib.ucl").last.result)
 
   @Test def testExamplefib2safety(): Unit =
-    assertEquals(Some(false), endToEnd("examples/fib2safety.ucl").result)
+    assert(endToEnd("examples/fib2safety.ucl").isEmpty)
 
   @Test def testExamplefibarraysafety(): Unit =
-    assertEquals(Some(false), endToEnd("examples/fibarraysafety.ucl").result)
+    assert(endToEnd("examples/fibarraysafety.ucl").isEmpty)
 }

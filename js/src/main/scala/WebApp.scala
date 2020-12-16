@@ -112,6 +112,8 @@ object WebApp {
 
       val pResult = Interpreter.run(parsed, Some("main"))
 
+      pResult.program.head = pResult.obligations.last._2.loc
+
       result.textContent = Interface.programToQuery(pResult.program)
     } catch {
       case e: Utils.SyntaxError =>

@@ -106,50 +106,50 @@
       </p>
 
       <pre><code id="demofullanswer">; declaring module main 
-(declare-datatypes ((main 0)) (((main!cntr
-  (a Int)
-  (b Int)))))
+  (declare-datatypes ((main 0)) (((main!cntr
+    (a Int)
+    (b Int)))))
 
-(define-fun stmt!1017 ((in main)) main
-  (main!cntr
-    ; assigning to a
-    (a in)
-    ; assigning to b
-    1))
-
-(define-fun stmt!1016 ((in main)) main
-  (main!cntr
-    ; assigning to a
-    0
-    ; assigning to b
-    (b in)))
-
-(define-fun main!init ((in main)) main
-  (stmt!1017 (stmt!1016 in)))
-
-(define-fun stmt!1020 ((in main)) main
-  (main!cntr
-    ; assigning to a
-    (a in)
-    ; assigning to b
-    (+
+  (define-fun stmt!1017 ((in main)) main
+    (main!cntr
+      ; assigning to a
       (a in)
-      (b in))))
+      ; assigning to b
+      1))
 
-(define-fun stmt!1019 ((in main)) main
-  (main!cntr
-    ; assigning to a
-    (b in)
-    ; assigning to b
-    (b in)))
+  (define-fun stmt!1016 ((in main)) main
+    (main!cntr
+      ; assigning to a
+      0
+      ; assigning to b
+      (b in)))
 
-(define-fun main!next ((in main)) main
-  (stmt!1020 (stmt!1019 in)))
+  (define-fun main!init ((in main)) main
+    (stmt!1017 (stmt!1016 in)))
 
-(define-fun main!spec ((in main)) Bool
-  (&lt;=
-    (a in)
-    (b in)))
+  (define-fun stmt!1020 ((in main)) main
+    (main!cntr
+      ; assigning to a
+      (a in)
+      ; assigning to b
+      (+
+        (a in)
+        (b in))))
+
+  (define-fun stmt!1019 ((in main)) main
+    (main!cntr
+      ; assigning to a
+      (b in)
+      ; assigning to b
+      (b in)))
+
+  (define-fun main!next ((in main)) main
+    (stmt!1020 (stmt!1019 in)))
+
+  (define-fun main!spec ((in main)) Bool
+    (&lt;=
+      (a in)
+      (b in)))
 ; done declaring module main
 
 (declare-const in main)

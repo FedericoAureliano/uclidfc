@@ -4,6 +4,7 @@ import middle._
 
 import sys.process._
 import java.io.{File, PrintWriter}
+import scala.collection.mutable.ListBuffer
 
 object Solver {
 
@@ -33,22 +34,40 @@ object Solver {
   }
 
   def check(
-    program: Program
-  ): (Option[Boolean], Option[Ref], Option[String]) = {
+    program: Program,
+    name: String,
+    solver: String
+  ): ProofResult = {
     val query =
-      Interface.programToQuery(program) ++ "\n(check-sat)\n(get-model)"
+      "(set-logic ALL)\n(set-option :produce-models true)\n" ++ Interface
+        .programToQuery(program) ++ "\n(check-sat)\n(get-model)"
     val qfile = writeQueryToTmpFile(query).getAbsolutePath()
-    val result = run(s"z3 ${qfile}")
+    val result = run(s"$solver ${qfile}")
 
-    // TODO parse the output
     val answer = result._1.mkString("\n")
 
     if (answer.contains("unsat")) {
-      (Some(false), None, Some(answer))
+      new ProofResult(program, name, Some(false), None, result._1)
     } else if (answer.contains("sat")) {
-      (Some(true), None, Some(answer))
+      new ProofResult(program, name, Some(true), None, result._1)
     } else {
-      (None, None, Some(answer))
+      new ProofResult(program, name, None, None, result._1)
     }
+  }
+
+  def solve(ob: ProofTask, solver: String): List[ProofResult] = {
+    val results = new ListBuffer[ProofResult]()
+
+    ob.obligations.foreach { o =>
+      ob.program.head = o._2.loc
+      results.addOne(check(ob.program, o._1, solver))
+
+      // found a counter example so quit
+      if (results.last.result == Some(true)) {
+        return results.toList
+      }
+    }
+
+    results.toList
   }
 }

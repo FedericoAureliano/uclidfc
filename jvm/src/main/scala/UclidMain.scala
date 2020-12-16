@@ -8,10 +8,11 @@ import front.Utils.ParserErrorList
 import scala.collection.mutable.ArrayBuffer
 
 import middle.Interpreter
-import middle.ProofState
+import middle.ProofTask
 import middle.Program
 
 import back.Solver
+import back.ProofResult
 
 /** This is the main class for Uclid.
   *
@@ -22,9 +23,14 @@ object UclidMain {
     parseOptions(args) match {
       case None => sys.exit(2)
       case Some(config) => {
-        val pResult = main(config)
-        println(pResult)
-        sys.exit(pResult.result match {
+        val pResults = main(config)
+        var ctx: Option[Boolean] = Some(false)
+        pResults.foreach { p =>
+          println(p)
+          ctx = p.result
+        }
+
+        sys.exit(ctx match {
           case Some(false) => 0
           case Some(true)  => 1
           case None        => 2
@@ -39,6 +45,7 @@ object UclidMain {
     */
   case class Config(
     mainModuleName: String = "main",
+    solverPath: String = "cvc4",
     files: Seq[java.io.File] = Seq()
   )
 
@@ -50,6 +57,11 @@ object UclidMain {
         .valueName("<Module>")
         .action((x, c) => c.copy(mainModuleName = x))
         .text("Name of the main module.")
+
+      opt[String]('s', "solver")
+        .valueName("<Solver>")
+        .action((x, c) => c.copy(solverPath = x))
+        .text("Path to SMT solver.")
 
       arg[java.io.File]("<file> ...")
         .unbounded()
@@ -63,27 +75,24 @@ object UclidMain {
 
   /** This version of 'main' does all the real work.
     */
-  def main(config: Config): ProofState = {
-    val pResult = new ProofState(new Program(new ArrayBuffer(), 0))
+  def main(config: Config): List[ProofResult] = {
+    val errorResult =
+      new ProofResult(new Program(new ArrayBuffer(), 0), "Front-end error")
     try {
       val mainModuleName = Identifier(config.mainModuleName)
       val modules = compile(config.files, mainModuleName)
-      val pState = Interpreter.run(modules, Some(config.mainModuleName))
-      val answer = Solver.check(pState.program)
-      pState.result = answer._1
-      pState.model = answer._2
-      pState.messages.addOne(answer._3.get)
-      pState
+      val obligations = Interpreter.run(modules, Some(config.mainModuleName))
+      Solver.solve(obligations, config.solverPath)
     } catch {
       case (e: java.io.FileNotFoundException) =>
-        pResult.messages.addOne("Error: " + e.getMessage() + ".")
-        pResult
+        errorResult.messages = List("Error: " + e.getMessage() + ".")
+        List(errorResult)
       case (p: Utils.ParserError) =>
-        pResult.messages.addOne(
+        errorResult.messages = List(
           "%s error %s: %s.\n%s"
             .format(p.errorName, p.positionStr, p.getMessage, p.fullStr)
         )
-        pResult
+        List(errorResult)
     }
   }
 

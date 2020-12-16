@@ -99,7 +99,7 @@ object Interpreter {
   def run(
     model: List[front.Module],
     main: Option[String]
-  ): ProofState = {
+  ): ProofTask = {
 
     val program = new Program(ArrayBuffer[Instruction](), 0)
     val scope = Scope()
@@ -107,25 +107,15 @@ object Interpreter {
     def executeControlBlock(
       moduleName: String,
       cmds: List[GenericProofCommand]
-    ): ProofState = {
+    ): ProofTask = {
       // TODO: currently only looks at most recent
-      val pState = new ProofState(program)
+      val pState = new ProofTask(program)
 
       // if the list is empty, then we want to just assert true
       val assertRef = scope.getOrAddOp("assert", {
         program.stmts.addOne(TheoryMacro("assert"))
         Ref(program.stmts.length - 1)
       })
-      val falseRef = scope.getOrAddOp("false", {
-        program.stmts.addOne(TheoryMacro("false"))
-        Ref(program.stmts.length - 1)
-      })
-
-      val defaultRef = Ref(program.stmts.length)
-      program.stmts.addOne(Application(assertRef, List(falseRef)))
-
-      // put for most recent and TODO for named variable if it exists
-      pState.program.head = defaultRef.loc
 
       cmds.foreach(p =>
         p.name.name match {
@@ -186,6 +176,7 @@ object Interpreter {
               program.stmts.addOne(TheoryMacro("and"))
               Ref(program.stmts.length - 1)
             })
+
             val inductiveRef = Ref(program.stmts.length)
             program.stmts.addOne(
               Application(andRef, List(entryRef, negExitRef))
@@ -203,8 +194,7 @@ object Interpreter {
             val assertionRef = Ref(program.stmts.length)
             program.stmts.addOne(Application(assertRef, List(disjRef)))
 
-            // put for most recent and TODO for named variable if it exists
-            pState.program.head = assertionRef.loc
+            pState.obligations.addOne(("Proof By Induction", assertionRef))
 
           }
         }
@@ -873,7 +863,7 @@ object Interpreter {
 
     // 1. Add every module to the program.
     // 2. When we find the main module, execute it
-    val result = model.foldLeft(new ProofState(program)) { (acc, m) =>
+    val result = model.foldLeft(new ProofTask(program)) { (acc, m) =>
       moduleToTerm(m)
       if (Some(m.id.name) == main) {
         // encode control block
