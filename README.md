@@ -26,7 +26,7 @@ sbt assembly
 ## Run Jar
 
 ```
-./tri-uclid examples/fib.ucl
+./uclid examples/fib.ucl
 ```
 
 ## Developers
