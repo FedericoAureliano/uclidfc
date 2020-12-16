@@ -1,123 +1,219 @@
-package interface.in
+package middle
 
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.ListBuffer
 import scala.collection.mutable.HashMap
 import scala.collection.mutable.Stack
 
-import middle.core
-import middle.core._
-import middle.core.rewrite
 import front._
 
-package object ast {
+// represents the current function we are building
+class ScopeFrame(
+  // signature of the function we're building
+  var stateParam: Ref,
+  var nondetParams: List[Ref],
+  var outputSort: Ref,
+  // map from identifier names to term that gets them for you
+  val fieldRefs: HashMap[String, Ref]
+)
 
-  // represents the current function we are building
-  class ScopeFrame(
-    // signature of the function we're building
-    var stateParam: Ref,
-    var nondetParams: List[Ref],
-    var outputSort: Ref,
-    // map from identifier names to term that gets them for you
-    val fieldRefs: HashMap[String, Ref]
-  )
+class GlobalScope(
+  // point type name to type location (modules are types)
+  val typeLocation: HashMap[String, Ref],
+  // point operator name to operator location
+  val opLocation: HashMap[String, Ref]
+)
 
-  class GlobalScope(
-    // point type name to type location (modules are types)
-    val typeLocation: HashMap[String, Ref],
-    // point operator name to operator location
-    val opLocation: HashMap[String, Ref]
-  )
+class Scope(
+  var frame: ScopeFrame,
+  val global: GlobalScope
+) {
+  var uniqueId = 0
+  var isSynthesis = false
 
-  class Scope(
-    var frame: ScopeFrame,
-    val global: GlobalScope,
-    var uniqueid: Int
-  ) {
-
-    def newNondetName(): String = {
-      uniqueid += 1
-      s"nd!${uniqueid}"
-    }
-
-    def addType(name: String, sort: Ref): Unit =
-      global.typeLocation.addOne((name, sort))
-
-    def getType(name: String): Option[Ref] =
-      global.typeLocation.get(name)
-
-    def getOrAddType(name: String, sort: => Ref): Ref =
-      global.typeLocation.getOrElseUpdate(name, sort)
-
-    def addOp(name: String, op: Ref): Unit =
-      global.opLocation.addOne((name, op))
-
-    def getOp(name: String): Option[Ref] =
-      global.opLocation.get(name)
-
-    def getOrAddOp(name: String, op: => Ref): Ref =
-      global.opLocation.getOrElseUpdate(name, op)
-
-    def setStateParam(stateRef: Ref): Unit =
-      frame.stateParam = stateRef
-
-    def getStateParam(): Ref =
-      frame.stateParam
-
-    def setOutputSort(outputSortRef: Ref): Unit =
-      frame.outputSort = outputSortRef
-
-    def getOutputSort(): Ref =
-      frame.outputSort
-
-    def addNondetParam(nondetParam: Ref): Unit =
-      frame.nondetParams = frame.nondetParams.appended(nondetParam)
-
-    def addFieldRef(name: String, term: Ref): Unit =
-      frame.fieldRefs.addOne((name, term))
-
-    def removeFieldRef(name: String): Unit =
-      frame.fieldRefs.remove(name)
-
-    def getFieldRef(name: String): Ref =
-      frame.fieldRefs(name)
-
-    def getParams(): List[Ref] =
-      List(frame.stateParam) ++ frame.nondetParams
-
-    def resetFrame(): Unit =
-      frame = new ScopeFrame(Ref(-1), List.empty, Ref(-1), HashMap.empty)
+  def newNondetName(): String = {
+    uniqueId += 1
+    s"nd!${uniqueId}"
   }
 
-  object Scope {
+  def addType(name: String, sort: Ref): Unit =
+    global.typeLocation.addOne((name, sort))
 
-    def apply(): Scope = {
-      val frame = new ScopeFrame(Ref(-1), List.empty, Ref(-1), HashMap.empty)
-      val global = new GlobalScope(HashMap.empty, HashMap.empty)
-      new Scope(frame, global, 0)
-    }
+  def getType(name: String): Option[Ref] =
+    global.typeLocation.get(name)
+
+  def getOrAddType(name: String, sort: => Ref): Ref =
+    global.typeLocation.getOrElseUpdate(name, sort)
+
+  def addOp(name: String, op: Ref): Unit =
+    global.opLocation.addOne((name, op))
+
+  def getOp(name: String): Option[Ref] =
+    global.opLocation.get(name)
+
+  def getOrAddOp(name: String, op: => Ref): Ref =
+    global.opLocation.getOrElseUpdate(name, op)
+
+  def setStateParam(stateRef: Ref): Unit =
+    frame.stateParam = stateRef
+
+  def getStateParam(): Ref =
+    frame.stateParam
+
+  def setOutputSort(outputSortRef: Ref): Unit =
+    frame.outputSort = outputSortRef
+
+  def getOutputSort(): Ref =
+    frame.outputSort
+
+  def addNondetParam(nondetParam: Ref): Unit =
+    frame.nondetParams = frame.nondetParams.appended(nondetParam)
+
+  def addFieldRef(name: String, term: Ref): Unit =
+    frame.fieldRefs.addOne((name, term))
+
+  def removeFieldRef(name: String): Unit =
+    frame.fieldRefs.remove(name)
+
+  def getFieldRef(name: String): Ref =
+    frame.fieldRefs(name)
+
+  def getParams(): List[Ref] =
+    List(frame.stateParam) ++ frame.nondetParams
+
+  def resetFrame(): Unit =
+    frame = new ScopeFrame(Ref(-1), List.empty, Ref(-1), HashMap.empty)
+}
+
+object Scope {
+
+  def apply(): Scope = {
+    val frame = new ScopeFrame(Ref(-1), List.empty, Ref(-1), HashMap.empty)
+    val global = new GlobalScope(HashMap.empty, HashMap.empty)
+    new Scope(frame, global)
   }
+}
 
-  def modelToProgram(
+object Interpreter {
+
+  def run(
     model: List[front.Module],
     main: Option[String]
-  ): Program = {
+  ): ProofState = {
 
     val program = new Program(ArrayBuffer[Instruction](), 0)
     val scope = Scope()
 
-    // 1. Add every module to the program.
-    // 2. When we find the main module, point the head to it
-    var head = Ref(0)
-    model.foreach { m =>
-      head = moduleToTerm(m)
-      if (Some(m.id.name) == main) {
-        program.head = head.loc
-      }
+    def executeControlBlock(
+      moduleName: String,
+      cmds: List[GenericProofCommand]
+    ): ProofState = {
+      // TODO: currently only looks at most recent
+      val pState = new ProofState(program)
+
+      // if the list is empty, then we want to just assert true
+      val assertRef = scope.getOrAddOp("assert", {
+        program.stmts.addOne(TheoryMacro("assert"))
+        Ref(program.stmts.length - 1)
+      })
+      val falseRef = scope.getOrAddOp("false", {
+        program.stmts.addOne(TheoryMacro("false"))
+        Ref(program.stmts.length - 1)
+      })
+
+      val defaultRef = Ref(program.stmts.length)
+      program.stmts.addOne(Application(assertRef, List(falseRef)))
+
+      // put for most recent and TODO for named variable if it exists
+      pState.program.head = defaultRef.loc
+
+      cmds.foreach(p =>
+        p.name.name match {
+          case "induction" => {
+            // create all the variables you need
+            val variables = scope.getParams().map { p =>
+              program.stmts(p.loc) match {
+                case FunctionParameter(name, sort) => {
+                  val vRef = Ref(program.stmts.length)
+                  program.stmts.addOne(UserFunction(name, sort))
+                  vRef
+                }
+              }
+            }
+
+            // get the module declaration
+            val mod = program
+              .stmts(scope.getType(moduleName).get.loc)
+              .asInstanceOf[middle.Module]
+            val initRef = mod.init
+            val nextRef = mod.next
+            val specRef = mod.spec
+
+            // base case
+            // apply init
+            val initAppRef = Ref(program.stmts.length)
+            program.stmts.addOne(Application(initRef, variables))
+
+            // apply spec to result of init
+            val initSpecRef = Ref(program.stmts.length)
+            program.stmts.addOne(Application(specRef, List(initAppRef)))
+
+            val negRef = scope.getOrAddOp("not", {
+              program.stmts.addOne(TheoryMacro("not"))
+              Ref(program.stmts.length - 1)
+            })
+
+            val baseRef = Ref(program.stmts.length)
+            program.stmts.addOne(Application(negRef, List(initSpecRef)))
+
+            // induction step
+            // holds on entry
+            val entryRef = Ref(program.stmts.length)
+            program.stmts.addOne(Application(specRef, List(variables(0))))
+
+            // TODO: k transitions
+            val transRef = Ref(program.stmts.length)
+            program.stmts.addOne(Application(nextRef, variables))
+
+            // holds on exit
+            val exitRef = Ref(program.stmts.length)
+            program.stmts.addOne(Application(specRef, List(transRef)))
+
+            val negExitRef = Ref(program.stmts.length)
+            program.stmts.addOne(Application(negRef, List(exitRef)))
+
+            val andRef = scope.getOrAddOp("and", {
+              program.stmts.addOne(TheoryMacro("and"))
+              Ref(program.stmts.length - 1)
+            })
+            val inductiveRef = Ref(program.stmts.length)
+            program.stmts.addOne(
+              Application(andRef, List(entryRef, negExitRef))
+            )
+
+            val orRef = scope.getOrAddOp("or", {
+              program.stmts.addOne(TheoryMacro("or"))
+              Ref(program.stmts.length - 1)
+            })
+            val disjRef = Ref(program.stmts.length)
+            program.stmts.addOne(
+              Application(orRef, List(baseRef, inductiveRef))
+            )
+
+            val assertionRef = Ref(program.stmts.length)
+            program.stmts.addOne(Application(assertRef, List(disjRef)))
+
+            // put for most recent and TODO for named variable if it exists
+            pState.program.head = assertionRef.loc
+
+          }
+        }
+      )
+      pState
     }
 
     // encode the module and return a pointer to the start of the encoding
-    def moduleToTerm(m: front.Module): Ref = {
+    def moduleToTerm(m: front.Module): Unit = {
 
       scope.resetFrame()
 
@@ -127,7 +223,7 @@ package object ast {
       // add placeholder for module and remember where it is
       val moduleRef = Ref(program.stmts.length)
       program.stmts.addOne(
-        core.Module(m.id.name, Ref(-1), Ref(-1), Ref(-1), Ref(-1))
+        middle.Module(m.id.name, Ref(-1), Ref(-1), Ref(-1), Ref(-1))
       )
       scope.addType(m.id.name, moduleRef)
 
@@ -164,7 +260,7 @@ package object ast {
       // update module with constructor; will need to update it fully at the end
       program.stmts.update(
         moduleRef.loc,
-        core.Module(m.id.name, constructorRef, Ref(-1), Ref(-1), Ref(-1))
+        middle.Module(m.id.name, constructorRef, Ref(-1), Ref(-1), Ref(-1))
       )
 
       // add init and next
@@ -201,10 +297,8 @@ package object ast {
       // fill in placeholder for module
       program.stmts.update(
         moduleRef.loc,
-        core.Module(m.id.name, constructorRef, initRef, nextRef, specRef)
+        middle.Module(m.id.name, constructorRef, initRef, nextRef, specRef)
       )
-
-      moduleRef
     } // End Module to Term
 
     // helper functions for modules
@@ -379,7 +473,8 @@ package object ast {
           // get the module it belongs to
           val modRef = getTermTypeRef(instanceRef)
           // find next function location
-          val nextRef = program.stmts(modRef.loc).asInstanceOf[core.Module].next
+          val nextRef =
+            program.stmts(modRef.loc).asInstanceOf[middle.Module].next
           // fill in the placeholder from before
           val nextCallRef = Ref(program.stmts.length)
           program.stmts.addOne(Application(nextRef, List(instanceRef)))
@@ -388,13 +483,13 @@ package object ast {
         }
 
         case ModuleInitCallExpr(id) => {
-          println("here", id)
           // get the instance
           val instanceRef = scope.getFieldRef(id.name)
           // get the module it belongs to
           val modRef = getTermTypeRef(instanceRef)
           // find init function location
-          val initRef = program.stmts(modRef.loc).asInstanceOf[core.Module].init
+          val initRef =
+            program.stmts(modRef.loc).asInstanceOf[middle.Module].init
           // fill in the placeholder from before
           val initCallRef = Ref(program.stmts.length)
           program.stmts.addOne(Application(initRef, List(instanceRef)))
@@ -514,7 +609,7 @@ package object ast {
                   val modRef = scope.getOutputSort()
                   val ctrRef = program
                     .stmts(modRef.loc)
-                    .asInstanceOf[core.Module]
+                    .asInstanceOf[middle.Module]
                     .ct
                   val selRefs =
                     program
@@ -552,7 +647,7 @@ package object ast {
                   val innerStateRef = scope.getFieldRef(id.name)
                   val innerModRef = getTermTypeRef(innerStateRef)
                   val innerMod =
-                    program.stmts(innerModRef.loc).asInstanceOf[core.Module]
+                    program.stmts(innerModRef.loc).asInstanceOf[middle.Module]
 
                   val innerCtr =
                     program.stmts(innerMod.ct.loc).asInstanceOf[Constructor]
@@ -591,7 +686,7 @@ package object ast {
                   val modRef = scope.getOutputSort()
                   val ctrRef = program
                     .stmts(modRef.loc)
-                    .asInstanceOf[core.Module]
+                    .asInstanceOf[middle.Module]
                     .ct
                   val selRefs =
                     program
@@ -748,12 +843,12 @@ package object ast {
         case SynonymType(id) => {
           val sortRef = scope.getType(id.name).get
           program.stmts(sortRef.loc) match {
-            case _: core.Module =>
+            case _: middle.Module =>
               // get the sort to see if we need to create a new instance
               val fieldRef = scope.getFieldRef(pair._1.name)
               val fieldSortRef = getTermTypeRef(fieldRef)
               program.stmts(fieldSortRef.loc) match {
-                case _: core.Module =>
+                case _: middle.Module =>
                   Some(
                     ModuleInitCallExpr(pair._1)
                   )
@@ -774,9 +869,19 @@ package object ast {
           }
         }
       }
-
     // End helper function definitions and return the middle.core program we built
 
-    program
+    // 1. Add every module to the program.
+    // 2. When we find the main module, execute it
+    val result = model.foldLeft(new ProofState(program)) { (acc, m) =>
+      moduleToTerm(m)
+      if (Some(m.id.name) == main) {
+        // encode control block
+        executeControlBlock(m.id.name, m.cmds)
+      } else {
+        acc
+      }
+    }
+    result
   }
 }

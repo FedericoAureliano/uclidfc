@@ -1,8 +1,6 @@
-package middle.core
+package middle
 
 import scala.collection.mutable.ArrayBuffer
-
-import middle.core.rewrite.{incrementInstructionRefs}
 
 // Essentially the whole AST. Head points to "first" element
 class Program(val stmts: ArrayBuffer[Instruction], var head: Int) {
@@ -11,10 +9,13 @@ class Program(val stmts: ArrayBuffer[Instruction], var head: Int) {
   def prependAll(all: ArrayBuffer[Instruction]) = {
     val offset = all.length
     (0 until stmts.length).foreach { i =>
-      stmts.update(i, incrementInstructionRefs(stmts(i), offset) match {
-        case Some(instruction) => instruction
-        case None              => stmts(i)
-      })
+      stmts.update(
+        i,
+        Rewriter.incrementInstructionRefs(stmts(i), offset) match {
+          case Some(instruction) => instruction
+          case None              => stmts(i)
+        }
+      )
     }
     head += offset
     stmts.prependAll(all)
@@ -22,7 +23,7 @@ class Program(val stmts: ArrayBuffer[Instruction], var head: Int) {
 
   def prependOne(one: Instruction) = {
     (0 until stmts.length).foreach { i =>
-      stmts.update(i, incrementInstructionRefs(stmts(i), 1) match {
+      stmts.update(i, Rewriter.incrementInstructionRefs(stmts(i), 1) match {
         case Some(instruction) => instruction
         case None              => stmts(i)
       })
@@ -34,7 +35,7 @@ class Program(val stmts: ArrayBuffer[Instruction], var head: Int) {
   def appendIncAll(all: ArrayBuffer[Instruction]) = {
     val offset = stmts.length
     (0 until all.length).foreach { i =>
-      all.update(i, incrementInstructionRefs(all(i), offset) match {
+      all.update(i, Rewriter.incrementInstructionRefs(all(i), offset) match {
         case Some(instruction) => instruction
         case None              => all(i)
       })
@@ -44,7 +45,7 @@ class Program(val stmts: ArrayBuffer[Instruction], var head: Int) {
 
   def appendIncOne(one: Instruction) = {
     val offset = stmts.length
-    stmts.append(incrementInstructionRefs(one, offset) match {
+    stmts.append(Rewriter.incrementInstructionRefs(one, offset) match {
       case Some(instruction) => instruction
       case None              => one
     })

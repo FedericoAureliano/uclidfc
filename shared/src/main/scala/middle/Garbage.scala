@@ -1,8 +1,6 @@
-package middle.core
+package middle
 
-import middle.core.rewrite.{incrementInstructionRefs, incrementRefs, updateRefs}
-
-package object garbage {
+object Garbage {
   def mark(term: Program): Array[Boolean] = mark_i(term, term.head)
 
   def mark_i(term: Program, position: Int): Array[Boolean] = {
@@ -80,7 +78,7 @@ package object garbage {
       0
     )
 
-    updateRefs(newTerm, newLocations)
+    Rewriter.updateRefs(newTerm, newLocations)
 
     newTerm
   }

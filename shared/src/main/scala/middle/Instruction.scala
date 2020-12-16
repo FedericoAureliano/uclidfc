@@ -1,4 +1,4 @@
-package middle.core
+package middle
 
 // Essentially an AST node or edge.
 abstract class Instruction

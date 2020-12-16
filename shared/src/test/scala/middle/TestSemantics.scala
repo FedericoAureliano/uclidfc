@@ -1,4 +1,4 @@
-package middle.core
+package middle
 
 import org.junit.Test
 import org.junit.Assert._
@@ -16,7 +16,7 @@ class TestSemanctics {
 
     val f = new Program(ArrayBuffer(head, body, arg, plus, integer), 0)
 
-    val check = semantics.checkRefBounds(f)
+    val check = Checker.checkRefBounds(f)
 
     assert(check.isDefined, f)
   }
@@ -31,7 +31,7 @@ class TestSemanctics {
 
     val f = new Program(ArrayBuffer(head, body, arg, plus, integer), 0)
 
-    val check = semantics.checkRefBounds(f)
+    val check = Checker.checkRefBounds(f)
 
     assert(check.isDefined, f)
   }
@@ -46,7 +46,7 @@ class TestSemanctics {
 
     val f = new Program(ArrayBuffer(head, body, arg, plus, integer), 0)
 
-    val check = semantics.checkRefBounds(f)
+    val check = Checker.checkRefBounds(f)
 
     assert(check.isEmpty, f)
   }

@@ -1,9 +1,8 @@
-package middle.core
+package middle
 
 import org.junit.Test
 import org.junit.Assert._
 
-import interface.out.smt.programToSmt
 import scala.collection.mutable.ArrayBuffer
 
 class TestGarbage {
@@ -18,7 +17,7 @@ class TestGarbage {
 
     val f = new Program(ArrayBuffer(head, body, arg, plus, integer), 0)
 
-    val marks = garbage.mark(f)
+    val marks = Garbage.mark(f)
 
     val msg = marks.zipWithIndex.mkString("\n")
 
@@ -36,7 +35,7 @@ class TestGarbage {
 
     val f = new Program(ArrayBuffer(head, body, arg, plus, integer, string), 0)
 
-    val marks = garbage.mark(f)
+    val marks = Garbage.mark(f)
 
     val msg = marks.zipWithIndex.mkString("\n")
 
@@ -56,11 +55,14 @@ class TestGarbage {
 
     val f = new Program(ArrayBuffer(head, body, arg, plus, integer, string), 0)
 
-    val marks = garbage.mark(f)
+    val marks = Garbage.mark(f)
 
-    val sweeped = garbage.sweep(f, marks)
+    val sweeped = Garbage.sweep(f, marks)
 
-    assert(programToSmt(sweeped) == programToSmt(f), sweeped)
+    assert(
+      Interface.programToQuery(sweeped) == Interface.programToQuery(f),
+      sweeped
+    )
     assert(sweeped.toString != f.toString, sweeped)
   }
 }

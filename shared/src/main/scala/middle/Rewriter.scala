@@ -1,12 +1,9 @@
-package middle.core
+package middle
 
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.ListBuffer
 
-import middle.core.garbage.{mark_i, sweep}
-import middle.core.semantics.inferSort
-
-package object rewrite {
+object Rewriter {
 
   def incrementRefs(term: Program, increment: Int): Unit =
     (0 until term.stmts.length).foreach { i =>
@@ -139,8 +136,8 @@ package object rewrite {
     }
 
   def copySubTerm(term: Program, position: Int): Program = {
-    val toKeep = mark_i(term, position)
-    sweep(term, toKeep)
+    val toKeep = Garbage.mark_i(term, position)
+    Garbage.sweep(term, toKeep)
   }
 
   def inlineApplication(term: Program, position: Int): Program = {
@@ -219,7 +216,7 @@ package object rewrite {
             // point anything that used to point to this app to a new user macro
             newLocations.addOne((i, count))
             count += 1
-            val sortRef = inferSort(term, i) match {
+            val sortRef = Checker.inferSort(term, i) match {
               case Ref(r) => Ref(r)
               case TheorySort(n, args) => {
                 // the application is a theory function so we add it's sort

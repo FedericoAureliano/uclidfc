@@ -1,10 +1,8 @@
-package middle.core
+package middle
 
 import org.junit.Test
 import org.junit.Assert._
 import scala.collection.mutable.ArrayBuffer
-
-import interface.out.smt.{programToSmtCtx, programToSmtTerm}
 
 class TestLang {
 
@@ -26,12 +24,14 @@ class TestLang {
     val answerdef = "(define-funf((xInt))Int(+xx))"
 
     assert(
-      programToSmtTerm(f, 0).replaceAll("( |\t|\n)+", "") == answerterm,
-      s"\n1\n${f}\n${programToSmtTerm(f, 0).replaceAll("( |\t|\n)+", "")}\n"
+      Interface
+        .programToQueryTerm(f, 0)
+        .replaceAll("( |\t|\n)+", "") == answerterm,
+      s"\n1\n${f}\n${Interface.programToQueryTerm(f, 0).replaceAll("( |\t|\n)+", "")}\n"
     )
     assert(
-      programToSmtCtx(f).replaceAll("( |\t|\n)+", "") == answerdef,
-      s"\n2\n${f}\n${programToSmtCtx(f).replaceAll("( |\t|\n)+", "")}\n"
+      Interface.programToQueryCtx(f).replaceAll("( |\t|\n)+", "") == answerdef,
+      s"\n2\n${f}\n${Interface.programToQueryCtx(f).replaceAll("( |\t|\n)+", "")}\n"
     )
   }
 }

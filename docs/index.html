@@ -89,68 +89,76 @@
   }
 
   invariant a_le_b: a &lt;= b;
+
+  control {
+    induction;
+  }
 }</textarea>
 
       <p>
 
-        is semantically equivalent to<label for="sn-1" class="sidenote-toggle
-        sidenote-number"></label> <input type="checkbox" id="sn-1" class="sidenote-toggle" /> <span
-          class="sidenote">Interactive translation is a work in progress: don't expect too much.</span>
+        is semantically equivalent to the following
+         <span style="font-variant: small-caps;">smt-lib</span>.<label for="sn-1" class="sidenote-toggle
+          sidenote-number"></label> <input type="checkbox" id="sn-1" class="sidenote-toggle" /> <span
+            class="sidenote">Interactive translation is a work in progress: don't expect too much. Check the query with CVC4's online interface [<a
+              href="https://cvc4.github.io/app/#temp_be5b8691-1e6e-405a-8053-f6c47abd9607" target="_blank">2</a>].</span>
 
       </p>
 
-      <pre><code id="demofullanswer">(declare-datatypes ((main 0)) (((main!cntr
+      <pre><code id="demofullanswer">; declaring module main 
+(declare-datatypes ((main 0)) (((main!cntr
   (a Int)
   (b Int)))))
 
-(define-fun main!init ((in main)) main
+(define-fun stmt!1017 ((in main)) main
+  (main!cntr
+    ; assigning to a
+    (a in)
+    ; assigning to b
+    1))
+
+(define-fun stmt!1016 ((in main)) main
   (main!cntr
     ; assigning to a
     0
     ; assigning to b
-    1))
+    (b in)))
 
-(define-fun main!next ((in main)) main
+(define-fun main!init ((in main)) main
+  (stmt!1017 (stmt!1016 in)))
+
+(define-fun stmt!1020 ((in main)) main
   (main!cntr
     ; assigning to a
-    (b in)
+    (a in)
     ; assigning to b
     (+
       (a in)
       (b in))))
 
+(define-fun stmt!1019 ((in main)) main
+  (main!cntr
+    ; assigning to a
+    (b in)
+    ; assigning to b
+    (b in)))
+
+(define-fun main!next ((in main)) main
+  (stmt!1020 (stmt!1019 in)))
+
 (define-fun main!spec ((in main)) Bool
   (&lt;=
     (a in)
-    (b in)))</code></pre>
+    (b in)))
+; done declaring module main
 
-      <p>
+(declare-const in main)
 
-        in <span style="font-variant: small-caps;">smt-lib</span>. The proof
-        language will manipulate the symbols defined by modules. There will be
-        more on the proof language later, but for now, consider the following
-        example proof by induction attempt for the above Uclid5 module.<label for="sn-1" class="sidenote-toggle
-        sidenote-number"></label> <input type="checkbox" id="sn-1" class="sidenote-toggle" /> <span
-          class="sidenote">Check the query with CVC4's online interface [<a
-            href="https://cvc4.github.io/app/#temp_be5b8691-1e6e-405a-8053-f6c47abd9607" target="_blank">2</a>].</span>
-
-      </p>
-
-      <pre><code>(declare-fun k () main)
-
-; look for counter example in base case
-(push)
-(assert (not (main!spec (main!init k))))
-(check-sat)
-(get-model)
-(pop)
-
-; look for counter example in induction step
-(push)
-(assert (and (main!spec k) (not (main!spec (main!next k)))))
-(check-sat)
-(get-model)
-(pop)</code></pre>
+(assert (or
+  (not (main!spec (main!init in)))
+  (and
+    (main!spec in)
+    (not (main!spec (main!next in))))))</code></pre>
 
       <p>
 
@@ -702,6 +710,7 @@ invariant a_le_b: a &lt;= b;
       <h2>TODO</h2>
       <p>
       <ul>
+        <li>Support next calls on expressions, not just identifiers</li>
         <li>Support bitvectors, arrays, and strings</li>
         <li>Inline assumptions and assertions</li>
         <li>Havocs</li>

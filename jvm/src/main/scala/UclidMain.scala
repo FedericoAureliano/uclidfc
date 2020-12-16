@@ -5,8 +5,13 @@ import scala.collection.immutable._
 import front.{Identifier, Module, _}
 import front.Utils.ParserErrorList
 
-import interface.out.smt.programToSmt
-import interface.in.ast.modelToProgram
+import scala.collection.mutable.ArrayBuffer
+
+import middle.Interpreter
+import middle.ProofState
+import middle.Program
+
+import back.Solver
 
 /** This is the main class for Uclid.
   *
@@ -15,11 +20,15 @@ object UclidMain {
 
   def main(args: Array[String]): Unit =
     parseOptions(args) match {
-      case None => sys.exit(1)
+      case None => sys.exit(2)
       case Some(config) => {
-        val pair = main(config)
-        println(pair._1)
-        sys.exit(pair._2)
+        val pResult = main(config)
+        println(pResult)
+        sys.exit(pResult.result match {
+          case Some(false) => 0
+          case Some(true)  => 1
+          case None        => 2
+        })
       }
     }
 
@@ -54,26 +63,29 @@ object UclidMain {
 
   /** This version of 'main' does all the real work.
     */
-  def main(config: Config): (String, Int) =
+  def main(config: Config): ProofState = {
+    val pResult = new ProofState(new Program(new ArrayBuffer(), 0))
     try {
       val mainModuleName = Identifier(config.mainModuleName)
       val modules = compile(config.files, mainModuleName)
-      val term = modelToProgram(modules, Some(config.mainModuleName))
-      Tuple2(
-        programToSmt(term) + "\n" +
-          "Finished execution for module: %s.".format(mainModuleName.toString),
-        0
-      )
+      val pState = Interpreter.run(modules, Some(config.mainModuleName))
+      val answer = Solver.check(pState.program)
+      pState.result = answer._1
+      pState.model = answer._2
+      pState.messages.addOne(answer._3.get)
+      pState
     } catch {
       case (e: java.io.FileNotFoundException) =>
-        Tuple2("Error: " + e.getMessage() + ".", 1)
+        pResult.messages.addOne("Error: " + e.getMessage() + ".")
+        pResult
       case (p: Utils.ParserError) =>
-        Tuple2(
+        pResult.messages.addOne(
           "%s error %s: %s.\n%s"
-            .format(p.errorName, p.positionStr, p.getMessage, p.fullStr),
-          1
+            .format(p.errorName, p.positionStr, p.getMessage, p.fullStr)
         )
+        pResult
     }
+  }
 
   /** Parse modules, typecheck them, inline procedures, create LTL monitors, etc. */
   def compile(

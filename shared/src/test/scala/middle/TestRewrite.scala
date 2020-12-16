@@ -1,10 +1,8 @@
-package middle.core
+package middle
 
 import org.junit.Test
 import org.junit.Assert._
 import scala.collection.mutable.ArrayBuffer
-
-import interface.out.smt.programToSmtTerm
 
 class TestRewrite {
 
@@ -22,14 +20,16 @@ class TestRewrite {
     val one = new Program(ArrayBuffer(TheoryMacro("1")), 0)
     f(one)
 
-    val inlined = rewrite.inlineApplication(f, 0)
+    val inlined = Rewriter.inlineApplication(f, 0)
 
     assert(f.toString != inlined.toString(), inlined)
 
     val answerterm = "(+11)"
     assert(
-      programToSmtTerm(inlined, 0).replaceAll("( |\t|\n)+", "") == answerterm,
-      s"${inlined}\n${programToSmtTerm(inlined, 0).replaceAll("( |\t|\n)+", "")}"
+      Interface
+        .programToQueryTerm(inlined, 0)
+        .replaceAll("( |\t|\n)+", "") == answerterm,
+      s"${inlined}\n${Interface.programToQueryTerm(inlined, 0).replaceAll("( |\t|\n)+", "")}"
     )
   }
 
@@ -45,17 +45,19 @@ class TestRewrite {
     val one = new Program(ArrayBuffer(TheoryMacro("1")), 0)
     f(one)
 
-    val leted = rewrite.letify(f, "test")
+    val leted = Rewriter.letify(f, "test")
 
     val answerterm = "(f1)"
     assert(
-      programToSmtTerm(leted, 0).replaceAll("( |\t|\n)+", "") == answerterm,
-      s"${leted}\n${programToSmtTerm(leted, 0).replaceAll("( |\t|\n)+", "")}"
+      Interface
+        .programToQueryTerm(leted, 0)
+        .replaceAll("( |\t|\n)+", "") == answerterm,
+      s"${leted}\n${Interface.programToQueryTerm(leted, 0).replaceAll("( |\t|\n)+", "")}"
     )
 
     assert(
       leted.stmts.length == f.stmts.length + 2,
-      s"${leted}\n${programToSmtTerm(leted, 0).replaceAll("( |\t|\n)+", "")}"
+      s"${leted}\n${Interface.programToQueryTerm(leted, 0).replaceAll("( |\t|\n)+", "")}"
     )
   }
 
@@ -79,14 +81,16 @@ class TestRewrite {
       0
     )
     f(yplusy)
-    val inlined = rewrite.inlineApplication(f, 0)
+    val inlined = Rewriter.inlineApplication(f, 0)
 
-    rewrite.reduceDuplicates(inlined)
+    Rewriter.reduceDuplicates(inlined)
 
     val answerterm = "(+(+yy)(+yy))"
     assert(
-      programToSmtTerm(inlined, 0).replaceAll("( |\t|\n)+", "") == answerterm,
-      s"${inlined}\n${programToSmtTerm(inlined, 0).replaceAll("( |\t|\n)+", "")}"
+      Interface
+        .programToQueryTerm(inlined, 0)
+        .replaceAll("( |\t|\n)+", "") == answerterm,
+      s"${inlined}\n${Interface.programToQueryTerm(inlined, 0).replaceAll("( |\t|\n)+", "")}"
     )
   }
 
@@ -110,20 +114,24 @@ class TestRewrite {
       0
     )
     f(yplusy)
-    val inlined = rewrite.inlineApplication(f, 0)
+    val inlined = Rewriter.inlineApplication(f, 0)
 
-    rewrite.reduceDuplicates(inlined)
+    Rewriter.reduceDuplicates(inlined)
 
     val answerterm = "(+(+yy)(+yy))"
     assert(
-      programToSmtTerm(inlined, 0).replaceAll("( |\t|\n)+", "") == answerterm,
-      s"${inlined}\n${programToSmtTerm(inlined, 0).replaceAll("( |\t|\n)+", "")}"
+      Interface
+        .programToQueryTerm(inlined, 0)
+        .replaceAll("( |\t|\n)+", "") == answerterm,
+      s"${inlined}\n${Interface.programToQueryTerm(inlined, 0).replaceAll("( |\t|\n)+", "")}"
     )
 
-    rewrite.reduceIndirection(inlined)
+    Rewriter.reduceIndirection(inlined)
     assert(
-      programToSmtTerm(inlined, 0).replaceAll("( |\t|\n)+", "") == answerterm,
-      s"${inlined}\n${programToSmtTerm(inlined, 0).replaceAll("( |\t|\n)+", "")}"
+      Interface
+        .programToQueryTerm(inlined, 0)
+        .replaceAll("( |\t|\n)+", "") == answerterm,
+      s"${inlined}\n${Interface.programToQueryTerm(inlined, 0).replaceAll("( |\t|\n)+", "")}"
     )
   }
 
@@ -147,31 +155,37 @@ class TestRewrite {
       0
     )
     f(yplusy)
-    val inlined = rewrite.inlineApplication(f, 0)
+    val inlined = Rewriter.inlineApplication(f, 0)
 
-    rewrite.reduceDuplicates(inlined)
+    Rewriter.reduceDuplicates(inlined)
 
     val answerterm = "(+(+yy)(+yy))"
     assert(
-      programToSmtTerm(inlined, 0).replaceAll("( |\t|\n)+", "") == answerterm,
-      s"${inlined}\n${programToSmtTerm(inlined, 0).replaceAll("( |\t|\n)+", "")}"
+      Interface
+        .programToQueryTerm(inlined, 0)
+        .replaceAll("( |\t|\n)+", "") == answerterm,
+      s"${inlined}\n${Interface.programToQueryTerm(inlined, 0).replaceAll("( |\t|\n)+", "")}"
     )
 
-    rewrite.reduceIndirection(inlined)
+    Rewriter.reduceIndirection(inlined)
     assert(
-      programToSmtTerm(inlined, 0).replaceAll("( |\t|\n)+", "") == answerterm,
-      s"${inlined}\n${programToSmtTerm(inlined, 0).replaceAll("( |\t|\n)+", "")}"
+      Interface
+        .programToQueryTerm(inlined, 0)
+        .replaceAll("( |\t|\n)+", "") == answerterm,
+      s"${inlined}\n${Interface.programToQueryTerm(inlined, 0).replaceAll("( |\t|\n)+", "")}"
     )
 
-    val cleaned = garbage.collectGarbage(inlined)
+    val cleaned = Garbage.collectGarbage(inlined)
     assert(
-      programToSmtTerm(cleaned, 0).replaceAll("( |\t|\n)+", "") == answerterm,
-      s"${cleaned}\n${programToSmtTerm(cleaned, 0).replaceAll("( |\t|\n)+", "")}"
+      Interface
+        .programToQueryTerm(cleaned, 0)
+        .replaceAll("( |\t|\n)+", "") == answerterm,
+      s"${cleaned}\n${Interface.programToQueryTerm(cleaned, 0).replaceAll("( |\t|\n)+", "")}"
     )
 
     assert(
       cleaned.stmts.length < inlined.stmts.length,
-      s"${cleaned}\n${programToSmtTerm(cleaned, 0).replaceAll("( |\t|\n)+", "")}"
+      s"${cleaned}\n${Interface.programToQueryTerm(cleaned, 0).replaceAll("( |\t|\n)+", "")}"
     )
   }
 }

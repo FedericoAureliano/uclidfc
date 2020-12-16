@@ -1,11 +1,11 @@
-package middle.core
+package middle
 
 /*
 Passing semantic checks must gurantee a well formed smt-lib query
 (except for functions to synthesize and procedure calls)
  */
 
-package object semantics {
+object Checker {
 
   def checkRefBounds(term: Program): Option[String] = {
     def checkRef(r: Ref): Boolean = r.loc < term.stmts.length && r.loc >= 0

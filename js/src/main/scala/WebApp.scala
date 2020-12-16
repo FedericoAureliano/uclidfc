@@ -7,33 +7,7 @@ import org.scalajs.dom.raw.{HTMLPreElement, HTMLTextAreaElement}
 
 import scala.collection.mutable.ArrayBuffer
 
-import interface.out.smt.programToSmt
-import interface.in.ast
-
-import middle.core.{
-  Application,
-  Constructor,
-  DataType,
-  FunctionParameter,
-  Instruction,
-  Module,
-  Numeral,
-  Program,
-  Ref,
-  Selector,
-  SortMacro,
-  SortParameter,
-  TheoryMacro,
-  TheorySort,
-  UserFunction,
-  UserMacro,
-  UserSort
-}
-import middle.core.rewrite.letify
-import middle.core.rewrite.inlineApplication
-import middle.core.rewrite.reduceDuplicates
-import middle.core.rewrite.reduceIndirection
-import middle.core.garbage.collectGarbage
+import middle._
 
 import front.UclidParser
 import front.Utils
@@ -72,7 +46,7 @@ object WebApp {
       for (line <- text.split("\n")) {
         program.appendIncOne(parse(line))
       }
-      result.textContent = programToSmt(program)
+      result.textContent = Interface.programToQuery(program)
     } catch {
       case e: Throwable => result.textContent = e.toString()
     }
@@ -86,7 +60,7 @@ object WebApp {
       for (line <- text.split("\n")) {
         program.appendIncOne(parse(line))
       }
-      val answer = letify(program, "tmp")
+      val answer = Rewriter.letify(program, "tmp")
 
       result.textContent = answer.toString()
     } catch {
@@ -102,7 +76,7 @@ object WebApp {
       for (line <- text.split("\n")) {
         program.appendIncOne(parse(line))
       }
-      val answer = inlineApplication(program, 0)
+      val answer = Rewriter.inlineApplication(program, 0)
 
       result.textContent = answer.toString()
     } catch {
@@ -119,10 +93,10 @@ object WebApp {
         program.appendIncOne(parse(line))
       }
 
-      reduceDuplicates(program)
-      reduceIndirection(program)
+      Rewriter.reduceDuplicates(program)
+      Rewriter.reduceIndirection(program)
 
-      val cleaned = collectGarbage(program)
+      val cleaned = Garbage.collectGarbage(program)
 
       result.textContent = cleaned.toString()
     } catch {
@@ -136,9 +110,9 @@ object WebApp {
     try {
       val parsed = UclidParser.parseModel("web", text)
 
-      val term = ast.modelToProgram(parsed, Some("main"))
+      val pResult = Interpreter.run(parsed, Some("main"))
 
-      result.textContent = programToSmt(term)
+      result.textContent = Interface.programToQuery(pResult.program)
     } catch {
       case e: Utils.SyntaxError =>
         result.textContent = s"${e.pos.get}: ${e.msg}"
