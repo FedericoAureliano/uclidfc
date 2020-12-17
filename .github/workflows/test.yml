@@ -18,8 +18,8 @@ jobs:
       id: cache-cvc4
       uses: actions/cache@v1
       with:
-        path: ext/bin-cvc4
-        key: ${{ runner.os }}-build-${{ hashFiles('ext/cvc4.sh') }}-3
+        path: external/bin-cvc4
+        key: ${{ runner.os }}-build-${{ hashFiles('external/cvc4.sh') }}-3
     - name: cvc4
       if: steps.cache-cvc4.outputs.cache-hit != 'true'
       working-directory: ext
@@ -29,8 +29,8 @@ jobs:
       id: cache-z3
       uses: actions/cache@v1
       with:
-        path: ext/bin-z3
-        key: ${{ runner.os }}-build-${{ hashFiles('ext/z3.sh') }}-3
+        path: external/bin-z3
+        key: ${{ runner.os }}-build-${{ hashFiles('external/z3.sh') }}-3
     - name: z3
       if: steps.cache-z3.outputs.cache-hit != 'true'
       working-directory: ext
@@ -38,15 +38,15 @@ jobs:
 
     - name: Move Binaries to Common Dir
       run: |
-       mkdir -p ext/bin
-       cp ext/bin-cvc4/*  ext/bin/
-       cp ext/bin-z3/*    ext/bin/
-       ls ext/bin/
+       mkdir -p external/bin
+       cp external/bin-cvc4/*  external/bin/
+       cp external/bin-z3/*    external/bin/
+       ls external/bin/
     - name: Upload Binaries
       uses: actions/upload-artifact@v2
       with:
         name: bin
-        path: ext/bin/
+        path: external/bin/
 
   test-ubuntu:
     runs-on: ubuntu-latest
@@ -59,15 +59,15 @@ jobs:
       uses: actions/download-artifact@v2
       with:
         name: bin
-        path: ext/bin/
+        path: external/bin/
 
     - name: Make Binaries Executable
-      run: chmod +x $GITHUB_WORKSPACE/ext/bin/*
+      run: chmod +x $GITHUB_WORKSPACE/external/bin/*
 
     - name: Add Binaries To Path
       run: |
-       ls $GITHUB_WORKSPACE/ext/bin/
-       echo "$GITHUB_WORKSPACE/ext/bin/" >> $GITHUB_PATH
+       ls $GITHUB_WORKSPACE/external/bin/
+       echo "$GITHUB_WORKSPACE/external/bin/" >> $GITHUB_PATH
     - name: Print Dependency Versions and Paths
       run: |
        echo "CVC4"
