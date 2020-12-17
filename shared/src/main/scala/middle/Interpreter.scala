@@ -203,7 +203,7 @@ object Interpreter {
     }
 
     // encode the module and return a pointer to the start of the encoding
-    def moduleToTerm(m: front.Module): Unit = {
+    def moduleToTerm(m: front.Module): Ref = {
 
       scope.resetFrame()
 
@@ -256,7 +256,7 @@ object Interpreter {
       // add init and next
       val initInitCalls = fields.foldLeft(List.empty[Statement]) { (acc, p) =>
         createInitCalls(p) match {
-          case Some(e) => acc ++ List(AssignStmt(List(LhsId(p._1)), List(e)))
+          case Some(e) => acc ++ List(AssignStmt(List(Lhs(p._1)), List(e)))
           case None    => acc
         }
       }
@@ -289,6 +289,8 @@ object Interpreter {
         moduleRef.loc,
         middle.Module(m.id.name, constructorRef, initRef, nextRef, specRef)
       )
+
+      moduleRef
     } // End Module to Term
 
     // helper functions for modules
@@ -333,7 +335,7 @@ object Interpreter {
           funcName,
           boolRef,
           bodyRef,
-          scope.getParams()
+          List(scope.getStateParam())
         )
       )
 
@@ -439,6 +441,47 @@ object Interpreter {
             Ref(program.stmts.length - 1)
           })
         }
+        case OperatorApplication(ArrayUpdate(indices, value), operands) => {
+          assert(
+            operands.length == 1,
+            "array update must be applied to a single operand"
+          )
+          assert(indices.length == 1, "array index must be a single value")
+          val opRef = scope.getOrAddOp("store", {
+            program.stmts.addOne(TheoryMacro("store"));
+            Ref(program.stmts.length - 1)
+          })
+
+          val arrayRef = exprToTerm(operands.head)
+          val valueRef = exprToTerm(value)
+          val indexRef = exprToTerm(indices.head)
+
+          val appRef = Ref(program.stmts.length)
+          program.stmts.addOne(
+            Application(opRef, List(arrayRef, indexRef, valueRef))
+          )
+
+          appRef
+        }
+        case OperatorApplication(ArraySelect(indices), operands) => {
+          assert(
+            operands.length == 1,
+            "array update must be applied to a single operand"
+          )
+          assert(indices.length == 1, "array index must be a single value")
+          val opRef = scope.getOrAddOp("select", {
+            program.stmts.addOne(TheoryMacro("select"));
+            Ref(program.stmts.length - 1)
+          })
+
+          val arrayRef = exprToTerm(operands.head)
+          val indexRef = exprToTerm(indices.head)
+
+          val appRef = Ref(program.stmts.length)
+          program.stmts.addOne(Application(opRef, List(arrayRef, indexRef)))
+
+          appRef
+        }
         case OperatorApplication(op, operands) => {
           val opRef = scope.getOrAddOp(op.toString(), {
             program.stmts.addOne(TheoryMacro(op.toString()));
@@ -457,9 +500,9 @@ object Interpreter {
           appRef
         }
 
-        case ModuleNextCallExpr(id) => {
+        case ModuleNextCallExpr(expr) => {
           // get the instance
-          val instanceRef = scope.getFieldRef(id.name)
+          val instanceRef = exprToTerm(expr)
           // get the module it belongs to
           val modRef = getTermTypeRef(instanceRef)
           // find next function location
@@ -516,7 +559,20 @@ object Interpreter {
     // TODO: combine with middle.core.semantics.inferSort ?
     def getTermTypeRef(app: Ref): Ref =
       program.stmts(app.loc) match {
-        case Application(caller, args)           => getTermTypeRef(caller)
+        case Application(caller, args) => {
+          // TODO check if caller is ite, select, store, ...
+          program.stmts(caller.loc) match {
+            case TheoryMacro("ite", params)   => getTermTypeRef(args.head)
+            case TheoryMacro("store", params) => getTermTypeRef(args.head)
+            case TheoryMacro("select", params) => {
+              val arrayRef = getTermTypeRef(args.head)
+              val arraySort =
+                program.stmts(arrayRef.loc).asInstanceOf[TheorySort]
+              arraySort.params.last
+            }
+            case _ => getTermTypeRef(caller)
+          }
+        }
         case Constructor(name, sort, selectors)  => sort
         case FunctionParameter(name, sort)       => sort
         case Selector(name, sort)                => sort
@@ -533,9 +589,6 @@ object Interpreter {
                 program.stmts.addOne(TheorySort("Int"));
                 Ref(program.stmts.length - 1)
               })
-            case "ite" => {
-              getTermTypeRef(params.last)
-            }
             case _ => {
               if (name.toIntOption.isDefined) {
                 scope.getOrAddType("Int", {
@@ -543,7 +596,9 @@ object Interpreter {
                   Ref(program.stmts.length - 1)
                 })
               } else {
-                throw new IllegalArgumentException("not supported yet")
+                throw new IllegalArgumentException(
+                  s"theory macro not supported yet: ${name}"
+                )
               }
             }
           }
@@ -566,7 +621,10 @@ object Interpreter {
         flattened.tail.foldLeft(startRef) { (acc, stmt) =>
           val funcRef = stmtToTerm(stmt)
           val appRef = Ref(program.stmts.length)
-          program.stmts.addOne(Application(funcRef, List(acc)))
+          // add the nondet parameters at the end
+          program.stmts.addOne(
+            Application(funcRef, List(acc) ++ scope.getParams().tail)
+          )
           appRef
         }
       } else {
@@ -593,8 +651,11 @@ object Interpreter {
               val lhs = lhss(0)
               val rhs = rhss(0)
 
-              lhs match {
-                case LhsId(id) => {
+              lhs.expr match {
+                case OperatorApplication(GetNextValueOp(), expr :: Nil) => {
+                  stmtToTerm(AssignStmt(List(Lhs(expr)), List(rhs)))
+                }
+                case Identifier(id) => {
                   // get the constructor
                   val modRef = scope.getOutputSort()
                   val ctrRef = program
@@ -609,10 +670,10 @@ object Interpreter {
 
                   val components = selRefs.map { s =>
                     val sel = program.stmts(s.loc).asInstanceOf[Selector]
-                    if (sel.name == lhs.ident.name) {
-                      exprToTerm(rhs)
-                    } else {
-                      scope.getFieldRef(sel.name)
+                    lhs.expr match {
+                      case Identifier(name) if name == sel.name =>
+                        exprToTerm(rhs)
+                      case _ => scope.getFieldRef(sel.name)
                     }
                   }
 
@@ -633,8 +694,11 @@ object Interpreter {
 
                   macroRef
                 }
-                case LhsPolymorphicSelect(id, fields) => {
-                  val innerStateRef = scope.getFieldRef(id.name)
+                case OperatorApplication(
+                    PolymorphicSelect(field),
+                    expr :: Nil
+                    ) => {
+                  val innerStateRef = exprToTerm(expr)
                   val innerModRef = getTermTypeRef(innerStateRef)
                   val innerMod =
                     program.stmts(innerModRef.loc).asInstanceOf[middle.Module]
@@ -646,7 +710,7 @@ object Interpreter {
                     program.stmts.addOne(
                       Application(
                         selRef,
-                        List(scope.getFieldRef(id.name))
+                        List(innerStateRef)
                       )
                     )
 
@@ -660,11 +724,7 @@ object Interpreter {
                   val oldOutputRef = scope.getOutputSort()
                   scope.setOutputSort(innerModRef)
 
-                  val newLhs: Lhs = if (fields.length > 1) {
-                    LhsPolymorphicSelect(fields.head, fields.tail)
-                  } else {
-                    LhsId(fields.head)
-                  }
+                  val newLhs: Lhs = Lhs(field)
 
                   // create the inner function call
                   val innerFuncRef =
@@ -684,20 +744,22 @@ object Interpreter {
                       .asInstanceOf[Constructor]
                       .selectors
 
-                  val components = selRefs.map { s =>
-                    val sel = program.stmts(s.loc).asInstanceOf[Selector]
-                    if (sel.name == lhs.ident.name) {
-                      val exprRef = Ref(program.stmts.length)
-                      program.stmts.addOne(
-                        Application(
-                          innerFuncRef,
-                          scope.getParams()
-                        )
-                      )
-                      exprRef
-                    } else {
-                      scope.getFieldRef(sel.name)
-                    }
+                  val components = selRefs.map {
+                    s =>
+                      val sel = program.stmts(s.loc).asInstanceOf[Selector]
+                      lhs.expr match {
+                        case Identifier(name) if name == sel.name => {
+                          val exprRef = Ref(program.stmts.length)
+                          program.stmts.addOne(
+                            Application(
+                              innerFuncRef,
+                              scope.getParams()
+                            )
+                          )
+                          exprRef
+                        }
+                        case _ => scope.getFieldRef(sel.name)
+                      }
                   }
 
                   val bodyRef = Ref(program.stmts.length)
@@ -716,6 +778,11 @@ object Interpreter {
                   scope.addOp(stmt.astNodeId.toString(), macroRef)
 
                   macroRef
+                }
+                case OperatorApplication(ArraySelect(indices), expr :: Nil) => {
+                  val newRhs =
+                    OperatorApplication(ArrayUpdate(indices, rhs), List(expr))
+                  stmtToTerm(AssignStmt(List(Lhs(expr)), List(newRhs)))
                 }
                 case _ =>
                   throw new IllegalArgumentException(
@@ -740,8 +807,8 @@ object Interpreter {
           p match {
             case AssignStmt(lhss, rhss) =>
               acc ++ lhss.zip(rhss)
-            case ModuleNextCallStmt(id) =>
-              acc ++ List(Tuple2(LhsId(id), ModuleNextCallExpr(id)))
+            case ModuleNextCallStmt(expr) =>
+              acc ++ List(Tuple2(Lhs(expr), ModuleNextCallExpr(expr)))
             case IfElseStmt(cond, ifblock, elseblock) => {
               val left = flattenStmts(List(ifblock))
               val right = flattenStmts(List(elseblock))
@@ -754,12 +821,12 @@ object Interpreter {
                   val rightTmp = right.filter(pair2 => pair2._1 == lhs)
 
                   val leftFiltered = if (leftTmp.length == 0) {
-                    List(Tuple2(lhs, lhs.ident))
+                    List(Tuple2(lhs, lhs.expr))
                   } else {
                     leftTmp
                   }
                   val rightFiltered = if (rightTmp.length == 0) {
-                    List(Tuple2(lhs, lhs.ident))
+                    List(Tuple2(lhs, lhs.expr))
                   } else {
                     rightTmp
                   }
@@ -784,7 +851,6 @@ object Interpreter {
                                 }
                                 acc3 ++ List(e)
                             }
-
                         acc2 ++ inner
                     }
 
@@ -864,8 +930,9 @@ object Interpreter {
     // 1. Add every module to the program.
     // 2. When we find the main module, execute it
     val result = model.foldLeft(new ProofTask(program)) { (acc, m) =>
-      moduleToTerm(m)
+      val mainRef = moduleToTerm(m)
       if (Some(m.id.name) == main) {
+        program.head = mainRef.loc
         // encode control block
         executeControlBlock(m.id.name, m.cmds)
       } else {

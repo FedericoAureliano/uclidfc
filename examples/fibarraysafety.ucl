@@ -18,6 +18,17 @@ module main
     var fibs : [integer]fib;
 
     next {
-        // next(fibs[0]);
+        next(fibs[1]);
+        next(fibs[2]);
+    }
+
+    property b_are_eq : fibs[1].b == fibs[2].b;
+    property a_are_eq : fibs[1].a == fibs[2].a;
+    property b_gt_0  : fibs[1].b > 0 && fibs[2].b > 0;
+    property a_ge_0  : fibs[1].a >= 0 && fibs[2].a >= 0;
+    property a_le_b  : fibs[1].a <= fibs[1].b && fibs[2].a <= fibs[2].b;
+
+    control {
+        induction;
     }
 }

@@ -463,20 +463,10 @@ case class PolymorphicSelect(id: Identifier) extends Operator {
 }
 
 case class ArraySelect(indices: List[Expr]) extends Operator {
-
-  override def toString = {
-    val indexStr = Utils.join(indices.map(_.toString()), ", ")
-    "[" + indexStr + "]"
-  }
   override def fixity = Operator.POSTFIX
 }
 
 case class ArrayUpdate(indices: List[Expr], value: Expr) extends Operator {
-
-  override def toString: String = {
-    val indexStr = Utils.join(indices.map(_.toString()), ", ")
-    "[" + indexStr + " -> " + value.toString() + "]"
-  }
   override def fixity = Operator.POSTFIX
 }
 
@@ -593,42 +583,44 @@ case class FuncApplication(e: Expr, args: List[Expr]) extends Expr {
     e.toString + "(" + Utils.join(args.map(_.toString), ", ") + ")"
 }
 
-case class ModuleNextCallExpr(id: Identifier) extends Expr {
-  override def toString = "next (" + id.toString + ")"
+case class ModuleNextCallExpr(expr: Expr) extends Expr {
+  override def toString = "next (" + expr.toString + ")"
 }
 
 case class ModuleInitCallExpr(id: Identifier) extends Expr {
   override def toString = "init (" + id.toString + ")"
 }
 
-sealed abstract class Lhs(val ident: Identifier) extends ASTNode
-
-case class LhsId(id: Identifier) extends Lhs(id) {
-  override def toString = id.toString
+case class Lhs(val expr: Expr) extends ASTNode {
+  override def toString = expr.toString
 }
 
-case class LhsArraySelect(id: Identifier, indices: List[Expr]) extends Lhs(id) {
+// case class LhsId(e: Expr) extends Lhs(e) {
+//   override def toString = expr.toString
+// }
 
-  override def toString =
-    id.toString + "[" + Utils.join(indices.map(_.toString), ", ") + "]"
-}
+// case class LhsArraySelect(e: Expr, indices: List[Expr]) extends Lhs(e) {
 
-case class LhsPolymorphicSelect(id: Identifier, fields: List[Identifier])
-    extends Lhs(id) {
+//   override def toString =
+//     expr.toString + "[" + Utils.join(indices.map(_.toString), ", ") + "]"
+// }
 
-  override def toString =
-    id.toString + "." + Utils.join(fields.map(_.toString), ".")
-}
+// case class LhsPolymorphicSelect(e: Expr, fields: List[Identifier])
+//     extends Lhs(e) {
 
-case class LhsSliceSelect(id: Identifier, bitslice: ConstBitVectorSlice)
-    extends Lhs(id) {
-  override def toString = id.toString + bitslice.toString
-}
+//   override def toString =
+//     expr.toString + "." + Utils.join(fields.map(_.toString), ".")
+// }
 
-case class LhsVarSliceSelect(id: Identifier, bitslice: VarBitVectorSlice)
-    extends Lhs(id) {
-  override def toString = id.toString + bitslice.toString
-}
+// case class LhsSliceSelect(e: Expr, bitslice: ConstBitVectorSlice)
+//     extends Lhs(e) {
+//   override def toString = expr.toString + bitslice.toString
+// }
+
+// case class LhsVarSliceSelect(e: Expr, bitslice: VarBitVectorSlice)
+//     extends Lhs(e) {
+//   override def toString = expr.toString + bitslice.toString
+// }
 
 sealed abstract class Type extends PositionedNode {
   def isBool = false
@@ -879,8 +871,8 @@ case class CaseStmt(body: List[(Expr, Statement)]) extends Statement {
       List("esac")
 }
 
-case class ModuleNextCallStmt(id: Identifier) extends Statement {
-  override def toLines = List("next (" + id.toString + ")")
+case class ModuleNextCallStmt(expr: Expr) extends Statement {
+  override def toLines = List("next (" + expr.toString + ")")
 }
 
 case class BlockVarsDecl(ids: List[Identifier], typ: Type) extends ASTNode {

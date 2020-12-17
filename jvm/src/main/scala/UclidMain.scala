@@ -10,6 +10,7 @@ import scala.collection.mutable.ArrayBuffer
 import middle.Interpreter
 import middle.ProofTask
 import middle.Program
+import middle.Interface
 
 import back.Solver
 import back.ProofResult
@@ -46,6 +47,7 @@ object UclidMain {
   case class Config(
     mainModuleName: String = "main",
     solverPath: String = "cvc4",
+    shouldPrint: Boolean = false,
     files: Seq[java.io.File] = Seq()
   )
 
@@ -62,6 +64,11 @@ object UclidMain {
         .valueName("<Solver>")
         .action((x, c) => c.copy(solverPath = x))
         .text("Path to SMT solver.")
+
+      opt[Boolean]('p', "print")
+        .valueName("<Print?>")
+        .action((x, c) => c.copy(shouldPrint = x))
+        .text("True if should print query.")
 
       arg[java.io.File]("<file> ...")
         .unbounded()
@@ -81,8 +88,15 @@ object UclidMain {
     try {
       val mainModuleName = Identifier(config.mainModuleName)
       val modules = compile(config.files, mainModuleName)
-      val obligations = Interpreter.run(modules, Some(config.mainModuleName))
-      Solver.solve(obligations, config.solverPath)
+      val obs = Interpreter.run(modules, Some(config.mainModuleName))
+      if (config.shouldPrint) {
+        obs.program.head = obs.obligations.last._2.loc
+        println(
+          "(set-logic ALL)\n(set-option :produce-models true)\n" ++ Interface
+            .programToQuery(obs.program) ++ "\n(check-sat)\n(get-model)"
+        )
+      }
+      Solver.solve(obs, config.solverPath)
     } catch {
       case (e: java.io.FileNotFoundException) =>
         errorResult.messages = List("Error: " + e.getMessage() + ".")

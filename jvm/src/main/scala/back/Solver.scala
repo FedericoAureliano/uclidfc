@@ -62,8 +62,8 @@ object Solver {
       ob.program.head = o._2.loc
       results.addOne(check(ob.program, o._1, solver))
 
-      // found a counter example so quit
-      if (results.last.result == Some(true)) {
+      // failed verification so quit
+      if (results.last.result != Some(false)) {
         return results.toList
       }
     }
