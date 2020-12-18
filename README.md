@@ -4,29 +4,23 @@
 
 [Install SBT](https://www.scala-lang.org/download/)
 
-## Run JVM
+## Users
 
-```
-sbt "uclidJVM/run examples/fib.ucl"
-```
-
-## Run JS
-
-```
-sbt fullOptJS; cp js/target/scala-2.13/uclid-opt.js docs/js/uclid-opt.js
-open docs/index.html
-```
-
-## Compile
+### Compile
 
 ```
 sbt assembly
 ```
 
-## Run Jar
+### Run
 
 ```
-./uclid examples/fib.ucl
+./uclid [options] <file> ...
+
+  -m, --main <Module>    Name of the main module.
+  -s, --solver <Solver>  Path to solver.
+  -p, --print            Print the query.
+  <file> ...             List of files to analyze.
 ```
 
 ## Developers
@@ -42,4 +36,17 @@ sbt scalafmtSbtCheck scalafmtCheck test:scalafmtCheck
 ```
 sbt jacoco
 open jvm/target/scala-2.13/jacoco/report/html/index.html
+```
+
+### Run JVM
+
+```
+sbt "uclidJVM/run examples/fib.ucl"
+```
+
+### Run JS
+
+```
+sbt fullOptJS; cp js/target/scala-2.13/uclid-opt.js docs/js/uclid-opt.js
+open docs/index.html
 ```

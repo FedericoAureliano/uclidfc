@@ -62,7 +62,7 @@ object UclidMain {
       opt[String]('s', "solver")
         .valueName("<Solver>")
         .action((x, c) => c.copy(solverPath = x))
-        .text("Path to SMT solver.")
+        .text("Path to solver.")
 
       opt[Unit]('p', "print")
         .action((_, c) => c.copy(shouldPrint = true))
