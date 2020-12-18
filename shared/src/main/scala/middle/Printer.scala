@@ -250,10 +250,13 @@ object Printer {
 
   def programToQuery(term: TermGraph): String = {
     val assertions = term.assertions
-      .map(r => s"(assert ${programPointToQueryTerm(term, r)})")
+      .map(r =>
+        s"(push 1)\n(assert ${programPointToQueryTerm(term, r)})\n(check-sat)\n(pop 1)\n"
+      )
       .mkString("\n")
-    "(set-logic ALL)\n(set-option :produce-models true)\n" + programToQueryCtx(
+
+    "(set-logic ALL)\n(set-option :produce-models true)\n(set-option :dump-models true)\n" + programToQueryCtx(
       term
-    ) + "\n" + assertions + "\n(check-sat)\n(get-model)"
+    ) + "\n" + assertions
   }
 }

@@ -24,13 +24,8 @@ object UclidMain {
       case None => sys.exit(2)
       case Some(config) => {
         val pResults = main(config)
-        var ctx: Option[Boolean] = Some(false)
-        pResults.foreach { p =>
-          println(p)
-          ctx = p.result
-        }
-
-        sys.exit(ctx match {
+        println(pResults)
+        sys.exit(pResults.result match {
           case Some(false) => 0
           case Some(true)  => 1
           case None        => 2
@@ -80,7 +75,7 @@ object UclidMain {
 
   /** This version of 'main' does all the real work.
     */
-  def main(config: Config): List[ProofResult] = {
+  def main(config: Config): ProofResult = {
     val errorResult =
       new ProofResult()
     try {
@@ -97,13 +92,13 @@ object UclidMain {
     } catch {
       case (e: java.io.FileNotFoundException) =>
         errorResult.messages = List("Error: " + e.getMessage() + ".")
-        List(errorResult)
+        errorResult
       case (p: Utils.ParserError) =>
         errorResult.messages = List(
           "%s error %s: %s.\n%s"
             .format(p.errorName, p.positionStr, p.getMessage, p.fullStr)
         )
-        List(errorResult)
+        errorResult
     }
   }
 

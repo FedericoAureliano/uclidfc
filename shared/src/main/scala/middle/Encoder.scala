@@ -678,6 +678,8 @@ object Encoder {
           val baseRef = Ref(program.stmts.length)
           program.stmts.addOne(Application(negRef, List(initSpecRef)))
 
+          program.assertions.addOne(baseRef)
+
           // induction step
           // holds on entry
           val entryRef = Ref(program.stmts.length)
@@ -704,16 +706,7 @@ object Encoder {
             Application(andRef, List(entryRef, negExitRef))
           )
 
-          val orRef = program.getOrCacheCallerRef("or", {
-            program.stmts.addOne(TheoryMacro("or"))
-            Ref(program.stmts.length - 1)
-          })
-          val disjRef = Ref(program.stmts.length)
-          program.stmts.addOne(
-            Application(orRef, List(baseRef, inductiveRef))
-          )
-
-          program.assertions.addOne(disjRef)
+          program.assertions.addOne(inductiveRef)
 
         }
       }
