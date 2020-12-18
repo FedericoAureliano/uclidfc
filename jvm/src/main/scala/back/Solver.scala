@@ -34,33 +34,30 @@ object Solver {
   }
 
   def check(
-    program: Program,
-    name: String,
+    program: TermGraph,
+    assertion: Ref,
     solver: String
   ): ProofResult = {
-    val query =
-      "(set-logic ALL)\n(set-option :produce-models true)\n" ++ Interface
-        .programToQuery(program) ++ "\n(check-sat)\n(get-model)"
+    val query = Printer.programToQuery(program)
     val qfile = writeQueryToTmpFile(query).getAbsolutePath()
     val result = run(s"$solver ${qfile}")
 
     val answer = result._1.mkString("\n")
 
     if (answer.contains("unsat")) {
-      new ProofResult(program, name, Some(false), None, result._1)
+      new ProofResult(Some(false), None, result._1)
     } else if (answer.contains("sat")) {
-      new ProofResult(program, name, Some(true), None, result._1)
+      new ProofResult(Some(true), None, result._1)
     } else {
-      new ProofResult(program, name, None, None, result._1)
+      new ProofResult(None, None, result._1)
     }
   }
 
-  def solve(ob: ProofTask, solver: String): List[ProofResult] = {
+  def solve(ob: TermGraph, solver: String): List[ProofResult] = {
     val results = new ListBuffer[ProofResult]()
 
-    ob.obligations.foreach { o =>
-      ob.program.head = o._2.loc
-      results.addOne(check(ob.program, o._1, solver))
+    ob.assertions.foreach { o =>
+      results.addOne(check(ob, o, solver))
 
       // failed verification so quit
       if (results.last.result != Some(false)) {

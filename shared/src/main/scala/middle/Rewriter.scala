@@ -5,7 +5,7 @@ import scala.collection.mutable.ListBuffer
 
 object Rewriter {
 
-  def incrementRefs(term: Program, increment: Int): Unit =
+  def incrementRefs(term: TermGraph, increment: Int): Unit =
     (0 until term.stmts.length).foreach { i =>
       incrementInstructionRefs(term.stmts(i), increment) match {
         case Some(instruction) => term.stmts(i) = instruction
@@ -64,7 +64,7 @@ object Rewriter {
     }
   }
 
-  def updateRefs(term: Program, newLocations: Int => Int): Unit =
+  def updateRefs(term: TermGraph, newLocations: Int => Int): Unit =
     (0 until term.stmts.length).foreach { i =>
       updateInstructionRef(term.stmts(i), newLocations) match {
         case Some(instruction) => term.stmts(i) = instruction
@@ -135,12 +135,13 @@ object Rewriter {
         )
     }
 
-  def copySubTerm(term: Program, position: Int): Program = {
-    val toKeep = Garbage.mark_i(term, position)
-    Garbage.sweep(term, toKeep)
+  def copySubTerm(term: TermGraph, position: Int): TermGraph = {
+    val toKeep = Array.fill[Boolean](term.stmts.length)(false)
+    Collector.mark_i(term, position, toKeep)
+    Collector.sweep(term, toKeep)
   }
 
-  def inlineApplication(term: Program, position: Int): Program = {
+  def inlineApplication(term: TermGraph, position: Int): TermGraph = {
     // get the application
     val ap = term.stmts(position) match {
       case Application(_, _) => term.stmts(position).asInstanceOf[Application]
@@ -200,10 +201,10 @@ object Rewriter {
     finalBuffer.addAll(callerBody.stmts)
     args.foreach(a => finalBuffer.addAll(a.stmts))
 
-    new Program(finalBuffer, 0)
+    new TermGraph(finalBuffer)
   }
 
-  def letify(term: Program, prefix: String): Program = {
+  def letify(term: TermGraph, prefix: String): TermGraph = {
 
     // find every application
     var newMacros = new ArrayBuffer[Instruction]()
@@ -251,18 +252,18 @@ object Rewriter {
 
     val newLocationMap: Map[Int, Int] = newLocations.toMap
 
-    val tmpTerm = new Program(term.stmts.clone(), 0)
+    val tmpTerm = new TermGraph(term.stmts.clone())
     updateRefs(
       tmpTerm,
       (x: Int) => if (newLocationMap contains x) newLocationMap(x) else x
     )
 
-    val newTerm = new Program(tmpTerm.stmts ++ newMacros, 0)
+    val newTerm = new TermGraph(tmpTerm.stmts ++ newMacros)
 
     newTerm
   }
 
-  def reduceDuplicates(term: Program): Unit =
+  def reduceDuplicates(term: TermGraph): Unit =
     // for every statement, if there is an equal statement later in the array, just point to it.
     (0 until term.stmts.length).foreach { i =>
       // don't do anything for standalone references since this will just increase indirection
@@ -277,7 +278,7 @@ object Rewriter {
       }
     }
 
-  def reduceIndirection(term: Program): Unit = {
+  def reduceIndirection(term: TermGraph): Unit = {
     // if we have a pointer chain then just cut out the middle pointers
     def findTarget(candidate: Instruction, position: Int): Ref =
       candidate match {

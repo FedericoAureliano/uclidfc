@@ -1,12 +1,14 @@
 package middle
 
-object Garbage {
-  def mark(term: Program): Array[Boolean] = mark_i(term, term.head)
+object Collector {
 
-  def mark_i(term: Program, position: Int): Array[Boolean] = {
-    val length = term.stmts.length
-    var marks = Array.fill[Boolean](length)(false)
+  def mark(term: TermGraph): Array[Boolean] = {
+    val marks = Array.fill[Boolean](term.stmts.length)(false)
+    term.assertions.foreach(r => mark_i(term, r.loc, marks))
+    marks
+  }
 
+  def mark_i(term: TermGraph, position: Int, marks: Array[Boolean]): Unit = {
     def markParams(params: List[Ref]) =
       params.foreach { p =>
         if (!marks(p.loc)) {
@@ -45,11 +47,9 @@ object Garbage {
 
     marks(position) = true
     markInstruction(term.stmts(position))
-
-    return marks
   }
 
-  def sweep(term: Program, marks: Array[Boolean]): Program = {
+  def sweep(term: TermGraph, marks: Array[Boolean]): TermGraph = {
     assert(
       term.stmts.length == marks.length,
       "term length must equal marks length"
@@ -71,11 +71,10 @@ object Garbage {
       }
     }
 
-    val newTerm = new Program(
+    val newTerm = new TermGraph(
       term.stmts.clone().zipWithIndex.filter { case (i, p) => marks(p) }.map {
         case (i, p) => i
-      },
-      0
+      }
     )
 
     Rewriter.updateRefs(newTerm, newLocations)
@@ -83,5 +82,5 @@ object Garbage {
     newTerm
   }
 
-  def collectGarbage(term: Program): Program = sweep(term, mark(term))
+  def collectGarbage(term: TermGraph): TermGraph = sweep(term, mark(term))
 }

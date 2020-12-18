@@ -1,5 +1,9 @@
 package middle
 
+import scala.collection.mutable.ArrayBuffer
+import scala.collection.mutable.ListBuffer
+import scala.collection.mutable.HashMap
+
 // Essentially an AST node or edge.
 abstract class Instruction
 
@@ -164,4 +168,49 @@ case class Application(caller: Ref, args: List[Ref]) extends Instruction {
 
   override def toString(): String =
     s"[app]\t${(List(caller) ++ args).mkString("\t")}"
+}
+
+class TermGraph(val stmts: ArrayBuffer[Instruction]) {
+  var uniqueId = 0
+  var isSynthesisQuery = false
+
+  val assertions: ListBuffer[Ref] = new ListBuffer()
+
+  // point type name to type location (modules are types)
+  val sortCache: HashMap[String, Ref] = new HashMap[String, Ref]()
+  // point operator name to operator location
+  val callerCache: HashMap[String, Ref] = new HashMap[String, Ref]()
+
+  def freshSymbolName(): String = {
+    uniqueId += 1
+    s"nd!${uniqueId}"
+  }
+
+  def cacheSortRef(name: String, sort: Ref): Unit =
+    sortCache.addOne((name, sort))
+
+  def getType(name: String): Option[Ref] =
+    sortCache.get(name)
+
+  def getOrCacheSortRef(name: String, sort: => Ref): Ref =
+    sortCache.getOrElseUpdate(name, sort)
+
+  def cacheCallerRef(name: String, op: Ref): Unit =
+    callerCache.addOne((name, op))
+
+  def getCallerRef(name: String): Option[Ref] =
+    callerCache.get(name)
+
+  def getOrCacheCallerRef(name: String, op: => Ref): Ref =
+    callerCache.getOrElseUpdate(name, op)
+
+  override def toString(): String = stmts.mkString("\n")
+
+  def appendAndUpdateRefs(one: Instruction) = {
+    val offset = stmts.length
+    stmts.append(Rewriter.incrementInstructionRefs(one, offset) match {
+      case Some(instruction) => instruction
+      case None              => one
+    })
+  }
 }

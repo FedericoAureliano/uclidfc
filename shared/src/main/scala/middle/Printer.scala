@@ -4,11 +4,15 @@ import front._
 
 import scala.collection.mutable.HashSet
 
-object Interface {
+object Printer {
 
   val TAB = "  "
 
-  def programToQueryTerm(term: Program, indentInput: Int): String = {
+  def programPointToQueryTerm(
+    term: TermGraph,
+    point: Ref,
+    indentInput: Int = 0
+  ): String = {
     var indent = indentInput
 
     def dispatch(position: Ref): String =
@@ -114,12 +118,12 @@ object Interface {
     def moduleToQueryTerm(m: middle.Module): String =
       m.name
 
-    dispatch(Ref(term.head))
+    dispatch(point)
   }
 
-  def programToQueryCtx(term: Program): String = {
+  def programToQueryCtx(term: TermGraph): String = {
     var indent = 0
-    val toDeclare = Garbage.mark(term)
+    val toDeclare = Collector.mark(term)
 
     def dispatch(position: Ref): Option[String] =
       if (toDeclare(position.loc)) {
@@ -167,7 +171,7 @@ object Interface {
         ctr.selectors.foreach { s =>
           tmp ++= "\n"
           val sel = term.stmts(s.loc).asInstanceOf[Selector]
-          tmp ++= s"${TAB * indent}(${sel.name} ${programToQueryTerm(new Program(term.stmts, sel.sort.loc), indent)})"
+          tmp ++= s"${TAB * indent}(${sel.name} ${programPointToQueryTerm(new TermGraph(term.stmts), sel.sort, indent)})"
         }
       }
       tmp ++= "))))\n"
@@ -177,7 +181,7 @@ object Interface {
     }
 
     def sortmacroToQueryCtx(s: SortMacro): String =
-      s"${TAB * indent}(define-sort ${s.name} ${programToQueryTerm(new Program(term.stmts, s.body.loc), indent)})"
+      s"${TAB * indent}(define-sort ${s.name} ${programPointToQueryTerm(new TermGraph(term.stmts), s.body, indent)})"
 
     def userfunctionToQueryCtx(u: UserFunction): String = {
       val tmp = new StringBuilder()
@@ -185,13 +189,13 @@ object Interface {
         tmp ++= s"${TAB * indent}(declare-fun ${u.name} (${u.params
           .map { p =>
             val fp = term.stmts(p.loc).asInstanceOf[FunctionParameter]
-            s"(${fp.name} ${programToQueryTerm(new Program(term.stmts, fp.sort.loc), indent)})"
+            s"(${fp.name} ${programPointToQueryTerm(new TermGraph(term.stmts), fp.sort, indent)})"
           }
           .mkString(" ")}) "
       } else {
         tmp ++= s"${TAB * indent}(declare-const ${u.name} "
       }
-      tmp ++= s"${TAB * indent}${programToQueryTerm(new Program(term.stmts, u.sort.loc), indent)})\n"
+      tmp ++= s"${TAB * indent}${programPointToQueryTerm(new TermGraph(term.stmts), u.sort, indent)})\n"
 
       tmp.toString()
     }
@@ -201,13 +205,13 @@ object Interface {
       tmp ++= s"${TAB * indent}(define-fun ${u.name} (${u.params
         .map { p =>
           val fp = term.stmts(p.loc).asInstanceOf[FunctionParameter]
-          s"(${fp.name} ${programToQueryTerm(new Program(term.stmts, fp.sort.loc), indent)})"
+          s"(${fp.name} ${programPointToQueryTerm(new TermGraph(term.stmts), fp.sort, indent)})"
         }
         .mkString(" ")}) "
 
-      tmp ++= s"${programToQueryTerm(new Program(term.stmts, u.sort.loc), indent)}\n"
+      tmp ++= s"${programPointToQueryTerm(new TermGraph(term.stmts), u.sort, indent)}\n"
       indent += 1
-      tmp ++= s"${TAB * indent}${programToQueryTerm(new Program(term.stmts, u.body.loc), indent)})\n"
+      tmp ++= s"${TAB * indent}${programPointToQueryTerm(new TermGraph(term.stmts), u.body, indent)})\n"
       indent -= 1
 
       tmp.toString()
@@ -226,7 +230,7 @@ object Interface {
       ctr.selectors.foreach { s =>
         tmp ++= "\n"
         val sel = term.stmts(s.loc).asInstanceOf[Selector]
-        tmp ++= s"${TAB * indent}(${sel.name} ${programToQueryTerm(new Program(term.stmts, sel.sort.loc), indent)})"
+        tmp ++= s"${TAB * indent}(${sel.name} ${programPointToQueryTerm(new TermGraph(term.stmts), sel.sort, indent)})"
       }
       tmp ++= "))))\n\n"
       indent -= 1
@@ -244,6 +248,12 @@ object Interface {
     term.stmts.zipWithIndex.map(p => dispatch(Ref(p._2))).flatten.mkString("\n")
   }
 
-  def programToQuery(term: Program): String =
-    programToQueryCtx(term) + "\n" + programToQueryTerm(term, 0)
+  def programToQuery(term: TermGraph): String = {
+    val assertions = term.assertions
+      .map(r => s"(assert ${programPointToQueryTerm(term, r)})")
+      .mkString("\n")
+    "(set-logic ALL)\n(set-option :produce-models true)\n" + programToQueryCtx(
+      term
+    ) + "\n" + assertions + "\n(check-sat)\n(get-model)"
+  }
 }

@@ -7,7 +7,7 @@ Passing semantic checks must gurantee a well formed smt-lib query
 
 object Checker {
 
-  def checkRefBounds(term: Program): Option[String] = {
+  def checkRefBounds(term: TermGraph): Option[String] = {
     def checkRef(r: Ref): Boolean = r.loc < term.stmts.length && r.loc >= 0
 
     term.stmts.zipWithIndex.foreach {
@@ -54,7 +54,7 @@ object Checker {
     None
   }
 
-  def inferSort(term: Program, position: Int): Instruction =
+  def inferSort(term: TermGraph, position: Int): Instruction =
     term.stmts(position) match {
       case Ref(i) => inferSort(term, i)
       case Numeral(_) =>

@@ -615,20 +615,6 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
       "(" ~ ")" ^^ { case _ ~ _ => List.empty[(Identifier, Type)] }
 
   lazy val LhsParser: PackratParser[Lhs] = positioned {
-    // IdParser ~ VarBitVectorSliceParser ^^ {
-    //   case id ~ slice =>
-    //     LhsVarSliceSelect(id, slice)
-    // } |
-    //   IdParser ~ ArraySelectOpParser ^^ {
-    //     case id ~ mapOp =>
-    //       LhsArraySelect(id, mapOp.indices)
-    //   } |
-    //   IdParser ~ PolymorphicSelectOpParser ~ rep(PolymorphicSelectOpParser) ^^ {
-    //     case id ~ rOp ~ rOps =>
-    //       LhsPolymorphicSelect(id, (rOp.id) :: (rOps.map(_.id)))
-    //   } |
-    //   IdParser <~ OpPrime ^^ { case id => LhsId(id) } |
-    //   IdParser ^^ { case id            => LhsId(id) }
     ExprParser ^^ { case expr => Lhs(expr) }
   }
 

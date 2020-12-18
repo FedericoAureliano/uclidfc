@@ -4,7 +4,7 @@ import org.junit.Test
 import org.junit.Assert._
 import scala.collection.mutable.ArrayBuffer
 
-class TestSemanctics {
+class TestChecker {
 
   @Test def testCheckBounds1(): Unit = {
     // declare a function f(x) = x + x
@@ -14,7 +14,7 @@ class TestSemanctics {
     val plus = TheoryMacro("+") // 3
     val integer = TheorySort("Int") // 4
 
-    val f = new Program(ArrayBuffer(head, body, arg, plus, integer), 0)
+    val f = new TermGraph(ArrayBuffer(head, body, arg, plus, integer))
 
     val check = Checker.checkRefBounds(f)
 
@@ -29,7 +29,7 @@ class TestSemanctics {
     val plus = TheoryMacro("+") // 3
     val integer = TheorySort("Int") // 4
 
-    val f = new Program(ArrayBuffer(head, body, arg, plus, integer), 0)
+    val f = new TermGraph(ArrayBuffer(head, body, arg, plus, integer))
 
     val check = Checker.checkRefBounds(f)
 
@@ -44,7 +44,7 @@ class TestSemanctics {
     val plus = TheoryMacro("+") // 3
     val integer = TheorySort("Int") // 4
 
-    val f = new Program(ArrayBuffer(head, body, arg, plus, integer), 0)
+    val f = new TermGraph(ArrayBuffer(head, body, arg, plus, integer))
 
     val check = Checker.checkRefBounds(f)
 

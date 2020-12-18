@@ -40,13 +40,13 @@ object WebApp {
   def updateSMTLIB(text: String, id: String): Unit = {
     val result = document.querySelector(s"#$id").asInstanceOf[HTMLPreElement]
 
-    val program = new Program(ArrayBuffer[Instruction](), 0)
+    val program = new TermGraph(ArrayBuffer[Instruction]())
 
     try {
       for (line <- text.split("\n")) {
-        program.appendIncOne(parse(line))
+        program.appendAndUpdateRefs(parse(line))
       }
-      result.textContent = Interface.programToQuery(program)
+      result.textContent = Printer.programToQuery(program)
     } catch {
       case e: Throwable => result.textContent = e.toString()
     }
@@ -54,11 +54,11 @@ object WebApp {
 
   def updateLetify(text: String, id: String): Unit = {
     val result = document.querySelector(s"#$id").asInstanceOf[HTMLPreElement]
-    val program = new Program(ArrayBuffer[Instruction](), 0)
+    val program = new TermGraph(ArrayBuffer[Instruction]())
 
     try {
       for (line <- text.split("\n")) {
-        program.appendIncOne(parse(line))
+        program.appendAndUpdateRefs(parse(line))
       }
       val answer = Rewriter.letify(program, "tmp")
 
@@ -70,11 +70,11 @@ object WebApp {
 
   def updateInline(text: String, id: String): Unit = {
     val result = document.querySelector(s"#$id").asInstanceOf[HTMLPreElement]
-    val program = new Program(ArrayBuffer[Instruction](), 0)
+    val program = new TermGraph(ArrayBuffer[Instruction]())
 
     try {
       for (line <- text.split("\n")) {
-        program.appendIncOne(parse(line))
+        program.appendAndUpdateRefs(parse(line))
       }
       val answer = Rewriter.inlineApplication(program, 0)
 
@@ -86,17 +86,17 @@ object WebApp {
 
   def updateCompact(text: String, id: String): Unit = {
     val result = document.querySelector(s"#$id").asInstanceOf[HTMLPreElement]
-    val program = new Program(ArrayBuffer[Instruction](), 0)
+    val program = new TermGraph(ArrayBuffer[Instruction]())
 
     try {
       for (line <- text.split("\n")) {
-        program.appendIncOne(parse(line))
+        program.appendAndUpdateRefs(parse(line))
       }
 
       Rewriter.reduceDuplicates(program)
       Rewriter.reduceIndirection(program)
 
-      val cleaned = Garbage.collectGarbage(program)
+      val cleaned = Collector.collectGarbage(program)
 
       result.textContent = cleaned.toString()
     } catch {
@@ -110,11 +110,9 @@ object WebApp {
     try {
       val parsed = UclidParser.parseModel("web", text)
 
-      val pResult = Interpreter.run(parsed, Some("main"))
+      val pResult = Encoder.run(parsed, Some("main"))
 
-      pResult.program.head = pResult.obligations.last._2.loc
-
-      result.textContent = Interface.programToQuery(pResult.program)
+      result.textContent = Printer.programToQuery(pResult)
     } catch {
       case e: Utils.SyntaxError =>
         result.textContent = s"${e.pos.get}: ${e.msg}"
