@@ -29,6 +29,6 @@ module main
     property a_le_b  : fibs[1].a <= fibs[1].b && fibs[2].a <= fibs[2].b;
 
     control {
-        induction;
+        unroll(3);
     }
 }

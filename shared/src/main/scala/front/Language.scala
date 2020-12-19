@@ -751,22 +751,15 @@ case class AxiomDecl(
   }
 }
 
-sealed abstract class ProofCommand extends ASTNode
-
-case class CommandParams(name: Identifier, values: List[Expr]) extends ASTNode {}
-
-case class GenericProofCommand(
+case class ProofCommand(
   name: Identifier,
-  params: List[CommandParams],
-  args: List[(Expr, String)],
-  resultVar: Option[Identifier],
-  argObj: Option[Identifier]
-) extends ProofCommand {}
+  k: Option[IntLit]
+) extends ASTNode
 
 case class Module(
   id: Identifier,
   decls: List[Decl],
-  cmds: List[GenericProofCommand]
+  cmds: List[ProofCommand]
 ) extends ASTNode {
 
   // create a new module with with the filename set.

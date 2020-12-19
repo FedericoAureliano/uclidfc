@@ -637,7 +637,7 @@ object Encoder {
     program: TermGraph, // modified
     scope: ScopeFrame,
     moduleName: String,
-    cmds: List[GenericProofCommand]
+    cmds: List[ProofCommand]
   ): Unit =
     cmds.foreach(p =>
       p.name.name match {
@@ -647,7 +647,7 @@ object Encoder {
             program.stmts(p.loc) match {
               case FunctionParameter(name, sort) => {
                 val vRef = Ref(program.stmts.length)
-                program.stmts.addOne(UserFunction(name, sort))
+                program.stmts.addOne(UserFunction(s"$name!step!0", sort))
                 vRef
               }
             }
@@ -685,9 +685,25 @@ object Encoder {
           val entryRef = Ref(program.stmts.length)
           program.stmts.addOne(Application(specRef, List(variables(0))))
 
-          // TODO: k transitions
-          val transRef = Ref(program.stmts.length)
-          program.stmts.addOne(Application(nextRef, variables))
+          // Take k steps
+          val k = p.k.getOrElse(IntLit(1)).value.toInt
+
+          var transRef = variables(0)
+
+          (1 to k).foreach {
+            i =>
+              val args = scope.nondetParams.map { p =>
+                program.stmts(p.loc) match {
+                  case FunctionParameter(name, sort) => {
+                    val vRef = Ref(program.stmts.length)
+                    program.stmts.addOne(UserFunction(s"$name!step!$i", sort))
+                    vRef
+                  }
+                }
+              }
+              program.stmts.addOne(Application(nextRef, List(transRef) ++ args))
+              transRef = Ref(program.stmts.length - 1)
+          }
 
           // holds on exit
           val exitRef = Ref(program.stmts.length)
@@ -708,6 +724,70 @@ object Encoder {
 
           program.assertions.addOne(inductiveRef)
 
+        }
+        case "unroll" => {
+          // create all the variables you need
+          val variables = scope.getParams().map { p =>
+            program.stmts(p.loc) match {
+              case FunctionParameter(name, sort) => {
+                val vRef = Ref(program.stmts.length)
+                program.stmts.addOne(UserFunction(s"$name!step!0", sort))
+                vRef
+              }
+            }
+          }
+
+          // get the module declaration
+          val mod = program
+            .stmts(program.getType(moduleName).get.loc)
+            .asInstanceOf[middle.Module]
+          val initRef = mod.init
+          val nextRef = mod.next
+          val specRef = mod.spec
+
+          val initAppRef = Ref(program.stmts.length)
+          program.stmts.addOne(Application(initRef, variables))
+
+          // apply spec to result of init
+          val initSpecRef = Ref(program.stmts.length)
+          program.stmts.addOne(Application(specRef, List(initAppRef)))
+
+          val negRef = program.getOrCacheCallerRef("not", {
+            program.stmts.addOne(TheoryMacro("not"))
+            Ref(program.stmts.length - 1)
+          })
+
+          val baseRef = Ref(program.stmts.length)
+          program.stmts.addOne(Application(negRef, List(initSpecRef)))
+
+          program.assertions.addOne(baseRef)
+
+          // Take k steps
+          val k = p.k.getOrElse(IntLit(1)).value.toInt
+
+          var transRef = initAppRef
+
+          (1 to k).foreach {
+            i =>
+              val args = scope.nondetParams.map { p =>
+                program.stmts(p.loc) match {
+                  case FunctionParameter(name, sort) => {
+                    val vRef = Ref(program.stmts.length)
+                    program.stmts.addOne(UserFunction(s"$name!step!$i", sort))
+                    vRef
+                  }
+                }
+              }
+              program.stmts.addOne(Application(nextRef, List(transRef) ++ args))
+              transRef = Ref(program.stmts.length - 1)
+              // holds on exit
+              val exitRef = Ref(program.stmts.length)
+              program.stmts.addOne(Application(specRef, List(transRef)))
+              val negExitRef = Ref(program.stmts.length)
+              program.stmts.addOne(Application(negRef, List(exitRef)))
+
+              program.assertions.addOne(negExitRef)
+          }
         }
       }
     )

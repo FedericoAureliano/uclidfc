@@ -846,52 +846,14 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
     )
 
   // control commands.
-  lazy val CmdParamParser: PackratParser[CommandParams] =
-    // TODO: Current fix to allow for logic to be specified for synthesize invariant
-    (IdParser <~ "=") ~ ("[" ~> ExprParser ~ rep("," ~> ExprParser) <~ "]") ^^ {
-      case id ~ (e ~ es) => CommandParams(id, e :: es)
-    } |
-      (IdParser) ^^ { case id => CommandParams(id, List.empty) }
-
-  lazy val CmdParamListParser: PackratParser[List[CommandParams]] =
-    "[" ~ "]" ^^ { case _ => List.empty } |
-      "[" ~> CmdParamParser ~ rep(";" ~> CmdParamParser) <~ "]" ^^ {
-        case p ~ ps =>
-          p :: ps
-      }
-
-  lazy val CmdParser: PackratParser[GenericProofCommand] = positioned {
-    (IdParser <~ "=").? ~ (IdParser <~ ".").? ~ IdParser <~ ";" ^^ {
-      case rId ~ oId ~ id =>
-        GenericProofCommand(id, List.empty, List.empty, rId, oId)
-    } |
-      (IdParser <~ "=").? ~ (IdParser <~ ".").? ~ IdParser ~ CmdParamListParser <~ ";" ^^ {
-        case rId ~ oId ~ id ~ cmdParams =>
-          GenericProofCommand(id, cmdParams, List.empty, rId, oId)
-      } |
-      (IdParser <~ "=").? ~ (IdParser <~ ".").? ~ IdParser ~ ExprListParser <~ ";" ^^ {
-        case rId ~ oId ~ id ~ es =>
-          GenericProofCommand(
-            id,
-            List.empty,
-            es.map(e => (e, e.toString())),
-            rId,
-            oId
-          )
-      } |
-      (IdParser <~ "=").? ~ (IdParser <~ ".").? ~ IdParser ~ CmdParamListParser ~ ExprListParser <~ ";" ^^ {
-        case rId ~ oId ~ id ~ cmdParams ~ es =>
-          GenericProofCommand(
-            id,
-            cmdParams,
-            es.map(e => (e, e.toString())),
-            rId,
-            oId
-          )
-      }
+  lazy val CmdParser: PackratParser[ProofCommand] = positioned {
+    IdParser ~ ("(" ~> IntegerParser <~ ")").? <~ ";" ^^ {
+      case id ~ k =>
+        ProofCommand(id, k)
+    }
   }
 
-  lazy val CmdBlockParser: PackratParser[List[GenericProofCommand]] =
+  lazy val CmdBlockParser: PackratParser[List[ProofCommand]] =
     KwControl ~ "{" ~> rep(CmdParser) <~ "}"
 
   lazy val ModuleParser: PackratParser[Module] = positioned {
