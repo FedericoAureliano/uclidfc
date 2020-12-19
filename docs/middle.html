@@ -1,0 +1,240 @@
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Trilingual Uclid</title>
+  <link rel="stylesheet" href="https://latex.now.sh/style.css">
+  <link rel="stylesheet" href="css/main.css">
+</head>
+
+<body id="top">
+  <header>
+    <h1>Trilingual Uclid5</h1>
+    <p class="author">
+      Federico Mora
+    </p>
+  </header>
+
+  <main>
+    <article>
+      <h2 id="assembly">Intermediate Representation</h3>
+      <p>
+
+        We make the modularity possible with an intermediate representation for
+        the core language that is easy to manipulate from the proof language
+        and has a clear interface to the procedure language. The intermediate
+        representation is like an assembly language for <span style="font-variant: small-caps;">smt-lib</span> with
+        Uclid5 modules,
+        procedure calls, and synthesis functions. It consists of the following
+        15 commands.<label for="sn-1" class="sidenote-toggle
+        sidenote-number"></label> <input type="checkbox" id="sn-1" class="sidenote-toggle" /> <span class="sidenote">We
+          do not yet support
+          parametric datatypes (but neither does Uclid5)</span>
+
+      </p>
+
+
+      <div class="scroll-wrapper">
+        <table>
+          <caption>Logic Assembly Commands</caption>
+          <thead>
+            <tr>
+              <td scope="col"></td>
+              <td colspan="5" scope="col" style="text-align: center;">Argument Number</td>
+              <td scope="col"></td>
+            </tr>
+            <tr>
+              <th scope="col"></th>
+              <th scope="col">1</th>
+              <th scope="col">2</th>
+              <th scope="col">3</th>
+              <th scope="col">4</th>
+              <th scope="col">5</th>
+              <th scope="col">Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>[num]</code></th>
+              <td><code>Int</code></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td>Numeral (value)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>[tst]</code></th>
+              <td><code>Str</code></td>
+              <td><code>Ref*</code></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td>Theory Sort (name, parameter sorts)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>[smo]</code></th>
+              <td><code>Str</code></td>
+              <td><code>Ref</code></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td>Sort Macro (name, sort)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>[spr]</code></th>
+              <td><code>Str</code></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td>Sort Parameter (name)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>[ust]</code></th>
+              <td><code>Str</code></td>
+              <td><code>Num</code></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td>User Sort (name, arity)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>[fpr]</code></th>
+              <td><code>Str</code></td>
+              <td><code>Ref</code></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td>Function Parameter (name, sort)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>[tmo]</code></th>
+              <td><code>Str</code></td>
+              <td><code>Ref*</code></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td>Theory Macro (name, params)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>[umo]</code></th>
+              <td><code>Str</code></td>
+              <td><code>Ref</code></td>
+              <td><code>Ref</code></td>
+              <td><code>Ref*</code></td>
+              <td></td>
+              <td>User Macro (name, sort, body, params)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>[ufn]</code></th>
+              <td><code>Str</code></td>
+              <td><code>Ref</code></td>
+              <td><code>Ref*</code></td>
+              <td></td>
+              <td></td>
+              <td>User Function (name, sort, params)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>[ctr]</code></th>
+              <td><code>Str</code></td>
+              <td><code>Ref</code></td>
+              <td><code>Ref*</code></td>
+              <td></td>
+              <td></td>
+              <td>Constructor (name, sort, selectors)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>[slr]</code></th>
+              <td><code>Str</code></td>
+              <td><code>Ref</code></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td>Selector (name, sort)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>[adt]</code></th>
+              <td><code>Str</code></td>
+              <td><code>Ref*</code></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td>Algebraic Datatype (name, constructors)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>[app]</code></th>
+              <td><code>Ref</code></td>
+              <td><code>Ref*</code></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td>Application (caller, callees)</td>
+            </tr>
+            <tr>
+              <th scope="row"></th>
+              <th></th>
+              <th></th>
+              <th></th>
+              <th></th>
+              <th></th>
+              <th></th>
+            </tr>
+            <tr>
+              <th scope="row"><code>[mod]</code></th>
+              <td><code>Str</code></td>
+              <td><code>Ref</code></td>
+              <td><code>Ref</code></td>
+              <td><code>Ref</code></td>
+              <td><code>Ref</code></td>
+              <td>Mod (name, constructor, init, next, spec)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>[syn]</code></th>
+              <td><code>Str</code></td>
+              <td><code>Ref</code></td>
+              <td><code>Ref*</code></td>
+              <td></td>
+              <td></td>
+              <td>Synthesis (name, sort, params)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+
+        Logic assembly programs are essentially logical terms with all
+        necessary context included.
+        In other words, you can think of logic assembly programs as a linear
+        representation of an abstract-syntax graph of a term.
+
+        The best thing about it is that any traversal or
+        rewrite just needs to account for 15 commands<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+        <input type="checkbox" id="sn-1" class="sidenote-toggle" />
+        <span class="sidenote">For comparison, the existing Uclid5 uses more than 150 language elements for its internal
+          representation.</span>
+
+        and we never need to touch auxiliary
+        data structures, like symbol tables.<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+        <input type="checkbox" id="sn-1" class="sidenote-toggle" />
+        <span class="sidenote">This will solve our value numbering problems: the number for a value is its location and
+          this is always consistent.</span>
+
+      </p>
+
+    </article>
+  </main>
+
+  <script>
+    MathJax = {
+      tex: {
+        inlineMath: [['$', '$'],],
+      },
+    };
+  </script>
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</body>
+
+</html>

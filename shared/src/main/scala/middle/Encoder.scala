@@ -85,26 +85,6 @@ object Encoder {
             Ref(program.stmts.length - 1)
           }
         )
-      case StringType() =>
-        program.getOrCacheSortRef(
-          t.toString(), {
-            program.stmts.addOne(TheorySort("String"))
-            program.cacheSortRef(t.toString(), Ref(program.stmts.length - 1))
-            Ref(program.stmts.length - 1)
-          }
-        )
-      case BitVectorType(width) => {
-        program.getOrCacheSortRef(
-          t.toString(), {
-            program.stmts.addOne(
-              TheorySort("_ BitVec", List(Ref(program.stmts.length + 1)))
-            )
-            program.stmts.addOne(Numeral(width))
-            program.cacheSortRef(t.toString(), Ref(program.stmts.length - 2))
-            Ref(program.stmts.length - 2)
-          }
-        )
-      }
       case ArrayType(inTypes, outType) => {
         program.getOrCacheSortRef(
           t.toString(), {
@@ -129,14 +109,12 @@ object Encoder {
         throw new IllegalArgumentException(s"type not yet supported: ${t}")
     }
 
-  // TODO: combine with middle.core.semantics.inferSort ?
   def getTermTypeRef(
     program: TermGraph, // modified
     app: Ref
   ): Ref =
     program.stmts(app.loc) match {
       case Application(caller, args) => {
-        // TODO check if caller is ite, select, store, ...
         program.stmts(caller.loc) match {
           case TheoryMacro("ite", params) => getTermTypeRef(program, args.head)
           case TheoryMacro("store", params) =>
@@ -240,8 +218,8 @@ object Encoder {
         appRef
       }
       case OperatorApplication(op, operands) => {
-        val opRef = program.getOrCacheCallerRef(op.toString(), {
-          program.stmts.addOne(TheoryMacro(op.toString()));
+        val opRef = program.getOrCacheCallerRef(op.name, {
+          program.stmts.addOne(TheoryMacro(op.name));
           Ref(program.stmts.length - 1)
         })
 
@@ -849,14 +827,7 @@ object Encoder {
   ): Option[(Expr)] =
     pair._2 match {
       case _: PrimitiveType        => None
-      case UndefinedType()         => None
       case UninterpretedType(name) => None
-      case EnumType(ids_)          => None
-      case _: ProductType =>
-        throw new IllegalArgumentException(
-          s"product types not supported yet: ${pair._2}"
-        )
-      case MapType(inTypes, outType) => None
       case ArrayType(inTypes, outType) =>
         createInitCalls(program, scope, (pair._1, outType)) match {
           case Some(e) =>

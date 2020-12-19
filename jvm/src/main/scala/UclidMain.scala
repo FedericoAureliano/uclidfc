@@ -3,7 +3,6 @@ package uclid
 import scala.util.parsing.combinator._
 import scala.collection.immutable._
 import front.{Identifier, Module, _}
-import front.Utils.ParserErrorList
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -92,12 +91,6 @@ object UclidMain {
     } catch {
       case (e: java.io.FileNotFoundException) =>
         errorResult.messages = List("Error: " + e.getMessage() + ".")
-        errorResult
-      case (p: Utils.ParserError) =>
-        errorResult.messages = List(
-          "%s error %s: %s.\n%s"
-            .format(p.errorName, p.positionStr, p.getMessage, p.fullStr)
-        )
         errorResult
     }
   }

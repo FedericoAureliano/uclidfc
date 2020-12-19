@@ -205,12 +205,4 @@ class TermGraph(val stmts: ArrayBuffer[Instruction]) {
     callerCache.getOrElseUpdate(name, op)
 
   override def toString(): String = stmts.mkString("\n")
-
-  def appendAndUpdateRefs(one: Instruction) = {
-    val offset = stmts.length
-    stmts.append(Rewriter.incrementInstructionRefs(one, offset) match {
-      case Some(instruction) => instruction
-      case None              => one
-    })
-  }
 }

@@ -1,4 +1,4 @@
-# UCLID5 v1.0
+# Trilingual Uclid
 
 ## Dependencies
 

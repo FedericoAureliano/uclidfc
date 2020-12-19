@@ -48,39 +48,4 @@ object Collector {
     marks(position) = true
     markInstruction(term.stmts(position))
   }
-
-  def sweep(term: TermGraph, marks: Array[Boolean]): TermGraph = {
-    assert(
-      term.stmts.length == marks.length,
-      "term length must equal marks length"
-    )
-
-    val len = marks.length
-
-    var newLocations = Array.fill[Int](len)(-1)
-
-    var count = 0
-
-    marks.zipWithIndex.foreach {
-      case (b, i) => {
-        if (!b) {
-          count += 1
-        } else {
-          newLocations(i) = (i - count)
-        }
-      }
-    }
-
-    val newTerm = new TermGraph(
-      term.stmts.clone().zipWithIndex.filter { case (i, p) => marks(p) }.map {
-        case (i, p) => i
-      }
-    )
-
-    Rewriter.updateRefs(newTerm, newLocations)
-
-    newTerm
-  }
-
-  def collectGarbage(term: TermGraph): TermGraph = sweep(term, mark(term))
 }

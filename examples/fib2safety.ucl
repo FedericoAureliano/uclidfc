@@ -23,9 +23,9 @@ module main
         next(fib2);
     }
 
-    property b_are_eq : fib1.b == fib2.b;
-    property a_are_eq : fib1.a == fib2.a;
-    property b_gt_0  : fib1.b > 0 && fib2.b > 0;
-    property a_ge_0  : fib1.a >= 0 && fib2.a >= 0;
-    property a_le_b  : fib1.a <= fib1.b && fib2.a <= fib2.b;
+    invariant b_are_eq : fib1.b == fib2.b;
+    invariant a_are_eq : fib1.a == fib2.a;
+    invariant b_gt_0  : fib1.b > 0 && fib2.b > 0;
+    invariant a_ge_0  : fib1.a >= 0 && fib2.a >= 0;
+    invariant a_le_b  : fib1.a <= fib1.b && fib2.a <= fib2.b;
 }

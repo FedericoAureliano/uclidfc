@@ -19,24 +19,6 @@ trait UclidTokens extends Tokens {
     override def toString = chars.toString + "_" + base.toString
   }
 
-  /** Bitvector types. */
-  case class BitVectorTypeLit(chars: String) extends UclidToken {
-    val width = chars.toInt
-    override def toString = "bv" + width.toString
-  }
-
-  /** Bitvector literals. */
-  case class BitVectorLit(chars: String, base: Int, width: Int)
-      extends UclidToken {
-    val intValue = BigInt(chars, base)
-    override def toString = "0x" + intValue.toString(16) + "bv" + width.toString
-  }
-
-  /** The class of string literal tokens. */
-  case class StringLit(chars: String) extends UclidToken {
-    override def toString = "\"" + chars + "\""
-  }
-
   /** The class of identifier tokens. */
   case class Identifier(chars: String) extends UclidToken {
     override def toString = "identifier " + chars
@@ -51,49 +33,11 @@ class UclidLexical extends Lexical with UclidTokens with Positional {
 
   override def token: Parser[Token] =
     (positioned {
-      'b' ~ 'v' ~> digit.+ ^^ {
-        case chars =>
-          BitVectorTypeLit(chars.mkString(""))
+      (letter | '_') ~ rep(letter | '_' | digit) ^^ {
+        case first ~ rest =>
+          processIdent((first :: rest).mkString(""))
       }
     }
-      | positioned {
-        (letter | '_') ~ rep(letter | '_' | digit) ^^ {
-          case first ~ rest =>
-            processIdent((first :: rest).mkString(""))
-        }
-      }
-      | positioned {
-        digit ~ rep(digit) ~ 'b' ~ 'v' ~ digit ~ rep(digit) ^^ {
-          case (f1 ~ r1 ~ 'b' ~ 'v' ~ f2 ~ r2) =>
-            BitVectorLit(
-              (f1 :: r1).mkString(""),
-              10,
-              (f2 :: r2).mkString("").toInt
-            )
-        }
-      }
-      | positioned {
-        '0' ~ 'x' ~ hexDigit ~ rep(hexDigit) ~ 'b' ~ 'v' ~ digit ~ rep(
-          digit
-        ) ^^ {
-          case ('0' ~ 'x' ~ f1 ~ r1 ~ 'b' ~ 'v' ~ f2 ~ r2) =>
-            BitVectorLit(
-              (f1 :: r1).mkString(""),
-              16,
-              (f2 :: r2).mkString("").toInt
-            )
-        }
-      }
-      | positioned {
-        '0' ~ 'b' ~ bit ~ rep(bit) ~ 'b' ~ 'v' ~ digit ~ rep(digit) ^^ {
-          case ('0' ~ 'b' ~ b ~ rb ~ 'b' ~ 'v' ~ d ~ rd) =>
-            BitVectorLit(
-              (b :: rb).mkString(""),
-              2,
-              (d :: rd).mkString("").toInt
-            )
-        }
-      }
       | positioned {
         '0' ~ 'x' ~> rep1(hexDigit) ^^ {
           case hits =>
@@ -107,12 +51,6 @@ class UclidLexical extends Lexical with UclidTokens with Positional {
         digit ~ rep(digit) ^^ {
           case first ~ rest =>
             IntegerLit((first :: rest).mkString(""), 10)
-        }
-      }
-      | positioned {
-        '\"' ~> rep(chrExcept('\"', '\n', EofCh)) <~ '\"' ^^ {
-          case chars =>
-            StringLit(chars.mkString(""))
         }
       }
       | EofCh ^^^ EOF
