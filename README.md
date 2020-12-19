@@ -2,7 +2,9 @@
 
 ## Dependencies
 
-[Install SBT](https://www.scala-lang.org/download/)
+- [Install SBT](https://www.scala-lang.org/download/)
+- [Install Z3](https://github.com/Z3Prover/z3)
+- (Optional) [Install CVC4](https://github.com/CVC4/CVC4)
 
 ## Users
 
@@ -41,7 +43,7 @@ open jvm/target/scala-2.13/jacoco/report/html/index.html
 ### Run JVM
 
 ```
-sbt "uclidJVM/run examples/fib.ucl"
+sbt "uclidJVM/run [options] <file> ..."
 ```
 
 ### Run JS
