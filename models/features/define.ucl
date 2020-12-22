@@ -1,0 +1,10 @@
+module main
+{
+    define f(x: integer) : integer = -3;
+
+    invariant tautology: f(7) == -3;
+
+    control {
+        induction;
+    }
+}

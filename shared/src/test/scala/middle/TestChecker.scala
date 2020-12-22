@@ -14,7 +14,7 @@ class TestChecker {
     val plus = TheoryMacro("+") // 3
     val integer = TheorySort("Int") // 4
 
-    val f = new TermGraph(ArrayBuffer(head, body, arg, plus, integer))
+    val f = new Program(ArrayBuffer(head, body, arg, plus, integer))
 
     val check = Checker.checkRefBounds(f)
 
@@ -29,7 +29,7 @@ class TestChecker {
     val plus = TheoryMacro("+") // 3
     val integer = TheorySort("Int") // 4
 
-    val f = new TermGraph(ArrayBuffer(head, body, arg, plus, integer))
+    val f = new Program(ArrayBuffer(head, body, arg, plus, integer))
 
     val check = Checker.checkRefBounds(f)
 
@@ -44,7 +44,7 @@ class TestChecker {
     val plus = TheoryMacro("+") // 3
     val integer = TheorySort("Int") // 4
 
-    val f = new TermGraph(ArrayBuffer(head, body, arg, plus, integer))
+    val f = new Program(ArrayBuffer(head, body, arg, plus, integer))
 
     val check = Checker.checkRefBounds(f)
 

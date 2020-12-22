@@ -7,7 +7,7 @@ Passing semantic checks must gurantee a well formed smt-lib query
 
 object Checker {
 
-  def checkRefBounds(term: TermGraph): Option[String] = {
+  def checkRefBounds(term: Program): Option[String] = {
     def checkRef(r: Ref): Boolean = r.loc < term.stmts.length && r.loc >= 0
 
     term.stmts.zipWithIndex.foreach {

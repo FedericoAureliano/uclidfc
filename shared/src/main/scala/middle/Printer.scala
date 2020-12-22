@@ -9,7 +9,7 @@ object Printer {
   val TAB = "  "
 
   def programPointToQueryTerm(
-    term: TermGraph,
+    term: Program,
     point: Ref,
     indentInput: Int = 0
   ): String = {
@@ -121,7 +121,7 @@ object Printer {
     dispatch(point)
   }
 
-  def programToQueryCtx(term: TermGraph): String = {
+  def programToQueryCtx(term: Program): String = {
     var indent = 0
     val toDeclare = Collector.mark(term)
 
@@ -171,7 +171,7 @@ object Printer {
         ctr.selectors.foreach { s =>
           tmp ++= "\n"
           val sel = term.stmts(s.loc).asInstanceOf[Selector]
-          tmp ++= s"${TAB * indent}(${sel.name} ${programPointToQueryTerm(new TermGraph(term.stmts), sel.sort, indent)})"
+          tmp ++= s"${TAB * indent}(${sel.name} ${programPointToQueryTerm(new Program(term.stmts), sel.sort, indent)})"
         }
       }
       tmp ++= "))))\n"
@@ -181,21 +181,20 @@ object Printer {
     }
 
     def sortmacroToQueryCtx(s: SortMacro): String =
-      s"${TAB * indent}(define-sort ${s.name} ${programPointToQueryTerm(new TermGraph(term.stmts), s.body, indent)})"
+      s"${TAB * indent}(define-sort ${s.name} ${programPointToQueryTerm(new Program(term.stmts), s.body, indent)})"
 
     def userfunctionToQueryCtx(u: UserFunction): String = {
       val tmp = new StringBuilder()
       if (u.params.length > 0) {
         tmp ++= s"${TAB * indent}(declare-fun ${u.name} (${u.params
           .map { p =>
-            val fp = term.stmts(p.loc).asInstanceOf[FunctionParameter]
-            s"(${fp.name} ${programPointToQueryTerm(new TermGraph(term.stmts), fp.sort, indent)})"
+            s"(${programPointToQueryTerm(new Program(term.stmts), p, indent)})"
           }
           .mkString(" ")}) "
       } else {
         tmp ++= s"${TAB * indent}(declare-const ${u.name} "
       }
-      tmp ++= s"${TAB * indent}${programPointToQueryTerm(new TermGraph(term.stmts), u.sort, indent)})\n"
+      tmp ++= s"${programPointToQueryTerm(new Program(term.stmts), u.sort, indent)})\n"
 
       tmp.toString()
     }
@@ -205,13 +204,13 @@ object Printer {
       tmp ++= s"${TAB * indent}(define-fun ${u.name} (${u.params
         .map { p =>
           val fp = term.stmts(p.loc).asInstanceOf[FunctionParameter]
-          s"(${fp.name} ${programPointToQueryTerm(new TermGraph(term.stmts), fp.sort, indent)})"
+          s"(${fp.name} ${programPointToQueryTerm(new Program(term.stmts), fp.sort, indent)})"
         }
         .mkString(" ")}) "
 
-      tmp ++= s"${programPointToQueryTerm(new TermGraph(term.stmts), u.sort, indent)}\n"
+      tmp ++= s"${programPointToQueryTerm(new Program(term.stmts), u.sort, indent)}\n"
       indent += 1
-      tmp ++= s"${TAB * indent}${programPointToQueryTerm(new TermGraph(term.stmts), u.body, indent)})\n"
+      tmp ++= s"${TAB * indent}${programPointToQueryTerm(new Program(term.stmts), u.body, indent)})\n"
       indent -= 1
 
       tmp.toString()
@@ -230,7 +229,7 @@ object Printer {
       ctr.selectors.foreach { s =>
         tmp ++= "\n"
         val sel = term.stmts(s.loc).asInstanceOf[Selector]
-        tmp ++= s"${TAB * indent}(${sel.name} ${programPointToQueryTerm(new TermGraph(term.stmts), sel.sort, indent)})"
+        tmp ++= s"${TAB * indent}(${sel.name} ${programPointToQueryTerm(new Program(term.stmts), sel.sort, indent)})"
       }
       tmp ++= "))))\n\n"
       indent -= 1
@@ -248,7 +247,7 @@ object Printer {
     term.stmts.zipWithIndex.map(p => dispatch(Ref(p._2))).flatten.mkString("\n")
   }
 
-  def programToQuery(term: TermGraph): String = {
+  def programToQuery(term: Program): String = {
     val assertions = term.assertions
       .map(r =>
         s"(push 1)\n(assert ${programPointToQueryTerm(term, r)})\n(check-sat)\n(pop 1)\n"

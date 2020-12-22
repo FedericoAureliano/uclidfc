@@ -69,6 +69,8 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
   val KwVar = "var"
   val KwSharedVar = "sharedvar"
   val KwConst = "const"
+  val KwFunc = "function"
+  val KwDef = "define"
   val KwIf = "if"
   val KwThen = "then"
   val KwElse = "else"
@@ -147,6 +149,8 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
     KwInput,
     KwOutput,
     KwConst,
+    KwFunc,
+    KwDef,
     KwModule,
     KwType,
     KwControl,
@@ -217,12 +221,8 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
       }
     }
 
-  lazy val NumberParser: PackratParser[NumericLit] = positioned(
-    IntegerParser
-  )
-
   lazy val LiteralParser: PackratParser[Literal] = positioned(
-    BoolParser | NumberParser
+    BoolParser | IntegerParser
   )
 
   /* END of Literals. */
@@ -409,18 +409,6 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
         case expr =>
           ModuleNextCallStmt(expr)
       } |
-      KwIf ~ "(" ~ "*" ~ ")" ~> (BlkStmtParser <~ KwElse) ~ BlkStmtParser ^^ {
-        case tblk ~ fblk =>
-          IfElseStmt(FreshLit(BooleanType()), tblk, fblk)
-      } |
-      KwIf ~ "(" ~ "*" ~ ")" ~> BlkStmtParser ^^ {
-        case blk =>
-          IfElseStmt(
-            FreshLit(BooleanType()),
-            blk,
-            BlockStmt(List.empty)
-          )
-      } |
       KwIf ~ "(" ~> (ExprParser <~ ")") ~ BlkStmtParser ~ (KwElse ~> BlkStmtParser) ^^ {
         case e ~ f ~ g => IfElseStmt(e, f, g)
       } |
@@ -446,11 +434,11 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
   lazy val TypeDeclParser: PackratParser[TypeDecl] = positioned {
     KwType ~> IdParser ~ ("=" ~> TypeParser) <~ ";" ^^ {
       case id ~ t =>
-        TypeDecl(id, t)
+        TypeDecl(Some(id), t)
     } |
       KwType ~> IdParser <~ ";" ^^ {
         case id =>
-          TypeDecl(id, UninterpretedType(id))
+          TypeDecl(None, UninterpretedType(id))
       }
   }
 
@@ -482,21 +470,30 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
     }
   }
 
-  lazy val ConstLitDeclParser: PackratParser[ConstantLitDecl] = positioned {
-    KwConst ~> IdParser ~ (":" ~ TypeParser ~ "=" ~> NumberParser) <~ ";" ^^ {
-      case id ~ lit =>
-        ConstantLitDecl(id, lit)
+  lazy val DefineDeclParser: PackratParser[DefineDecl] = positioned {
+    KwConst ~> IdParser ~ ":" ~ TypeParser ~ "=" ~ LiteralParser <~ ";" ^^ {
+      case id ~ ":" ~ typ ~ "=" ~ lit =>
+        DefineDecl(id, List.empty, typ, lit)
     } |
-      KwConst ~> IdParser ~ (":" ~ TypeParser ~ "=" ~ OpNeg ~> NumberParser) <~ ";" ^^ {
-        case id ~ lit => ConstantLitDecl(id, lit.negate)
+      KwConst ~> IdParser ~ ":" ~ TypeParser ~ "=" ~ OpNeg ~ LiteralParser <~ ";" ^^ {
+        case id ~ ":" ~ typ ~ "=" ~ OpNeg ~ lit =>
+          DefineDecl(id, List.empty, typ, lit.negate())
+      } |
+      KwDef ~> IdParser ~ IdTypeListParser ~ ":" ~ TypeParser ~ "=" ~ ExprParser <~ ";" ^^ {
+        case id ~ args ~ ":" ~ typ ~ "=" ~ expr =>
+          DefineDecl(id, args, typ, expr)
       }
   }
 
-  lazy val ConstDeclParser: PackratParser[ConstantsDecl] = positioned {
+  lazy val FunctionDeclParser: PackratParser[FunctionsDecl] = positioned {
     KwConst ~> IdListParser ~ ":" ~ TypeParser <~ ";" ^^ {
       case ids ~ ":" ~ typ =>
-        ConstantsDecl(ids, typ)
-    }
+        FunctionsDecl(ids, List.empty, typ)
+    } |
+      KwFunc ~> IdParser ~ IdTypeListParser ~ ":" ~ TypeParser <~ ";" ^^ {
+        case id ~ args ~ ":" ~ typ =>
+          FunctionsDecl(List(id), args.map(p => p._2), typ)
+      }
   }
 
   lazy val InitDeclParser: PackratParser[InitDecl] = positioned {
@@ -522,9 +519,9 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
 
   lazy val DeclParser: PackratParser[Decl] =
     positioned(
-      TypeDeclParser | ConstDeclParser |
+      TypeDeclParser | FunctionDeclParser |
         VarsDeclParser | InputsDeclParser | OutputsDeclParser | SharedVarsDeclParser |
-        ConstLitDeclParser | ConstDeclParser |
+        DefineDeclParser |
         InitDeclParser | NextDeclParser | SpecDeclParser
     )
 

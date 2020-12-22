@@ -1,0 +1,10 @@
+module main
+{
+    const x : integer = -3;
+
+    invariant tautology: x == -3;
+
+    control {
+        induction;
+    }
+}

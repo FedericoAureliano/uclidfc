@@ -1,0 +1,12 @@
+module main
+{
+    type key;
+
+    var a : key;
+
+    invariant tautology: a == a;
+
+    control {
+        induction;
+    }
+}

@@ -7,7 +7,7 @@ import front.{Identifier, Module, _}
 import scala.collection.mutable.ArrayBuffer
 
 import middle.Encoder
-import middle.TermGraph
+import middle.Program
 import middle.Printer
 
 import back.Solver

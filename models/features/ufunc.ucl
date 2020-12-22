@@ -1,0 +1,12 @@
+module main
+{
+    const x : integer;
+    const y : integer;
+    function f(x : integer) : boolean;
+
+    invariant tautology: x == y ==> f(x) == f(y);
+
+    control {
+        induction;
+    }
+}

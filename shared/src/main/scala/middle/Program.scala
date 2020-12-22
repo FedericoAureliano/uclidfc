@@ -3,6 +3,7 @@ package middle
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.ListBuffer
 import scala.collection.mutable.HashMap
+import scala.collection.mutable.Stack
 
 // Essentially an AST node or edge.
 abstract class Instruction
@@ -170,39 +171,70 @@ case class Application(caller: Ref, args: List[Ref]) extends Instruction {
     s"[app]\t${(List(caller) ++ args).mkString("\t")}"
 }
 
-class TermGraph(val stmts: ArrayBuffer[Instruction]) {
-  var uniqueId = 0
+class Program(val stmts: ArrayBuffer[Instruction]) {
   var isSynthesisQuery = false
+  val cache = new CacheStack()
+  pushCache()
 
   val assertions: ListBuffer[Ref] = new ListBuffer()
 
-  // point type name to type location (modules are types)
-  val sortCache: HashMap[String, Ref] = new HashMap[String, Ref]()
-  // point operator name to operator location
-  val callerCache: HashMap[String, Ref] = new HashMap[String, Ref]()
+  override def toString(): String = stmts.mkString("\n")
+
+  var uniqueId = 0
+
+  def pushCache(): Unit = {
+    cache.sortCache.push(new HashMap[String, Ref]())
+    cache.objectCache.push(new HashMap[String, Ref]())
+  }
+
+  def popCache(): Unit = {
+    cache.sortCache.pop()
+    cache.objectCache.pop()
+  }
 
   def freshSymbolName(): String = {
     uniqueId += 1
     s"nd!${uniqueId}"
   }
 
-  def cacheSortRef(name: String, sort: Ref): Unit =
-    sortCache.addOne((name, sort))
+  def saveSortRef(name: String, sort: Ref): Unit =
+    cache.sortCache.top.addOne((name, sort))
 
-  def getType(name: String): Option[Ref] =
-    sortCache.get(name)
+  def loadSortRef(name: String): Option[Ref] = {
+    cache.sortCache.foreach { cache =>
+      cache.get(name) match {
+        case Some(value) => return Some(value)
+        case None        =>
+      }
+    }
+    return None
+  }
 
-  def getOrCacheSortRef(name: String, sort: => Ref): Ref =
-    sortCache.getOrElseUpdate(name, sort)
+  def loadOrSaveSortRef(name: String, sort: => Ref): Ref =
+    cache.sortCache.top.getOrElseUpdate(name, sort)
 
-  def cacheCallerRef(name: String, op: Ref): Unit =
-    callerCache.addOne((name, op))
+  def saveObjectRef(name: String, obj: Ref): Unit =
+    cache.objectCache.top.addOne((name, obj))
 
-  def getCallerRef(name: String): Option[Ref] =
-    callerCache.get(name)
+  def loadObjectRef(name: String): Option[Ref] = {
+    cache.objectCache.foreach { cache =>
+      cache.get(name) match {
+        case Some(value) => return Some(value)
+        case None        =>
+      }
+    }
+    return None
+  }
 
-  def getOrCacheCallerRef(name: String, op: => Ref): Ref =
-    callerCache.getOrElseUpdate(name, op)
+  def loadOrSaveObjectRef(name: String, obj: => Ref): Ref =
+    cache.objectCache.top.getOrElseUpdate(name, obj)
+}
 
-  override def toString(): String = stmts.mkString("\n")
+class CacheStack() {
+  // point type name to type location (modules are types)
+  val sortCache: Stack[HashMap[String, Ref]] = new Stack[HashMap[String, Ref]]()
+
+  // point Object name to name location
+  val objectCache: Stack[HashMap[String, Ref]] =
+    new Stack[HashMap[String, Ref]]()
 }

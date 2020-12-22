@@ -2,13 +2,13 @@ package middle
 
 object Collector {
 
-  def mark(term: TermGraph): Array[Boolean] = {
+  def mark(term: Program): Array[Boolean] = {
     val marks = Array.fill[Boolean](term.stmts.length)(false)
     term.assertions.foreach(r => mark_i(term, r.loc, marks))
     marks
   }
 
-  def mark_i(term: TermGraph, position: Int, marks: Array[Boolean]): Unit = {
+  def mark_i(term: Program, position: Int, marks: Array[Boolean]): Unit = {
     def markParams(params: List[Ref]) =
       params.foreach { p =>
         if (!marks(p.loc)) {

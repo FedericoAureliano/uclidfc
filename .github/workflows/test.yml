@@ -1,4 +1,4 @@
-name: uclid5 CI
+name: Tests, Coverage, and Formatting
 
 on:
   push:
@@ -104,17 +104,8 @@ jobs:
     - name: Test
       run: sbt test
 
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v2
+    - name: Coverage
+      run: sbt jacoco
+
     - name: Formatting
       run: sbt scalafmtSbtCheck scalafmtCheck test:scalafmtCheck
-
-  coverage:
-    runs-on: ubuntu-latest
-    needs: build-dependencies
-    steps:
-    - uses: actions/checkout@v2
-    - name: Jacoco
-      run: sbt jacoco

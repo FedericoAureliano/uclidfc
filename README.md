@@ -36,7 +36,7 @@ sbt scalafmtSbtCheck scalafmtCheck test:scalafmtCheck
 ### Check Coverage
 
 ```
-sbt jacoco
+sbt clean jacoco
 open jvm/target/scala-2.13/jacoco/report/html/index.html
 ```
 

@@ -102,11 +102,11 @@ case class DisjunctionOp() extends BooleanOperator {
 }
 
 case class IffOp() extends BooleanOperator {
-  override val name = "<==>"
+  override val name = "="
 }
 
 case class ImplicationOp() extends BooleanOperator {
-  override val name = "==>"
+  override val name = "=>"
 }
 
 case class NegationOp() extends BooleanOperator {
@@ -152,34 +152,18 @@ case class Identifier(name: String) extends Expr {
   override def toString = name.toString
 }
 
-sealed abstract class Literal extends Expr {}
-
-/** A non-deterministic new constant. */
-case class FreshLit(typ: Type) extends Literal {}
-
-sealed abstract class NumericLit extends Literal {
-  def typeOf: NumericType
-  def to(n: NumericLit): Seq[NumericLit]
-  def negate: NumericLit
+sealed abstract class Literal extends Expr {
+  def negate(): Literal
 }
 
 case class BoolLit(value: Boolean) extends Literal {
   override def toString = value.toString
+  override def negate() = BoolLit(!value)
 }
 
-case class IntLit(value: BigInt) extends NumericLit {
+case class IntLit(value: BigInt) extends Literal {
   override def toString = value.toString
-  override def typeOf: NumericType = IntegerType()
-
-  override def to(n: NumericLit): Seq[NumericLit] =
-    n match {
-      case i: IntLit => (value to i.value).map(IntLit(_))
-      case _ =>
-        throw new Utils.RuntimeError(
-          "Cannot create range for differing types of numeric literals."
-        )
-    }
-  override def negate = IntLit(-value)
+  override def negate() = IntLit(-value)
 }
 
 case class ConstArray(exp: Expr, typ: Type) extends Expr {
@@ -206,14 +190,6 @@ sealed abstract class Type extends PositionedNode {
   val name: String
 }
 
-/** Primitive types: Int, Bool and BitVector.
-  */
-sealed abstract class PrimitiveType extends Type {}
-
-/**  Numeric types base class. All numeric types are also primitive types.
-  */
-sealed abstract class NumericType extends PrimitiveType {}
-
 /**  Uninterpreted types.
   */
 case class UninterpretedType(nameIn: Identifier) extends Type {
@@ -222,12 +198,12 @@ case class UninterpretedType(nameIn: Identifier) extends Type {
 
 /** Regular types.
   */
-case class BooleanType() extends PrimitiveType {
+case class BooleanType() extends Type {
   override val name = "boolean"
   override def defaultValue = Some(BoolLit(false))
 }
 
-case class IntegerType() extends NumericType {
+case class IntegerType() extends Type {
   override val name = "integer"
   override def defaultValue = Some(IntLit(0))
 }
@@ -270,60 +246,37 @@ case class ModuleNextCallStmt(expr: Expr) extends Statement {}
 
 case class BlockVarsDecl(ids: List[Identifier], typ: Type) extends ASTNode {}
 
-sealed abstract class Decl extends ASTNode {
-  def declNames: List[Identifier]
-}
+sealed abstract class Decl extends ASTNode {}
 
-case class TypeDecl(id: Identifier, typ: Type) extends Decl {
-  override def declNames = List(id)
-}
+case class TypeDecl(id: Option[Identifier], typ: Type) extends Decl {}
 
-case class StateVarsDecl(ids: List[Identifier], typ: Type) extends Decl {
-  override def declNames = ids
-}
+case class StateVarsDecl(ids: List[Identifier], typ: Type) extends Decl {}
 
-case class InputVarsDecl(ids: List[Identifier], typ: Type) extends Decl {
-  override def declNames = ids
-}
+case class InputVarsDecl(ids: List[Identifier], typ: Type) extends Decl {}
 
-case class OutputVarsDecl(ids: List[Identifier], typ: Type) extends Decl {
-  override def declNames = ids
-}
+case class OutputVarsDecl(ids: List[Identifier], typ: Type) extends Decl {}
 
-case class SharedVarsDecl(ids: List[Identifier], typ: Type) extends Decl {
-  override def declNames = ids
-}
+case class SharedVarsDecl(ids: List[Identifier], typ: Type) extends Decl {}
 
-/** This is base trait for all entities that are exported from a module. */
-sealed abstract trait ModuleExternal {
-  def extNames: List[Identifier]
-  def extType: Type
-}
+case class DefineDecl(
+  id: Identifier,
+  params: List[(Identifier, Type)],
+  retTyp: Type,
+  expr: Expr
+) extends Decl {}
 
-case class ConstantLitDecl(id: Identifier, lit: NumericLit) extends Decl {
-  override def declNames = List(id)
-}
+case class FunctionsDecl(
+  ids: List[Identifier],
+  argTypes: List[Type],
+  retTyp: Type
+) extends Decl {}
 
-case class ConstantsDecl(ids: List[Identifier], typ: Type)
-    extends Decl
-    with ModuleExternal {
-  override def declNames = ids
-  override def extNames = ids
-  override def extType = typ
-}
+case class InitDecl(body: Statement) extends Decl {}
 
-case class InitDecl(body: Statement) extends Decl {
-  override def declNames = List.empty
-}
-
-case class NextDecl(body: Statement) extends Decl {
-  override def declNames = List.empty
-}
+case class NextDecl(body: Statement) extends Decl {}
 
 case class SpecDecl(id: Identifier, expr: Expr) extends Decl {
   val propertyKeyword = "invariant"
-
-  override def declNames = List(id)
   def name = "%s %s".format(propertyKeyword, id.toString())
 }
 
@@ -344,6 +297,11 @@ case class Module(
     newModule.filename = Some(name)
     return newModule
   }
+
+  // module types.
+  lazy val typeDecls: List[TypeDecl] =
+    decls
+      .collect { case typs: TypeDecl => typs }
 
   // module inputs.
   lazy val inputs: List[(Identifier, Type)] =
@@ -368,16 +326,17 @@ case class Module(
       .collect { case sVars: SharedVarsDecl => sVars }
       .flatMap(sVar => sVar.ids.map(id => (id, sVar.typ)))
 
-  lazy val constLits: List[(Identifier, NumericLit)] =
-    decls.collect {
-      case constLit: ConstantLitDecl =>
-        (constLit.id, constLit.lit)
-    }
-  // module constants.
-  lazy val constantDecls = decls.collect { case cnsts: ConstantsDecl => cnsts }
+  lazy val defines: List[(Identifier, List[(Identifier, Type)], Type, Expr)] =
+    decls
+      .collect {
+        case defi: DefineDecl =>
+          (defi.id, defi.params, defi.retTyp, defi.expr)
+      }
 
-  lazy val constants: List[(Identifier, Type)] =
-    constantDecls.flatMap(cnst => cnst.ids.map(id => (id, cnst.typ)))
+  lazy val functions: List[(Identifier, List[Type], Type)] =
+    decls
+      .collect { case cnsts: FunctionsDecl => cnsts }
+      .flatMap(cnst => cnst.ids.map(id => (id, cnst.argTypes, cnst.retTyp)))
 
   // module properties.
   lazy val properties: List[SpecDecl] = decls.collect {

@@ -34,7 +34,7 @@ object Solver {
   }
 
   def solve(
-    program: TermGraph,
+    program: Program,
     solver: String
   ): ProofResult = {
     val query = Printer.programToQuery(program)

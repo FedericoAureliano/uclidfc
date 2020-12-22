@@ -8,48 +8,18 @@ import scala.collection.mutable.Stack
 import front._
 
 // represents the current function we are building
-class ScopeFrame(
+class FunctionFrame(
   // signature of the function we're building
-  var stateParam: Ref,
-  var nondetParams: List[Ref],
-  var outputSort: Ref,
-  // map from identifier names to term that gets them for you
-  val fieldRefs: HashMap[String, Ref]
+  var stateParam: Ref, // points to a function parameter of module type
+  var auxParams: List[Ref], // auxiliary parameters (stuff like nondets)
+  var outputSort: Ref // sort the function is returning (a module to represent state)
 ) {
 
-  def setStateParam(stateRef: Ref): Unit =
-    stateParam = stateRef
-
-  def getStateParam(): Ref =
-    stateParam
-
-  def setOutputSort(outputSortRef: Ref): Unit =
-    outputSort = outputSortRef
-
-  def getOutputSort(): Ref =
-    outputSort
-
   def addNondetParam(nondetParam: Ref): Unit =
-    nondetParams = nondetParams.appended(nondetParam)
-
-  def addFieldRef(name: String, term: Ref): Unit =
-    fieldRefs.addOne((name, term))
-
-  def removeFieldRef(name: String): Unit =
-    fieldRefs.remove(name)
-
-  def getFieldRef(name: String): Ref =
-    fieldRefs(name)
+    auxParams = auxParams.appended(nondetParam)
 
   def getParams(): List[Ref] =
-    List(stateParam) ++ nondetParams
-
-  def resetFrame(): Unit = {
-    stateParam = Ref(-1)
-    nondetParams = List.empty
-    outputSort = Ref(-1)
-    fieldRefs.clear()
-  }
+    List(stateParam) ++ auxParams
 }
 
 object Encoder {
@@ -57,36 +27,36 @@ object Encoder {
   // encode a type use (adds to program if type not yet used)
   // and return a pointer to the type
   def typeUseToTerm(
-    program: TermGraph, // modified
+    program: Program, // modified
     t: Type
   ): Ref =
     t match {
       case UninterpretedType(name) =>
-        program.getOrCacheSortRef(
-          t.toString(), {
+        program.loadOrSaveSortRef(
+          name.name, {
             program.stmts.addOne(UserSort(name.name))
-            program.cacheSortRef(t.toString(), Ref(program.stmts.length - 1))
+            program.saveSortRef(name.name, Ref(program.stmts.length - 1))
             Ref(program.stmts.length - 1)
           }
         )
       case BooleanType() =>
-        program.getOrCacheSortRef(
+        program.loadOrSaveSortRef(
           t.toString(), {
             program.stmts.addOne(TheorySort("Bool"))
-            program.cacheSortRef(t.toString(), Ref(program.stmts.length - 1))
+            program.saveSortRef(t.toString(), Ref(program.stmts.length - 1))
             Ref(program.stmts.length - 1)
           }
         )
       case IntegerType() =>
-        program.getOrCacheSortRef(
+        program.loadOrSaveSortRef(
           t.toString(), {
             program.stmts.addOne(TheorySort("Int"))
-            program.cacheSortRef(t.toString(), Ref(program.stmts.length - 1))
+            program.saveSortRef(t.toString(), Ref(program.stmts.length - 1))
             Ref(program.stmts.length - 1)
           }
         )
       case ArrayType(inTypes, outType) => {
-        program.getOrCacheSortRef(
+        program.loadOrSaveSortRef(
           t.toString(), {
             val args =
               (inTypes ++ List(outType)).map(arg => typeUseToTerm(program, arg))
@@ -96,10 +66,11 @@ object Encoder {
         )
       }
       case SynonymType(id) =>
-        program.getType(id.name) match {
+        program.loadSortRef(id.name) match {
           case Some(value) => value
-          case None =>
-            program.getType(id.name + "!type") match {
+          case None        =>
+            // if we failed to find it as a regular type, try to find it as a module
+            program.loadSortRef(id.name + "!type") match {
               case Some(value) => value
               case None =>
                 throw new IllegalArgumentException(s"type not declared: ${t}")
@@ -109,23 +80,23 @@ object Encoder {
         throw new IllegalArgumentException(s"type not yet supported: ${t}")
     }
 
-  def getTermTypeRef(
-    program: TermGraph, // modified
+  def inferTermType(
+    program: Program, // modified
     app: Ref
   ): Ref =
     program.stmts(app.loc) match {
       case Application(caller, args) => {
         program.stmts(caller.loc) match {
-          case TheoryMacro("ite", params) => getTermTypeRef(program, args.head)
+          case TheoryMacro("ite", params) => inferTermType(program, args.head)
           case TheoryMacro("store", params) =>
-            getTermTypeRef(program, args.head)
+            inferTermType(program, args.head)
           case TheoryMacro("select", params) => {
-            val arrayRef = getTermTypeRef(program, args.head)
+            val arrayRef = inferTermType(program, args.head)
             val arraySort =
               program.stmts(arrayRef.loc).asInstanceOf[TheorySort]
             arraySort.params.last
           }
-          case _ => getTermTypeRef(program, caller)
+          case _ => inferTermType(program, caller)
         }
       }
       case Constructor(name, sort, selectors)  => sort
@@ -135,18 +106,18 @@ object Encoder {
       case TheoryMacro(name, params) =>
         name match {
           case "true" | "false" | "and" | "or" | "=" =>
-            program.getOrCacheSortRef("Bool", {
+            program.loadOrSaveSortRef("Bool", {
               program.stmts.addOne(TheorySort("Bool"));
               Ref(program.stmts.length - 1)
             })
           case "+" | "*" | "-" =>
-            program.getOrCacheSortRef("Int", {
+            program.loadOrSaveSortRef("Int", {
               program.stmts.addOne(TheorySort("Int"));
               Ref(program.stmts.length - 1)
             })
           case _ => {
             if (name.toIntOption.isDefined) {
-              program.getOrCacheSortRef("Int", {
+              program.loadOrSaveSortRef("Int", {
                 program.stmts.addOne(TheorySort("Int"));
                 Ref(program.stmts.length - 1)
               })
@@ -161,17 +132,16 @@ object Encoder {
 
   // encode a term and return a pointer to the start of the term
   def exprToTerm(
-    program: TermGraph, // modified
-    scope: ScopeFrame,
+    program: Program, // modified
     expr: Expr
   ): Ref =
     expr match {
       case Identifier(name) => {
         // find selector
-        scope.getFieldRef(name)
+        program.loadObjectRef(name).get
       }
       case l: Literal => {
-        program.getOrCacheCallerRef(l.toString(), {
+        program.loadOrSaveObjectRef(l.toString(), {
           program.stmts.addOne(TheoryMacro(l.toString()));
           Ref(program.stmts.length - 1)
         })
@@ -182,14 +152,14 @@ object Encoder {
           "array update must be applied to a single operand"
         )
         assert(indices.length == 1, "array index must be a single value")
-        val opRef = program.getOrCacheCallerRef("store", {
+        val opRef = program.loadOrSaveObjectRef("store", {
           program.stmts.addOne(TheoryMacro("store"));
           Ref(program.stmts.length - 1)
         })
 
-        val arrayRef = exprToTerm(program, scope, operands.head)
-        val valueRef = exprToTerm(program, scope, value)
-        val indexRef = exprToTerm(program, scope, indices.head)
+        val arrayRef = exprToTerm(program, operands.head)
+        val valueRef = exprToTerm(program, value)
+        val indexRef = exprToTerm(program, indices.head)
 
         val appRef = Ref(program.stmts.length)
         program.stmts.addOne(
@@ -204,13 +174,13 @@ object Encoder {
           "array update must be applied to a single operand"
         )
         assert(indices.length == 1, "array index must be a single value")
-        val opRef = program.getOrCacheCallerRef("select", {
+        val opRef = program.loadOrSaveObjectRef("select", {
           program.stmts.addOne(TheoryMacro("select"));
           Ref(program.stmts.length - 1)
         })
 
-        val arrayRef = exprToTerm(program, scope, operands.head)
-        val indexRef = exprToTerm(program, scope, indices.head)
+        val arrayRef = exprToTerm(program, operands.head)
+        val indexRef = exprToTerm(program, indices.head)
 
         val appRef = Ref(program.stmts.length)
         program.stmts.addOne(Application(opRef, List(arrayRef, indexRef)))
@@ -218,14 +188,28 @@ object Encoder {
         appRef
       }
       case OperatorApplication(op, operands) => {
-        val opRef = program.getOrCacheCallerRef(op.name, {
+        val opRef = program.loadOrSaveObjectRef(op.name, {
           program.stmts.addOne(TheoryMacro(op.name));
           Ref(program.stmts.length - 1)
         })
 
         val operandRefs = new ListBuffer[Ref]()
         operands.foreach { x =>
-          val loc = exprToTerm(program, scope, x)
+          val loc = exprToTerm(program, x)
+          operandRefs.addOne(loc)
+        }
+
+        val appRef = Ref(program.stmts.length)
+        program.stmts.addOne(Application(opRef, operandRefs.toList))
+
+        appRef
+      }
+      case FuncApplication(op, operands) => {
+        val opRef = exprToTerm(program, op)
+
+        val operandRefs = new ListBuffer[Ref]()
+        operands.foreach { x =>
+          val loc = exprToTerm(program, x)
           operandRefs.addOne(loc)
         }
 
@@ -237,9 +221,9 @@ object Encoder {
 
       case ModuleNextCallExpr(expr) => {
         // get the instance
-        val instanceRef = exprToTerm(program, scope, expr)
+        val instanceRef = exprToTerm(program, expr)
         // get the module it belongs to
-        val modRef = getTermTypeRef(program, instanceRef)
+        val modRef = inferTermType(program, instanceRef)
         // find next function location
         val nextRef =
           program.stmts(modRef.loc).asInstanceOf[middle.Module].next
@@ -252,9 +236,9 @@ object Encoder {
 
       case ModuleInitCallExpr(id) => {
         // get the instance
-        val instanceRef = scope.getFieldRef(id.name)
+        val instanceRef = program.loadObjectRef(id.name).get
         // get the module it belongs to
-        val modRef = getTermTypeRef(program, instanceRef)
+        val modRef = inferTermType(program, instanceRef)
         // find init function location
         val initRef =
           program.stmts(modRef.loc).asInstanceOf[middle.Module].init
@@ -267,9 +251,9 @@ object Encoder {
 
       case ConstArray(exp, typ) => {
         // BTW: Z3 can handle a non constant argument to the as const function, but CVC4 can't (Dec. 14, 2020)
-        val expRef = exprToTerm(program, scope, exp)
+        val expRef = exprToTerm(program, exp)
 
-        val asConstRef = program.getOrCacheCallerRef("as const", {
+        val asConstRef = program.loadOrSaveObjectRef("as const", {
           program.stmts.addOne(TheoryMacro("as const"));
           Ref(program.stmts.length - 1)
         })
@@ -371,11 +355,11 @@ object Encoder {
       )
 
   def stmtToTerm(
-    program: TermGraph, // modified
-    scope: ScopeFrame,
+    program: Program, // modified
+    scope: FunctionFrame,
     stmt: Statement
   ): Ref =
-    program.getOrCacheCallerRef(
+    program.loadOrSaveObjectRef(
       stmt.astNodeId.toString(), {
         stmt match {
           case AssignStmt(lhss, rhss) => {
@@ -394,7 +378,7 @@ object Encoder {
               }
               case Identifier(id) => {
                 // get the constructor
-                val modRef = scope.getOutputSort()
+                val modRef = scope.outputSort
                 val ctrRef = program
                   .stmts(modRef.loc)
                   .asInstanceOf[middle.Module]
@@ -405,12 +389,12 @@ object Encoder {
                     .asInstanceOf[Constructor]
                     .selectors
 
-                val components = selRefs.map { s =>
+                val components: List[Ref] = selRefs.map { s =>
                   val sel = program.stmts(s.loc).asInstanceOf[Selector]
                   lhs.expr match {
                     case Identifier(name) if name == sel.name =>
-                      exprToTerm(program, scope, rhs)
-                    case _ => scope.getFieldRef(sel.name)
+                      exprToTerm(program, rhs)
+                    case _ => program.loadObjectRef(sel.name).get
                   }
                 }
 
@@ -421,13 +405,13 @@ object Encoder {
                 program.stmts.addOne(
                   UserMacro(
                     s"stmt!${stmt.astNodeId}",
-                    scope.getOutputSort(),
+                    scope.outputSort,
                     bodyRef,
                     scope.getParams()
                   )
                 )
 
-                program.cacheCallerRef(stmt.astNodeId.toString(), macroRef)
+                program.saveObjectRef(stmt.astNodeId.toString(), macroRef)
 
                 macroRef
               }
@@ -435,8 +419,8 @@ object Encoder {
                   PolymorphicSelect(field),
                   expr :: Nil
                   ) => {
-                val innerStateRef = exprToTerm(program, scope, expr)
-                val innerModRef = getTermTypeRef(program, innerStateRef)
+                val innerStateRef = exprToTerm(program, expr)
+                val innerModRef = inferTermType(program, innerStateRef)
                 val innerMod =
                   program
                     .stmts(innerModRef.loc)
@@ -459,9 +443,14 @@ object Encoder {
                   (name, getterRef)
                 }
 
-                innerGetters.map(p => scope.addFieldRef(p._1, p._2))
-                val oldOutputRef = scope.getOutputSort()
-                scope.setOutputSort(innerModRef)
+                program.pushCache()
+                innerGetters.foreach(p => program.saveObjectRef(p._1, p._2))
+
+                val newScope = new FunctionFrame(
+                  scope.stateParam,
+                  scope.auxParams,
+                  innerModRef
+                )
 
                 val newLhs: Lhs = Lhs(field)
 
@@ -469,14 +458,13 @@ object Encoder {
                 val innerFuncRef =
                   stmtToTerm(
                     program,
-                    scope,
+                    newScope,
                     AssignStmt(List(newLhs), List(rhs))
                   )
 
-                scope.setOutputSort(oldOutputRef)
-                innerGetters.map(p => scope.removeFieldRef(p._1))
+                program.popCache()
 
-                val modRef = scope.getOutputSort()
+                val modRef = scope.outputSort
                 val ctrRef = program
                   .stmts(modRef.loc)
                   .asInstanceOf[middle.Module]
@@ -487,7 +475,7 @@ object Encoder {
                     .asInstanceOf[Constructor]
                     .selectors
 
-                val components = selRefs.map {
+                val components: List[Ref] = selRefs.map {
                   s =>
                     val sel = program.stmts(s.loc).asInstanceOf[Selector]
                     lhs.expr match {
@@ -501,7 +489,7 @@ object Encoder {
                         )
                         exprRef
                       }
-                      case _ => scope.getFieldRef(sel.name)
+                      case _ => program.loadObjectRef(sel.name).get
                     }
                 }
 
@@ -512,13 +500,13 @@ object Encoder {
                 program.stmts.addOne(
                   UserMacro(
                     s"stmt!${stmt.astNodeId}",
-                    scope.getOutputSort(),
+                    scope.outputSort,
                     bodyRef,
                     scope.getParams()
                   )
                 )
 
-                program.cacheCallerRef(stmt.astNodeId.toString(), macroRef)
+                program.saveObjectRef(stmt.astNodeId.toString(), macroRef)
 
                 macroRef
               }
@@ -545,9 +533,9 @@ object Encoder {
       }
     )
 
-  def encodeStatements(
-    program: TermGraph, // modified
-    scope: ScopeFrame,
+  def blockToTerm(
+    program: Program, // modified
+    scope: FunctionFrame,
     stmts: List[Statement]
   ): Ref = {
     val flattened =
@@ -572,27 +560,27 @@ object Encoder {
       }
     } else {
       val inputSort = program
-        .stmts(scope.getStateParam().loc)
+        .stmts(scope.stateParam.loc)
         .asInstanceOf[FunctionParameter]
         .sort
-      if (inputSort == scope.getOutputSort()) {
-        scope.getStateParam()
+      if (inputSort == scope.outputSort) {
+        scope.stateParam
       } else {
         // TODO: we can't just return the input because the output state is different
-        scope.getStateParam()
+        scope.stateParam
       }
     }
   }
 
   // encode a transition block and return a pointer to the function definition
-  def transitionBlockToTerm(
-    program: TermGraph, // modified
-    scope: ScopeFrame,
+  def transitionToTerm(
+    program: Program, // modified
+    scope: FunctionFrame,
     funcName: String,
     block: BlockStmt
   ): Ref = {
 
-    val bodyRef = encodeStatements(
+    val bodyRef = blockToTerm(
       program,
       scope,
       block.stmts
@@ -602,7 +590,7 @@ object Encoder {
     program.stmts.addOne(
       UserMacro(
         funcName,
-        scope.getOutputSort(),
+        scope.outputSort,
         bodyRef,
         scope.getParams()
       )
@@ -611,9 +599,9 @@ object Encoder {
     transitionBlockRef
   }
 
-  def encodeControlBlock(
-    program: TermGraph, // modified
-    scope: ScopeFrame,
+  def executeControl(
+    program: Program, // modified
+    scope: FunctionFrame,
     moduleName: String,
     cmds: List[ProofCommand]
   ): Unit =
@@ -633,7 +621,7 @@ object Encoder {
 
           // get the module declaration
           val mod = program
-            .stmts(program.getType(moduleName).get.loc)
+            .stmts(program.loadSortRef(moduleName).get.loc)
             .asInstanceOf[middle.Module]
           val initRef = mod.init
           val nextRef = mod.next
@@ -648,7 +636,7 @@ object Encoder {
           val initSpecRef = Ref(program.stmts.length)
           program.stmts.addOne(Application(specRef, List(initAppRef)))
 
-          val negRef = program.getOrCacheCallerRef("not", {
+          val negRef = program.loadOrSaveObjectRef("not", {
             program.stmts.addOne(TheoryMacro("not"))
             Ref(program.stmts.length - 1)
           })
@@ -670,7 +658,7 @@ object Encoder {
 
           (1 to k).foreach {
             i =>
-              val args = scope.nondetParams.map { p =>
+              val args = scope.auxParams.map { p =>
                 program.stmts(p.loc) match {
                   case FunctionParameter(name, sort) => {
                     val vRef = Ref(program.stmts.length)
@@ -690,7 +678,7 @@ object Encoder {
           val negExitRef = Ref(program.stmts.length)
           program.stmts.addOne(Application(negRef, List(exitRef)))
 
-          val andRef = program.getOrCacheCallerRef("and", {
+          val andRef = program.loadOrSaveObjectRef("and", {
             program.stmts.addOne(TheoryMacro("and"))
             Ref(program.stmts.length - 1)
           })
@@ -717,7 +705,7 @@ object Encoder {
 
           // get the module declaration
           val mod = program
-            .stmts(program.getType(moduleName).get.loc)
+            .stmts(program.loadSortRef(moduleName).get.loc)
             .asInstanceOf[middle.Module]
           val initRef = mod.init
           val nextRef = mod.next
@@ -730,7 +718,7 @@ object Encoder {
           val initSpecRef = Ref(program.stmts.length)
           program.stmts.addOne(Application(specRef, List(initAppRef)))
 
-          val negRef = program.getOrCacheCallerRef("not", {
+          val negRef = program.loadOrSaveObjectRef("not", {
             program.stmts.addOne(TheoryMacro("not"))
             Ref(program.stmts.length - 1)
           })
@@ -747,7 +735,7 @@ object Encoder {
 
           (1 to k).foreach {
             i =>
-              val args = scope.nondetParams.map { p =>
+              val args = scope.auxParams.map { p =>
                 program.stmts(p.loc) match {
                   case FunctionParameter(name, sort) => {
                     val vRef = Ref(program.stmts.length)
@@ -772,13 +760,13 @@ object Encoder {
 
   // get all the specs and create a function from them
   def specsToTerm(
-    program: TermGraph, // modified
-    scope: ScopeFrame,
+    program: Program, // modified
+    scope: FunctionFrame,
     funcName: String,
     properties: List[SpecDecl]
   ) = {
     // spec needs Bool, so add Bool if it's not already there
-    val boolRef = program.getOrCacheSortRef("Bool", {
+    val boolRef = program.loadOrSaveSortRef("Bool", {
       program.stmts.addOne(TheorySort("Bool"));
       Ref(program.stmts.length - 1)
     })
@@ -786,21 +774,21 @@ object Encoder {
     val specConjuncts = new ListBuffer[Ref]()
 
     val bodyRef = if (properties.length > 1) {
-      val andRef = program.getOrCacheCallerRef("and", {
+      val andRef = program.loadOrSaveObjectRef("and", {
         program.stmts.addOne(TheoryMacro("and"));
         Ref(program.stmts.length - 1)
       })
       properties.foreach { d =>
-        val t = exprToTerm(program, scope, d.expr)
+        val t = exprToTerm(program, d.expr)
         specConjuncts.addOne(t)
         t
       }
       program.stmts.addOne(Application(andRef, specConjuncts.toList))
       Ref(program.stmts.length - 1)
     } else if (properties.length == 1) {
-      exprToTerm(program, scope, properties(0).expr)
+      exprToTerm(program, properties(0).expr)
     } else {
-      val trueRef = program.getOrCacheCallerRef("true", {
+      val trueRef = program.loadOrSaveObjectRef("true", {
         program.stmts.addOne(TheoryMacro("true"));
         Ref(program.stmts.length - 1)
       })
@@ -813,7 +801,7 @@ object Encoder {
         funcName,
         boolRef,
         bodyRef,
-        List(scope.getStateParam())
+        List(scope.stateParam)
       )
     )
 
@@ -821,12 +809,13 @@ object Encoder {
   } // end helper specsToTerm
 
   def createInitCalls(
-    program: TermGraph, // modified
-    scope: ScopeFrame,
+    program: Program, // modified
+    scope: FunctionFrame,
     pair: (Identifier, Type)
   ): Option[(Expr)] =
     pair._2 match {
-      case _: PrimitiveType        => None
+      case BooleanType()           => None
+      case IntegerType()           => None
       case UninterpretedType(name) => None
       case ArrayType(inTypes, outType) =>
         createInitCalls(program, scope, (pair._1, outType)) match {
@@ -837,12 +826,12 @@ object Encoder {
           case None => None
         }
       case SynonymType(id) => {
-        val sortRef = program.getType(id.name).get
+        val sortRef = program.loadSortRef(id.name).get
         program.stmts(sortRef.loc) match {
           case _: middle.Module =>
             // get the sort to see if we need to create a new instance
-            val fieldRef = scope.getFieldRef(pair._1.name)
-            val fieldSortRef = getTermTypeRef(program, fieldRef)
+            val fieldRef = program.loadObjectRef(pair._1.name).get
+            val fieldSortRef = inferTermType(program, fieldRef)
             program.stmts(fieldSortRef.loc) match {
               case _: middle.Module =>
                 Some(
@@ -855,7 +844,7 @@ object Encoder {
                 val fp = Ref(program.stmts.length)
                 program.stmts.addOne(FunctionParameter(tmpName, sortRef))
                 scope.addNondetParam(fp)
-                scope.addFieldRef(tmpName, fp)
+                program.saveObjectRef(tmpName, fp)
                 Some(
                   ModuleInitCallExpr(Identifier(tmpName))
                 )
@@ -866,28 +855,36 @@ object Encoder {
       }
     }
 
+  def typeDeclToTerm(program: Program, typ: TypeDecl): Unit = {
+    val rhsRef = typeUseToTerm(program, typ.typ)
+    typ.id match {
+      case Some(value) => program.saveSortRef(value.name, rhsRef)
+      case None        =>
+    }
+  }
+
   // encode the module and return a pointer to the start of the encoding
   def moduleToTerm(
-    program: TermGraph, // modified
-    scope: ScopeFrame,
+    program: Program, // modified
     m: front.Module
-  ): Ref = {
+  ): FunctionFrame = {
 
-    scope.resetFrame()
-
-    val fields =
-      (m.vars ++ m.sharedVars ++ m.inputs ++ m.outputs ++ m.constants)
+    // deal with type declarations
+    m.typeDecls.foreach(t => typeDeclToTerm(program, t))
 
     // add placeholder for module and remember where it is
     val moduleRef = Ref(program.stmts.length)
     program.stmts.addOne(
       middle.Module(m.id.name, Ref(-1), Ref(-1), Ref(-1), Ref(-1))
     )
-    program.cacheSortRef(m.id.name, moduleRef)
+    program.saveSortRef(m.id.name, moduleRef)
 
     // input state
     val inputStateRef = Ref(program.stmts.length)
     program.stmts.addOne(FunctionParameter("in", moduleRef))
+
+    val fields =
+      (m.vars ++ m.sharedVars ++ m.inputs ++ m.outputs)
 
     // create selectors and remember where they are
     val selectorTerms = new HashMap[String, Ref]()
@@ -905,9 +902,39 @@ object Encoder {
         selRef
       }
 
-    scope.setStateParam(inputStateRef)
-    scope.setOutputSort(moduleRef)
-    selectorTerms.map(p => scope.addFieldRef(p._1, p._2))
+    // functions cant be updated, but they are in the scope of the module
+    m.functions.foreach { p =>
+      val typeRefs = (List(p._3) ++ p._2).map(t => typeUseToTerm(program, t))
+      val funcRef = Ref(program.stmts.length)
+      program.stmts.addOne(
+        UserFunction(p._1.name, typeRefs.head, typeRefs.tail)
+      )
+      program.saveObjectRef(p._1.name, funcRef)
+    }
+
+    // defines and constant literals
+    m.defines.foreach { p =>
+      program.pushCache()
+      val params = p._2.map { a =>
+        val typeRef = typeUseToTerm(program, a._2)
+        val selRef = Ref(program.stmts.length)
+        program.stmts.addOne(FunctionParameter(a._1.name, typeRef))
+
+        program.saveObjectRef(a._1.name, selRef)
+
+        selRef
+      }
+      val typeRef = typeUseToTerm(program, p._3)
+      val bodyRef = exprToTerm(program, p._4)
+      program.popCache()
+      val funcRef = Ref(program.stmts.length)
+      program.stmts.addOne(UserMacro(p._1.name, typeRef, bodyRef, params))
+      program.saveObjectRef(p._1.name, funcRef)
+    }
+
+    val scope = new FunctionFrame(inputStateRef, List.empty, moduleRef)
+    program.pushCache()
+    selectorTerms.map(p => program.saveObjectRef(p._1, p._2))
 
     // add constructor and remember where it is
     val constructorRef = Ref(program.stmts.length)
@@ -934,7 +961,7 @@ object Encoder {
       case Some(InitDecl(stmt)) => BlockStmt(List(stmt) ++ initInitCalls)
       case None                 => BlockStmt(initInitCalls)
     }
-    val initRef = transitionBlockToTerm(
+    val initRef = transitionToTerm(
       program,
       scope,
       m.id.name + "!init",
@@ -946,7 +973,7 @@ object Encoder {
       case Some(NextDecl(stmt))             => BlockStmt(List(stmt))
       case None                             => BlockStmt(List.empty)
     }
-    val nextRef = transitionBlockToTerm(
+    val nextRef = transitionToTerm(
       program,
       scope,
       m.id.name + "!next",
@@ -962,23 +989,23 @@ object Encoder {
       middle.Module(m.id.name, constructorRef, initRef, nextRef, specRef)
     )
 
-    moduleRef
+    program.popCache()
+    scope
   } // End Module to Term
 
   def run(
     model: List[front.Module],
     main: Option[String]
-  ): TermGraph = {
+  ): Program = {
 
-    val program = new TermGraph(ArrayBuffer[Instruction]())
-    val scope = new ScopeFrame(Ref(-1), List.empty, Ref(-1), HashMap.empty)
+    val program = new Program(ArrayBuffer[Instruction]())
 
     // 1. Add every module to the program.
     // 2. When we find the main module, execute it
     val result = model.foreach { m =>
-      val mainRef = moduleToTerm(program, scope, m)
+      val scope = moduleToTerm(program, m)
       if (Some(m.id.name) == main) {
-        encodeControlBlock(program, scope, m.id.name, m.cmds)
+        executeControl(program, scope, m.id.name, m.cmds)
       }
     }
 
