@@ -6,9 +6,15 @@ import sys.process._
 import java.io.{File, PrintWriter}
 import scala.collection.mutable.ListBuffer
 
-object Solver {
+class Solver(
+  cmnd: String,
+  val extraOpts: List[(String, String)]
+) {
 
-  def run(in: String): (List[String], List[String], Int) = {
+  val options =
+    extraOpts ++ List(("produce-models", "true"), ("dump-models", "true"))
+
+  def runProcess(in: String): (List[String], List[String], Int) = {
     val qb = Process(in)
     var out = List[String]()
     var err = List[String]()
@@ -35,16 +41,24 @@ object Solver {
 
   def solve(
     program: Program,
-    solver: String
+    printOnly: Boolean
   ): ProofResult = {
+    val logic = s"(set-logic ${program.inferLogic()})"
+    val queryOpts = options ++ program.options
     val query = Printer.programToQuery(program)
-    val processedQuery = if (solver.contains("cvc4")) {
-      "(set-option :incremental true)\n" + query
-    } else {
-      query
+
+    val processedQuery =
+      (List(logic) ++ queryOpts.map(o => s"(set-option :${o._1} ${o._2})") ++ List(
+        query
+      )).mkString("\n")
+
+    if (printOnly) {
+      println(processedQuery)
+      return new ProofResult(None, None, List("Print only"))
     }
+
     val qfile = writeQueryToTmpFile(processedQuery).getAbsolutePath()
-    val result = run(s"$solver ${qfile}")
+    val result = runProcess(s"$cmnd ${qfile}")
 
     val answer = " " + result._1.mkString("\n")
 
@@ -70,9 +84,9 @@ class ProofResult(
 
   override def toString(): String = {
     val answer = result match {
-      case Some(true)  => "Counterexample"
-      case Some(false) => "Verification Passes"
-      case None        => "Failure"
+      case Some(true)  => "Counterexample:"
+      case Some(false) => "Verification Passes:"
+      case None        => "Not Solved:"
     }
     (List(answer) ++ messages)
       .mkString("\n")

@@ -150,6 +150,7 @@ class Program(val stmts: ArrayBuffer[Instruction]) {
   pushCache()
 
   val assertions: ListBuffer[Ref] = new ListBuffer()
+  var options: List[(String, String)] = List.empty
 
   override def toString(): String = stmts.mkString("\n")
 
@@ -207,6 +208,8 @@ class Program(val stmts: ArrayBuffer[Instruction]) {
       case Some(value) => value
       case None        => val r = obj; saveObjectRef(name, r); r
     }
+
+  def inferLogic(): String = "ALL"
 }
 
 class CacheStack() {

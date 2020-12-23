@@ -242,7 +242,7 @@ object Printer {
       )
       .mkString("\n")
 
-    "(set-logic ALL)\n(set-option :produce-models true)\n(set-option :dump-models true)\n" + programToQueryCtx(
+    programToQueryCtx(
       term
     ) + "\n" + assertions
   }

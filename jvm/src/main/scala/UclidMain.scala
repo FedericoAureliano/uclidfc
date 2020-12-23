@@ -13,10 +13,18 @@ import middle.Printer
 import back.Solver
 import back.ProofResult
 
+object Solvers extends Enumeration {
+  type Solvers = Value
+  val z3, cvc4 = Value
+}
+
 /** This is the main class for Uclid.
   *
   */
 object UclidMain {
+
+  implicit val weekDaysRead: scopt.Read[Solvers.Value] =
+    scopt.Read.reads(Solvers.withName(_))
 
   def main(args: Array[String]): Unit =
     parseOptions(args) match {
@@ -39,8 +47,8 @@ object UclidMain {
     */
   case class Config(
     mainModuleName: String = "main",
-    solverPath: String = "z3",
-    shouldPrint: Boolean = false,
+    solver: Solvers.Value = Solvers.z3,
+    printOnly: Boolean = false,
     files: Seq[java.io.File] = Seq()
   )
 
@@ -53,14 +61,13 @@ object UclidMain {
         .action((x, c) => c.copy(mainModuleName = x))
         .text("Name of the main module.")
 
-      opt[String]('s', "solver")
-        .valueName("<Solver>")
-        .action((x, c) => c.copy(solverPath = x))
-        .text("Path to solver.")
+      opt[Solvers.Value]('s', "solver")
+        .action((x, c) => c.copy(solver = x))
+        .text(s"Solver to use (${Solvers.values.mkString(", ")})")
 
       opt[Unit]('p', "print")
-        .action((_, c) => c.copy(shouldPrint = true))
-        .text("Print the query.")
+        .action((_, c) => c.copy(printOnly = true))
+        .text("Print the query without solving.")
 
       arg[java.io.File]("<file> ...")
         .unbounded()
@@ -81,13 +88,12 @@ object UclidMain {
       val mainModuleName = Identifier(config.mainModuleName)
       val modules = compile(config.files, mainModuleName)
       val obs = Encoder.run(modules, Some(config.mainModuleName))
-      if (config.shouldPrint) {
-        println(
-          Printer
-            .programToQuery(obs)
-        )
+      val solver = config.solver match {
+        case Solvers.z3 => new Solver("z3", List())
+        case Solvers.cvc4 =>
+          new Solver("cvc4", List(("incremental", "true")))
       }
-      Solver.solve(obs, config.solverPath)
+      solver.solve(obs, config.printOnly)
     } catch {
       case (e: java.io.FileNotFoundException) =>
         errorResult.messages = List(e.toString())

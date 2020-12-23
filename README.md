@@ -19,10 +19,10 @@ sbt assembly
 ```
 ./uclid [options] <file> ...
 
-  -m, --main <Module>    Name of the main module.
-  -s, --solver <Solver>  Path to solver.
-  -p, --print            Print the query.
-  <file> ...             List of files to analyze.
+  -m, --main <Module>   Name of the main module.
+  -s, --solver <value>  Solver to use (<available list>)
+  -p, --print           Print the query without solving.
+  <file> ...            List of files to analyze.
 ```
 
 ## Developers
