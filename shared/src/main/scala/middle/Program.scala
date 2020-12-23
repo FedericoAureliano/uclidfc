@@ -33,33 +33,6 @@ case class TheorySort(name: String, params: List[Ref] = List.empty)
   override def toString(): String = s"[tst]\t$name\t${params.mkString("\t")}"
 }
 
-case class SortMacro(name: String, body: Ref) extends Instruction {
-  /*
-  Sort macros are shortcuts for existing sorts. For example, we can alias Int as I with
-
-  [smo] I   #1
-  [tst] Int
-   */
-  override def toString(): String = s"[smo]\t$name"
-}
-
-case class SortParameter(name: String) extends Instruction {
-  /*
-  Sort parameters are used for defining parametric sorts. For example, the smt-lib
-
-  (define-sort A (X) (Array X X))
-
-  for arrays that contain and are indexed by the same sort would be
-
-  [smo] A     #1
-  [tst] Array #2  #2
-  [spr] X
-
-  in LIR.
-   */
-  override def toString(): String = s"[spr]\t$name"
-}
-
 case class UserSort(name: String, arity: Numeral = Numeral(0))
     extends Instruction {
   /*
@@ -211,7 +184,10 @@ class Program(val stmts: ArrayBuffer[Instruction]) {
   }
 
   def loadOrSaveSortRef(name: String, sort: => Ref): Ref =
-    cache.sortCache.top.getOrElseUpdate(name, sort)
+    loadSortRef(name) match {
+      case Some(value) => value
+      case None        => val r = sort; saveSortRef(name, r); r
+    }
 
   def saveObjectRef(name: String, obj: Ref): Unit =
     cache.objectCache.top.addOne((name, obj))
@@ -227,7 +203,10 @@ class Program(val stmts: ArrayBuffer[Instruction]) {
   }
 
   def loadOrSaveObjectRef(name: String, obj: => Ref): Ref =
-    cache.objectCache.top.getOrElseUpdate(name, obj)
+    loadObjectRef(name) match {
+      case Some(value) => value
+      case None        => val r = obj; saveObjectRef(name, r); r
+    }
 }
 
 class CacheStack() {

@@ -1,0 +1,35 @@
+// UCLID TEST
+// Solver=cvc4
+// Result=Some(false)
+
+module main
+{
+    const x : integer;
+    const y : integer;
+    function f(x : integer) : boolean;
+
+    var c: integer;
+    var d: boolean;
+
+    init {
+        if (!d) {
+            c = x;
+        } else {
+            c = y;
+        }
+    }
+
+    next {
+        if (d) {
+            c = x;
+        } else {
+            c = y;
+        }
+    }
+
+    invariant tautology: x == y ==> f(c) == f(y) && f(c) == f(x);
+
+    control {
+        unroll(5);
+    }
+}

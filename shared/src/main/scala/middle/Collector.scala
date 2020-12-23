@@ -27,8 +27,6 @@ object Collector {
         }
         case Numeral(_)              =>
         case TheorySort(_, p)        => markParams(p)
-        case SortMacro(_, b)         => markInstruction(b)
-        case SortParameter(_)        =>
         case UserSort(_, _)          =>
         case FunctionParameter(_, s) => markInstruction(s)
         case TheoryMacro(_, p)       => markParams(p)

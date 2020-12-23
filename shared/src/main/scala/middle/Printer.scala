@@ -24,8 +24,6 @@ object Printer {
         case s: Selector          => selectorToQueryTerm(s)
         case n: Numeral           => numeralToQueryTerm(n)
         case r: Ref               => refToQueryTerm(r)
-        case s: SortMacro         => sortmacroToQueryTerm(s)
-        case s: SortParameter     => sortparameterToQueryTerm(s)
         case t: TheoryMacro       => theorymacroToQueryTerm(t)
         case t: TheorySort        => theorysortToQueryTerm(t)
         case u: UserFunction      => userfunctionToQueryTerm(u)
@@ -86,12 +84,6 @@ object Printer {
     def refToQueryTerm(r: Ref): String =
       dispatch(r)
 
-    def sortmacroToQueryTerm(s: SortMacro): String =
-      s.name
-
-    def sortparameterToQueryTerm(s: SortParameter): String =
-      s.name
-
     def theorymacroToQueryTerm(t: TheoryMacro): String =
       if (t.params.length > 0) {
         s"${t.name} (${t.params.map(p => dispatch(p)).mkString(" ")})"
@@ -131,7 +123,6 @@ object Printer {
         term.stmts(position.loc) match {
           case r: Ref          => dispatch(r)
           case d: DataType     => Some(datatypeToQueryCtx(d))
-          case s: SortMacro    => Some(sortmacroToQueryCtx(s))
           case u: UserFunction => Some(userfunctionToQueryCtx(u))
           case u: UserMacro => {
             val dispatched =
@@ -164,37 +155,34 @@ object Printer {
     def datatypeToQueryCtx(d: DataType): String = {
       val tmp = new StringBuilder()
       // for each constructor
+      tmp ++= s"${TAB * indent}(declare-datatypes ((${d.name} 0)) (("
       d.constructors.foreach { ct =>
         val ctr = term.stmts(ct.loc).asInstanceOf[Constructor]
-        tmp ++= s"${TAB * indent}(declare-datatypes ((${d.name} 0)) (((${ctr.name}"
+        tmp ++= s"(${ctr.name}"
         indent += 1
         ctr.selectors.foreach { s =>
           tmp ++= "\n"
           val sel = term.stmts(s.loc).asInstanceOf[Selector]
-          tmp ++= s"${TAB * indent}(${sel.name} ${programPointToQueryTerm(new Program(term.stmts), sel.sort, indent)})"
+          tmp ++= s"${TAB * indent}(${sel.name} ${programPointToQueryTerm(term, sel.sort, indent)})"
         }
+        tmp ++= ")"
       }
-      tmp ++= "))))\n"
+      tmp ++= ")))\n"
       indent -= 1
 
       tmp.toString()
     }
 
-    def sortmacroToQueryCtx(s: SortMacro): String =
-      s"${TAB * indent}(define-sort ${s.name} ${programPointToQueryTerm(new Program(term.stmts), s.body, indent)})"
-
     def userfunctionToQueryCtx(u: UserFunction): String = {
       val tmp = new StringBuilder()
       if (u.params.length > 0) {
-        tmp ++= s"${TAB * indent}(declare-fun ${u.name} (${u.params
-          .map { p =>
-            s"(${programPointToQueryTerm(new Program(term.stmts), p, indent)})"
-          }
-          .mkString(" ")}) "
+        tmp ++= s"${TAB * indent}(declare-fun ${u.name} ${u.params
+          .map(p => s"(${programPointToQueryTerm(term, p, indent)})")
+          .mkString(" ")} "
       } else {
         tmp ++= s"${TAB * indent}(declare-const ${u.name} "
       }
-      tmp ++= s"${programPointToQueryTerm(new Program(term.stmts), u.sort, indent)})\n"
+      tmp ++= s"${programPointToQueryTerm(term, u.sort, indent)})\n"
 
       tmp.toString()
     }
@@ -204,20 +192,20 @@ object Printer {
       tmp ++= s"${TAB * indent}(define-fun ${u.name} (${u.params
         .map { p =>
           val fp = term.stmts(p.loc).asInstanceOf[FunctionParameter]
-          s"(${fp.name} ${programPointToQueryTerm(new Program(term.stmts), fp.sort, indent)})"
+          s"(${fp.name} ${programPointToQueryTerm(term, fp.sort, indent)})"
         }
         .mkString(" ")}) "
 
-      tmp ++= s"${programPointToQueryTerm(new Program(term.stmts), u.sort, indent)}\n"
+      tmp ++= s"${programPointToQueryTerm(term, u.sort, indent)}\n"
       indent += 1
-      tmp ++= s"${TAB * indent}${programPointToQueryTerm(new Program(term.stmts), u.body, indent)})\n"
+      tmp ++= s"${TAB * indent}${programPointToQueryTerm(term, u.body, indent)})\n"
       indent -= 1
 
       tmp.toString()
     }
 
     def usersortToQueryCtx(u: UserSort): String =
-      s"${TAB * indent}(declare-sort ${u.name})"
+      s"${TAB * indent}(declare-sort ${u.name} ${u.arity.value})"
 
     def moduleToQueryCtx(m: middle.Module): String = {
       val tmp = new StringBuilder()
@@ -229,7 +217,7 @@ object Printer {
       ctr.selectors.foreach { s =>
         tmp ++= "\n"
         val sel = term.stmts(s.loc).asInstanceOf[Selector]
-        tmp ++= s"${TAB * indent}(${sel.name} ${programPointToQueryTerm(new Program(term.stmts), sel.sort, indent)})"
+        tmp ++= s"${TAB * indent}(${sel.name} ${programPointToQueryTerm(term, sel.sort, indent)})"
       }
       tmp ++= "))))\n\n"
       indent -= 1

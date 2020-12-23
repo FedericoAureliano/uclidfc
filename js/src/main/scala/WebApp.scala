@@ -10,7 +10,6 @@ import scala.collection.mutable.ArrayBuffer
 import middle._
 
 import front.UclidParser
-import front.Utils
 
 object WebApp {
 

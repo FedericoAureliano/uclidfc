@@ -20,24 +20,7 @@ object IdGenerator {
 
 /** An AST position consists of a filename and the Position type from the Scala std library.
   */
-case class ASTPosition(filename: Option[String], pos: Position) {
-
-  override def toString: String =
-    filename match {
-      case Some(fn) => fn + ", line " + pos.line.toString
-      case None     => "line " + pos.line.toString
-    }
-
-  def errorString(): String =
-    if (pos.line > 0) {
-      filename match {
-        case Some(fn) => " at " + fn + ", line " + pos.line.toString()
-        case None     => "at line " + pos.line.toString()
-      }
-    } else {
-      ""
-    }
-}
+case class ASTPosition(filename: Option[String], pos: Position) {}
 
 sealed trait PositionedNode extends Positional {
   var filename: Option[String] = None
@@ -120,10 +103,6 @@ case class EqualityOp() extends ComparisonOperator {
   override val name = "="
 }
 
-case class InequalityOp() extends ComparisonOperator {
-  override val name = "!="
-}
-
 // ITE operator
 case class ITEOp() extends Operator {
   override val name = "ite"
@@ -184,9 +163,6 @@ case class ModuleInitCallExpr(id: Identifier) extends Expr {}
 case class Lhs(val expr: Expr) extends ASTNode {}
 
 sealed abstract class Type extends PositionedNode {
-  def ids = List.empty[Identifier]
-  def matches(t2: Type) = (this == t2)
-  def defaultValue: Option[Expr] = None
   val name: String
 }
 
@@ -200,38 +176,28 @@ case class UninterpretedType(nameIn: Identifier) extends Type {
   */
 case class BooleanType() extends Type {
   override val name = "boolean"
-  override def defaultValue = Some(BoolLit(false))
 }
 
 case class IntegerType() extends Type {
   override val name = "integer"
-  override def defaultValue = Some(IntLit(0))
+}
+
+case class EnumType(id: Identifier, variants: List[Identifier]) extends Type {
+  override val name = id.name
 }
 
 case class ArrayType(inTypes: List[Type], outType: Type) extends Type {
 
-  override val name = "array"
+  override val name =
+    s"[${inTypes.map(p => p.name).mkString("")}]${outType.name}"
 }
 
 case class SynonymType(id: Identifier) extends Type {
-  override val name = id.toString
-
-  override def equals(other: Any) = other match {
-    case that: SynonymType => that.id.name == this.id.name
-    case _                 => false
-  }
+  override val name = id.name
 }
 
 /** Statements * */
 sealed abstract class Statement extends ASTNode {}
-
-case class SkipStmt() extends Statement {}
-
-case class AssertStmt(e: Expr, id: Option[Identifier]) extends Statement {}
-
-case class AssumeStmt(e: Expr, id: Option[Identifier]) extends Statement {}
-
-case class HavocStmt(havocable: Identifier) extends Statement {}
 
 case class AssignStmt(lhss: List[Lhs], rhss: List[Expr]) extends Statement {}
 
@@ -243,8 +209,6 @@ case class IfElseStmt(cond: Expr, ifblock: Statement, elseblock: Statement)
 case class CaseStmt(body: List[(Expr, Statement)]) extends Statement {}
 
 case class ModuleNextCallStmt(expr: Expr) extends Statement {}
-
-case class BlockVarsDecl(ids: List[Identifier], typ: Type) extends ASTNode {}
 
 sealed abstract class Decl extends ASTNode {}
 
@@ -265,96 +229,84 @@ case class DefineDecl(
   expr: Expr
 ) extends Decl {}
 
-case class FunctionsDecl(
-  ids: List[Identifier],
+case class FunctionDecl(
+  id: Identifier,
   argTypes: List[Type],
   retTyp: Type
 ) extends Decl {}
 
-case class InitDecl(body: Statement) extends Decl {}
+case class InitDecl(body: BlockStmt) extends Decl {}
 
-case class NextDecl(body: Statement) extends Decl {}
+case class NextDecl(body: BlockStmt) extends Decl {}
 
-case class SpecDecl(id: Identifier, expr: Expr) extends Decl {
-  val propertyKeyword = "invariant"
-  def name = "%s %s".format(propertyKeyword, id.toString())
-}
+case class SpecDecl(id: Identifier, expr: Expr) extends Decl {}
 
 case class ProofCommand(
   name: Identifier,
   k: Option[IntLit]
 ) extends ASTNode
 
-case class Module(
+case class ModuleDecl(
   id: Identifier,
   decls: List[Decl],
   cmds: List[ProofCommand]
-) extends ASTNode {
-
-  // create a new module with with the filename set.
-  def withFilename(name: String): Module = {
-    val newModule = Module(id, decls, cmds)
-    newModule.filename = Some(name)
-    return newModule
-  }
+) extends Decl {
 
   // module types.
-  lazy val typeDecls: List[TypeDecl] =
+  val typeDecls: List[TypeDecl] =
     decls
       .collect { case typs: TypeDecl => typs }
 
   // module inputs.
-  lazy val inputs: List[(Identifier, Type)] =
+  val inputs: List[(Identifier, Type)] =
     decls
       .collect { case inps: InputVarsDecl => inps }
       .flatMap(i => i.ids.map(id => (id, i.typ)))
 
   // module outputs.
-  lazy val outputs: List[(Identifier, Type)] =
+  val outputs: List[(Identifier, Type)] =
     decls
       .collect { case outs: OutputVarsDecl => outs }
       .flatMap(o => o.ids.map(id => (id, o.typ)))
 
   // module state variables.
-  lazy val vars: List[(Identifier, Type)] =
+  val vars: List[(Identifier, Type)] =
     decls
       .collect { case vars: StateVarsDecl => vars }
       .flatMap(v => v.ids.map(id => (id, v.typ)))
 
-  lazy val sharedVars: List[(Identifier, Type)] =
+  val sharedVars: List[(Identifier, Type)] =
     decls
       .collect { case sVars: SharedVarsDecl => sVars }
       .flatMap(sVar => sVar.ids.map(id => (id, sVar.typ)))
 
-  lazy val defines: List[(Identifier, List[(Identifier, Type)], Type, Expr)] =
+  val defines: List[DefineDecl] =
     decls
       .collect {
-        case defi: DefineDecl =>
-          (defi.id, defi.params, defi.retTyp, defi.expr)
+        case defi: DefineDecl => defi
       }
 
-  lazy val functions: List[(Identifier, List[Type], Type)] =
+  val functions: List[FunctionDecl] =
     decls
-      .collect { case cnsts: FunctionsDecl => cnsts }
-      .flatMap(cnst => cnst.ids.map(id => (id, cnst.argTypes, cnst.retTyp)))
+      .collect { case cnsts: FunctionDecl => cnsts }
 
   // module properties.
-  lazy val properties: List[SpecDecl] = decls.collect {
+  val properties: List[SpecDecl] = decls.collect {
     case spec: SpecDecl =>
       spec
   }
 
   // the init block.
-  lazy val init: Option[InitDecl] = {
-    decls
-      .find(_.isInstanceOf[InitDecl])
-      .flatMap((d) => Some(d.asInstanceOf[InitDecl]))
+  val init: Option[InitDecl] = {
+    val collected = decls.collect { case i: InitDecl => i }
+    assert(collected.length <= 1, "must have at most one init block")
+    collected.find(_.isInstanceOf[InitDecl])
   }
 
   // the next block.
-  lazy val next: Option[NextDecl] = {
-    decls
-      .find(_.isInstanceOf[NextDecl])
-      .flatMap((d) => Some(d.asInstanceOf[NextDecl]))
+  val next: Option[NextDecl] = {
+    val collected = decls.collect { case i: NextDecl => i }
+    assert(collected.length <= 1, "must have at most one next block")
+    collected.find(_.isInstanceOf[NextDecl])
   }
 }

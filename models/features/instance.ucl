@@ -1,3 +1,7 @@
+// UCLID TEST
+// Solver=z3
+// Result=Some(false)
+
 module fib
 {
     var a, b : integer;

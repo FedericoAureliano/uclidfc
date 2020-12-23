@@ -1,3 +1,7 @@
+// UCLID TEST
+// Solver=z3
+// Result=Some(false)
+
 module main
 {
     define f(x: integer) : integer = -3;

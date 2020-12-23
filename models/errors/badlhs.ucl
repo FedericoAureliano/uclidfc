@@ -1,13 +1,12 @@
 // UCLID TEST
 // Solver=cvc4
-// Result=Some(true)
-
+// Result=None
 
 module main {
   var a, b : integer;
 
   init {
-    a = 0;
+    a + b = 0; // here
     b = 1;
   }
 
@@ -19,6 +18,6 @@ module main {
   invariant a_le_b: a <= b;
 
   control {
-    induction(3);
+    induction;
   }
 }

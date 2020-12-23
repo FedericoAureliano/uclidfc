@@ -1,0 +1,26 @@
+// UCLID TEST
+// Solver=z3
+// Result=Some(true)
+
+type key;
+define f(x: key, y: key) : boolean = x == y;
+const x : key;
+
+module main {
+  var a, b : key;
+
+  init {
+      a = x;
+      b = x;
+  }
+
+  next {
+      b = a;
+  }
+
+  invariant tautology: !f(a, b);
+
+  control {
+      unroll(1);
+  }
+}

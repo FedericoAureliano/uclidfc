@@ -1,0 +1,33 @@
+// UCLID TEST
+// Solver=cvc4
+// Result=Some(false)
+
+type intarray = [integer]integer;
+type boolarray = [boolean]boolean;
+type nestedarray = [intarray]boolarray;
+type nestedarray2 = [boolarray]intarray;
+
+module main {
+    var a: intarray;
+    var b: nestedarray;
+    var c: nestedarray;
+    var d: nestedarray2;
+    var e: nestedarray2;
+    var f: boolarray;
+
+    init {
+        b = c;
+        d = e;
+        a[0] = 1;
+        f[true] = false;
+    }
+
+    invariant cex: a[0] == 1;
+    invariant cex2: b == c;
+    invariant cex3: d == e;
+    invariant cex4: f[true] == false;
+
+    control {
+        induction;
+    }
+}

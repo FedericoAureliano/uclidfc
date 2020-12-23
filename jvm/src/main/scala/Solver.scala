@@ -46,14 +46,14 @@ object Solver {
     val qfile = writeQueryToTmpFile(processedQuery).getAbsolutePath()
     val result = run(s"$solver ${qfile}")
 
-    val answer = result._1.mkString("\n")
+    val answer = " " + result._1.mkString("\n")
 
     if (!result._2.isEmpty || answer.contains("error") || answer.contains(
           "unknown"
         )) {
       new ProofResult(None, None, result._1)
     } else {
-      if ("\\ssat".r.findFirstIn(answer).isDefined) {
+      if ("(\\ssat)".r.findFirstIn(answer).isDefined) {
         new ProofResult(Some(true), None, result._1)
       } else {
         new ProofResult(Some(false), None, result._1)
@@ -72,9 +72,9 @@ class ProofResult(
     val answer = result match {
       case Some(true)  => "Counterexample"
       case Some(false) => "Verification Passes"
-      case None        => "unknown/error/timeout"
+      case None        => "Failure"
     }
-    (List(answer, "Solver Output:") ++ messages)
-      .mkString("\n") + "\n"
+    (List(answer) ++ messages)
+      .mkString("\n")
   }
 }

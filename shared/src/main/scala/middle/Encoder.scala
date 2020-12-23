@@ -41,23 +41,41 @@ object Encoder {
         )
       case BooleanType() =>
         program.loadOrSaveSortRef(
-          t.toString(), {
+          t.name, {
             program.stmts.addOne(TheorySort("Bool"))
-            program.saveSortRef(t.toString(), Ref(program.stmts.length - 1))
+            program.saveSortRef(t.name, Ref(program.stmts.length - 1))
             Ref(program.stmts.length - 1)
           }
         )
       case IntegerType() =>
         program.loadOrSaveSortRef(
-          t.toString(), {
+          t.name, {
             program.stmts.addOne(TheorySort("Int"))
-            program.saveSortRef(t.toString(), Ref(program.stmts.length - 1))
+            program.saveSortRef(t.name, Ref(program.stmts.length - 1))
             Ref(program.stmts.length - 1)
           }
         )
+      case EnumType(id, variants) => {
+        program.loadOrSaveSortRef(
+          id.name, {
+            // add datatype placeholder
+            val dtRef = Ref(program.stmts.length)
+            program.stmts.addOne(DataType(id.name, List.empty))
+            // add constructor for each id
+            val constructors = variants.map { i =>
+              val vRef = Ref(program.stmts.length)
+              program.stmts.addOne(Constructor(i.name, dtRef, List.empty))
+              program.saveObjectRef(i.name, vRef)
+              vRef
+            }
+            program.stmts.update(dtRef.loc, DataType(id.name, constructors))
+            dtRef
+          }
+        )
+      }
       case ArrayType(inTypes, outType) => {
         program.loadOrSaveSortRef(
-          t.toString(), {
+          t.name, {
             val args =
               (inTypes ++ List(outType)).map(arg => typeUseToTerm(program, arg))
             program.stmts.addOne(TheorySort("Array", args))
@@ -66,16 +84,11 @@ object Encoder {
         )
       }
       case SynonymType(id) =>
-        program.loadSortRef(id.name) match {
-          case Some(value) => value
-          case None        =>
-            // if we failed to find it as a regular type, try to find it as a module
-            program.loadSortRef(id.name + "!type") match {
-              case Some(value) => value
-              case None =>
-                throw new IllegalArgumentException(s"type not declared: ${t}")
-            }
-        }
+        program
+          .loadSortRef(id.name)
+          .getOrElse(
+            throw new IllegalArgumentException(s"type not declared: ${t}")
+          )
       case _ =>
         throw new IllegalArgumentException(s"type not yet supported: ${t}")
     }
@@ -99,35 +112,13 @@ object Encoder {
           case _ => inferTermType(program, caller)
         }
       }
-      case Constructor(name, sort, selectors)  => sort
-      case FunctionParameter(name, sort)       => sort
-      case Selector(name, sort)                => sort
-      case UserMacro(name, sort, body, params) => sort
-      case TheoryMacro(name, params) =>
-        name match {
-          case "true" | "false" | "and" | "or" | "=" =>
-            program.loadOrSaveSortRef("Bool", {
-              program.stmts.addOne(TheorySort("Bool"));
-              Ref(program.stmts.length - 1)
-            })
-          case "+" | "*" | "-" =>
-            program.loadOrSaveSortRef("Int", {
-              program.stmts.addOne(TheorySort("Int"));
-              Ref(program.stmts.length - 1)
-            })
-          case _ => {
-            if (name.toIntOption.isDefined) {
-              program.loadOrSaveSortRef("Int", {
-                program.stmts.addOne(TheorySort("Int"));
-                Ref(program.stmts.length - 1)
-              })
-            } else {
-              throw new IllegalArgumentException(
-                s"theory macro not supported yet: ${name}"
-              )
-            }
-          }
-        }
+      case Constructor(name, sort, selectors) => sort
+      case FunctionParameter(name, sort)      => sort
+      case Selector(name, sort)               => sort
+      case _ =>
+        throw new IllegalArgumentException(
+          s"type inference not yet supported: ${program.stmts(app.loc)}"
+        )
     }
 
   // encode a term and return a pointer to the start of the term
@@ -814,17 +805,14 @@ object Encoder {
     pair: (Identifier, Type)
   ): Option[(Expr)] =
     pair._2 match {
-      case BooleanType()           => None
-      case IntegerType()           => None
-      case UninterpretedType(name) => None
+      case BooleanType()        => None
+      case IntegerType()        => None
+      case EnumType(_, _)       => None
+      case UninterpretedType(_) => None
       case ArrayType(inTypes, outType) =>
-        createInitCalls(program, scope, (pair._1, outType)) match {
-          case Some(e) =>
-            Some(
-              ConstArray(e, pair._2)
-            )
-          case None => None
-        }
+        createInitCalls(program, scope, (pair._1, outType)).flatMap(e =>
+          Some(ConstArray(e, pair._2))
+        )
       case SynonymType(id) => {
         val sortRef = program.loadSortRef(id.name).get
         program.stmts(sortRef.loc) match {
@@ -863,10 +851,39 @@ object Encoder {
     }
   }
 
+  def functionDeclToTerm(program: Program, fd: FunctionDecl): Unit = {
+    val typeRefs =
+      (List(fd.retTyp) ++ fd.argTypes).map(t => typeUseToTerm(program, t))
+    val funcRef = Ref(program.stmts.length)
+    program.stmts.addOne(
+      UserFunction(fd.id.name, typeRefs.head, typeRefs.tail)
+    )
+    program.saveObjectRef(fd.id.name, funcRef)
+  }
+
+  def defineDeclToTerm(program: Program, dd: DefineDecl): Unit = {
+    program.pushCache()
+    val params = dd.params.map { a =>
+      val typeRef = typeUseToTerm(program, a._2)
+      val selRef = Ref(program.stmts.length)
+      program.stmts.addOne(FunctionParameter(a._1.name, typeRef))
+
+      program.saveObjectRef(a._1.name, selRef)
+
+      selRef
+    }
+    val typeRef = typeUseToTerm(program, dd.retTyp)
+    val bodyRef = exprToTerm(program, dd.expr)
+    program.popCache()
+    val funcRef = Ref(program.stmts.length)
+    program.stmts.addOne(UserMacro(dd.id.name, typeRef, bodyRef, params))
+    program.saveObjectRef(dd.id.name, funcRef)
+  }
+
   // encode the module and return a pointer to the start of the encoding
   def moduleToTerm(
     program: Program, // modified
-    m: front.Module
+    m: ModuleDecl
   ): FunctionFrame = {
 
     // deal with type declarations
@@ -903,34 +920,10 @@ object Encoder {
       }
 
     // functions cant be updated, but they are in the scope of the module
-    m.functions.foreach { p =>
-      val typeRefs = (List(p._3) ++ p._2).map(t => typeUseToTerm(program, t))
-      val funcRef = Ref(program.stmts.length)
-      program.stmts.addOne(
-        UserFunction(p._1.name, typeRefs.head, typeRefs.tail)
-      )
-      program.saveObjectRef(p._1.name, funcRef)
-    }
+    m.functions.foreach(p => functionDeclToTerm(program, p))
 
     // defines and constant literals
-    m.defines.foreach { p =>
-      program.pushCache()
-      val params = p._2.map { a =>
-        val typeRef = typeUseToTerm(program, a._2)
-        val selRef = Ref(program.stmts.length)
-        program.stmts.addOne(FunctionParameter(a._1.name, typeRef))
-
-        program.saveObjectRef(a._1.name, selRef)
-
-        selRef
-      }
-      val typeRef = typeUseToTerm(program, p._3)
-      val bodyRef = exprToTerm(program, p._4)
-      program.popCache()
-      val funcRef = Ref(program.stmts.length)
-      program.stmts.addOne(UserMacro(p._1.name, typeRef, bodyRef, params))
-      program.saveObjectRef(p._1.name, funcRef)
-    }
+    m.defines.foreach(p => defineDeclToTerm(program, p))
 
     val scope = new FunctionFrame(inputStateRef, List.empty, moduleRef)
     program.pushCache()
@@ -956,10 +949,8 @@ object Encoder {
       }
     }
     val initBlock = m.init match {
-      case Some(InitDecl(BlockStmt(stmts))) =>
-        BlockStmt(stmts ++ initInitCalls)
-      case Some(InitDecl(stmt)) => BlockStmt(List(stmt) ++ initInitCalls)
-      case None                 => BlockStmt(initInitCalls)
+      case Some(decl) => BlockStmt(decl.body.stmts ++ initInitCalls)
+      case None       => BlockStmt(initInitCalls)
     }
     val initRef = transitionToTerm(
       program,
@@ -969,9 +960,8 @@ object Encoder {
     )
 
     val nextBlock = m.next match {
-      case Some(NextDecl(BlockStmt(stmts))) => BlockStmt(stmts)
-      case Some(NextDecl(stmt))             => BlockStmt(List(stmt))
-      case None                             => BlockStmt(List.empty)
+      case Some(decl) => decl.body
+      case None       => BlockStmt(List.empty)
     }
     val nextRef = transitionToTerm(
       program,
@@ -994,7 +984,7 @@ object Encoder {
   } // End Module to Term
 
   def run(
-    model: List[front.Module],
+    model: List[Decl],
     main: Option[String]
   ): Program = {
 
@@ -1003,9 +993,18 @@ object Encoder {
     // 1. Add every module to the program.
     // 2. When we find the main module, execute it
     val result = model.foreach { m =>
-      val scope = moduleToTerm(program, m)
-      if (Some(m.id.name) == main) {
-        executeControl(program, scope, m.id.name, m.cmds)
+      m match {
+        case td: TypeDecl     => typeDeclToTerm(program, td)
+        case dd: DefineDecl   => defineDeclToTerm(program, dd)
+        case fd: FunctionDecl => functionDeclToTerm(program, fd)
+        case mod: ModuleDecl => {
+          val scope = moduleToTerm(program, mod)
+          if (Some(mod.id.name) == main) {
+            executeControl(program, scope, mod.id.name, mod.cmds)
+          }
+        }
+        case _ =>
+          throw new IllegalArgumentException(s"must be a top level decl: ${m}")
       }
     }
 

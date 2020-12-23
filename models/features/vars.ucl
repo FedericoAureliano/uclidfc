@@ -1,0 +1,17 @@
+// UCLID TEST
+// Solver=cvc4
+// Result=Some(true)
+
+module main {
+    var a: boolean;
+    input b: boolean;
+    output c: boolean;
+    sharedvar d: boolean;
+    const e: boolean;
+
+    invariant cex: a || b || c || d || e;
+
+    control {
+        unroll;
+    }
+}

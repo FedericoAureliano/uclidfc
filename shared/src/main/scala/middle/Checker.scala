@@ -17,8 +17,6 @@ object Checker {
           case Ref(j)                   => if (!checkRef(Ref(j))) return err
           case Numeral(_)               =>
           case TheorySort(n, p)         => p.foreach(a => if (!checkRef(a)) return err)
-          case SortMacro(n, b)          => if (!checkRef(b)) return err
-          case SortParameter(_)         =>
           case UserSort(n, a)           =>
           case FunctionParameter(n, sr) => if (!checkRef(sr)) return err
           case TheoryMacro(n, p)        => p.foreach(a => if (!checkRef(a)) return err)

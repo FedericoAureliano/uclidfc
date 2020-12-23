@@ -1,0 +1,47 @@
+// UCLID TEST
+// Solver=z3
+// Result=Some(false)
+
+module main
+{
+    const x : integer;
+    const y : integer;
+    function f(x : integer) : boolean;
+
+    var c: integer;
+    var d: integer;
+
+    init {
+        case 
+        (d == 1) : {
+            c = x;
+        } 
+        (d == 2) : {  
+            c = y;
+        }
+        default : {
+            c = d;
+        }
+        esac
+    }
+
+    next {
+        case 
+        (d == 1) : {
+            c = x;
+        } 
+        (d == 2) : {  
+            c = y;
+        }
+        default : {
+            c = d;
+        }
+        esac
+    }
+
+    invariant tautology: c == x || c == y || c == d;
+
+    control {
+        induction;
+    }
+}

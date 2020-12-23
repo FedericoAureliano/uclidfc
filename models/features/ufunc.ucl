@@ -1,3 +1,7 @@
+// UCLID TEST
+// Solver=cvc4
+// Result=Some(false)
+
 module main
 {
     const x : integer;

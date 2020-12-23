@@ -39,15 +39,6 @@ class UclidLexical extends Lexical with UclidTokens with Positional {
       }
     }
       | positioned {
-        '0' ~ 'x' ~> rep1(hexDigit) ^^ {
-          case hits =>
-            IntegerLit(hits.mkString, 16)
-        }
-      }
-      | positioned {
-        '0' ~ 'b' ~> rep1(bit) ^^ { case bits => IntegerLit(bits.mkString, 2) }
-      }
-      | positioned {
         digit ~ rep(digit) ^^ {
           case first ~ rest =>
             IntegerLit((first :: rest).mkString(""), 10)
@@ -58,10 +49,6 @@ class UclidLexical extends Lexical with UclidTokens with Positional {
       | delim
       | failure("illegal character"))
 
-  def hexDigit: Parser[Char] =
-    elem("hexDigit", ((ch) => ch.isDigit || (ch >= 'A' && ch <= 'F')))
-  def bit: Parser[Char] = elem("bit", ((ch) => ch == '0' || ch == '1'))
-
   // see `whitespace in `Scanners`
   def whitespace: Parser[Any] = rep(
     whitespaceChar
@@ -70,10 +57,6 @@ class UclidLexical extends Lexical with UclidTokens with Positional {
       | '/' ~ '*' ~ failure("unclosed comment")
   )
 
-  // protected def comment: Parser[Any] = (
-  //    '*' ~ '/'  ^^ { case _ => ' '  }
-  //   | chrExcept(EofCh) ~ comment
-  //   )
   protected def comment: Parser[Any] = (
     rep(chrExcept(EofCh, '*') | '*' ~ not('/')) ~ '*' ~ '/'
       ^^^ ' '

@@ -1,0 +1,39 @@
+// UCLID TEST
+// Solver=z3
+// Result=Some(false)
+
+module fib
+{
+    var a, b : integer;
+
+    init {
+        a = 0;
+        b = 1;
+    }
+
+    next {
+        a' = b;
+        b' = a + b;
+    }
+}
+
+module main
+{
+    var fibs : [integer]fib;
+    var fib1 : fib;
+
+    init {
+        fibs[0] = fib1;
+    }
+
+    next {
+        next(fibs[0]);
+        next(fib1);
+    }
+
+    invariant musthold: fibs[0] == fib1;
+
+    control {
+        induction(2);
+    }
+}

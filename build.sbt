@@ -22,12 +22,12 @@ lazy val uclid = crossProject(JSPlatform, JVMPlatform)
       "Jacoco Coverage Report",
       None,
       JacocoThresholds(
-        instruction = 75,
-        method = 75,
-        branch = 75,
-        complexity = 75,
-        line = 75,
-        clazz = 75
+        instruction = 70,
+        method = 50,
+        branch = 50,
+        complexity = 50,
+        line = 95,
+        clazz = 50
       ),
       Seq(JacocoReportFormats.ScalaHTML, JacocoReportFormats.XML),
       "utf-8"

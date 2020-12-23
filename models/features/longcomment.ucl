@@ -1,6 +1,7 @@
-// UCLID TEST
-// Solver=z3
-// Result=Some(false)
+/* UCLID TEST
+Solver=z3
+Result=Some(false)
+*/
 
 module main
 {
