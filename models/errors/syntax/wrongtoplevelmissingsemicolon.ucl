@@ -1,0 +1,5 @@
+// UCLID TEST
+// Solver=cvc4
+// Result=None
+
+var a: integer

@@ -1,0 +1,23 @@
+// UCLID TEST
+// Solver=cvc4
+// Result=None
+
+module main {
+  var a, b : integer;
+
+  init {
+    a = 0;
+    b = 1;
+  }
+
+  next {
+    a' = b;
+    b' = (a'' + b);
+  }
+
+  invariant a_le_b: a <= b;
+
+  control {
+    induction;
+  }
+}

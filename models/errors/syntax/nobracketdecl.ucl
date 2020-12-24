@@ -1,0 +1,17 @@
+// UCLID TEST
+// Solver=cvc4
+// Result=None
+
+module main
+{
+    type key;
+    type frame = record {k : key, i : integer, b : boolean, k2: key;
+
+    var a : frame;
+
+    invariant couldbe: a.k2 != a.k;
+
+    control {
+        induction;
+    }
+}

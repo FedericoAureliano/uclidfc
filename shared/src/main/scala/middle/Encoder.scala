@@ -16,19 +16,10 @@ object Encoder {
     t: Type
   ): Ref =
     t match {
-      case UninterpretedType(name) =>
-        program.loadOrSaveSortRef(
-          name.name, {
-            program.stmts.addOne(UserSort(name.name))
-            program.saveSortRef(name.name, Ref(program.stmts.length - 1))
-            Ref(program.stmts.length - 1)
-          }
-        )
       case BooleanType() =>
         program.loadOrSaveSortRef(
           t.name, {
             program.stmts.addOne(TheorySort("Bool"))
-            program.saveSortRef(t.name, Ref(program.stmts.length - 1))
             Ref(program.stmts.length - 1)
           }
         )
@@ -36,51 +27,9 @@ object Encoder {
         program.loadOrSaveSortRef(
           t.name, {
             program.stmts.addOne(TheorySort("Int"))
-            program.saveSortRef(t.name, Ref(program.stmts.length - 1))
             Ref(program.stmts.length - 1)
           }
         )
-      case EnumType(id, variants) => {
-        program.loadOrSaveSortRef(
-          id.name, {
-            // add datatype placeholder
-            val dtRef = Ref(program.stmts.length)
-            program.stmts.addOne(DataType(id.name, List.empty))
-            // add constructor for each id
-            val constructors = variants.map { i =>
-              val vRef = Ref(program.stmts.length)
-              program.stmts.addOne(Constructor(i.name, dtRef, List.empty))
-              program.saveObjectRef(i.name, vRef)
-              vRef
-            }
-            program.stmts.update(dtRef.loc, DataType(id.name, constructors))
-            dtRef
-          }
-        )
-      }
-      case RecordType(id, elements) => {
-        program.loadOrSaveSortRef(
-          id.name, {
-            // add datatype placeholder
-            val dtRef = Ref(program.stmts.length)
-            program.stmts.addOne(DataType(id.name, List.empty))
-
-            val selecorRefs = elements.map { p =>
-              val tyepRef = typeUseToTerm(program, p._2)
-              program.stmts.addOne(Selector(p._1.name, tyepRef))
-              Ref(program.stmts.length - 1)
-            }
-
-            val ctrRef = Ref(program.stmts.length)
-            program.stmts.addOne(Constructor(id.name, dtRef, selecorRefs))
-            program.saveObjectRef(id.name, ctrRef)
-
-            program.stmts.update(dtRef.loc, DataType(id.name, List(ctrRef)))
-
-            dtRef
-          }
-        )
-      }
       case ArrayType(inTypes, outType) => {
         program.loadOrSaveSortRef(
           t.name, {
@@ -95,10 +44,10 @@ object Encoder {
         program
           .loadSortRef(id.name)
           .getOrElse(
-            throw new IllegalArgumentException(s"type not declared: ${t}")
+            throw new TypeOutOfScope(t.pos, t)
           )
       case _ =>
-        throw new IllegalArgumentException(s"type not yet supported: ${t}")
+        throw new TypeNotSupportedYet(t.pos, t)
     }
 
   def inferTermType(
@@ -135,9 +84,12 @@ object Encoder {
     expr: Expr
   ): Ref = {
     expr match {
-      case Identifier(name) => {
+      case id: Identifier => {
         // find selector
-        program.loadObjectRef(name).get
+        program.loadObjectRef(id.name) match {
+          case Some(value) => value
+          case None        => throw new IdentifierOutOfScope(id.pos, id)
+        }
       }
       case l: Literal => {
         program.loadOrSaveObjectRef(l.toString(), {
@@ -185,6 +137,9 @@ object Encoder {
         program.stmts.addOne(Application(opRef, List(arrayRef, indexRef)))
 
         appRef
+      }
+      case OperatorApplication(GetNextValueOp(), operands) => {
+        throw new ExprNotSupportedYet(expr.pos, expr)
       }
       case OperatorApplication(op, operands) => {
         val opRef = program.loadOrSaveObjectRef(op.name, {
@@ -235,7 +190,10 @@ object Encoder {
 
       case ModuleInitCallExpr(id) => {
         // get the instance
-        val instanceRef = program.loadObjectRef(id.name).get
+        val instanceRef = program.loadObjectRef(id.name) match {
+          case Some(value) => value
+          case None        => throw new IdentifierOutOfScope(id.pos, id)
+        }
         // get the module it belongs to
         val modRef = inferTermType(program, instanceRef)
         // find init function location
@@ -268,10 +226,7 @@ object Encoder {
         appRef
       }
 
-      case _ =>
-        throw new IllegalArgumentException(
-          s"expression not implemented yet: ${expr}"
-        )
+      case _ => throw new ExprNotSupportedYet(expr.pos, expr)
     } // end helper exprToTerm
   }
 
@@ -347,10 +302,8 @@ object Encoder {
           }
           case BlockStmt(bstmts) =>
             acc ++ flattenStmts(bstmts)
-          case _ =>
-            throw new IllegalArgumentException(
-              s"statement not supported yet: ${p}"
-            )
+          case s =>
+            throw new StatementNotSupportedYet(s.pos, s)
         }
       )
 
@@ -359,125 +312,123 @@ object Encoder {
     program: Program, // modified
     params: List[Ref],
     ctrRef: Ref, // this is the constructor to build the target object
-    stmt: Statement
+    stmt: AssignStmt
   ): Ref =
     program.loadOrSaveObjectRef(
       stmt.astNodeId.toString(), {
-        stmt match {
-          case AssignStmt(lhss, rhss) => {
-            assert(lhss.length == 1, "lhss must be flattened by now")
-            assert(rhss.length == 1, "rhss must be flattened by now")
-            val lhs = lhss(0)
-            val rhs = rhss(0)
+        assert(stmt.lhss.length == 1, "lhss must be flattened by now")
+        assert(stmt.rhss.length == 1, "rhss must be flattened by now")
+        val lhs = stmt.lhss(0)
+        val rhs = stmt.rhss(0)
 
-            lhs.expr match {
-              case OperatorApplication(GetNextValueOp(), expr :: Nil) => {
-                // TODO: handle primes correctly (right now we just ignore them)
-                stmtToTerm(
-                  program,
-                  params,
-                  ctrRef,
-                  AssignStmt(List(Lhs(expr)), List(rhs))
-                )
-              }
-              case Identifier(id) => {
-                // get the constructor
-                val ctr = program
-                  .stmts(ctrRef.loc)
-                  .asInstanceOf[Constructor]
+        lhs.expr match {
+          case OperatorApplication(GetNextValueOp(), expr :: Nil) => {
+            // TODO: handle primes correctly (right now we just ignore them)
+            stmtToTerm(
+              program,
+              params,
+              ctrRef,
+              AssignStmt(List(Lhs(expr)), List(rhs))
+            )
+          }
+          case Identifier(id) => {
+            // get the constructor
+            val ctr = program
+              .stmts(ctrRef.loc)
+              .asInstanceOf[Constructor]
 
-                val components: List[Ref] = ctr.selectors.map {
-                  s =>
-                    val sel = program.stmts(s.loc).asInstanceOf[Selector]
-                    lhs.expr match {
-                      // if we are looking at the current selector, then process it, otherwise just return the identity
-                      case Identifier(name) if name == sel.name =>
-                        exprToTerm(program, rhs)
-                      case _ => program.loadObjectRef(sel.name).get
+            val components: List[Ref] = ctr.selectors.map {
+              s =>
+                val sel = program.stmts(s.loc).asInstanceOf[Selector]
+                lhs.expr match {
+                  // if we are looking at the current selector, then process it, otherwise just return the identity
+                  case Identifier(name) if name == sel.name =>
+                    exprToTerm(program, rhs)
+                  case _ =>
+                    program.loadObjectRef(sel.name) match {
+                      case Some(value) => value
+                      case None =>
+                        throw new IdentifierOutOfScope(
+                          Identifier(sel.name).pos,
+                          Identifier(sel.name)
+                        ) // todo: how to preserve position?
                     }
                 }
-
-                val bodyRef = Ref(program.stmts.length)
-                program.stmts.addOne(Application(ctrRef, components))
-
-                val macroRef = Ref(program.stmts.length)
-                program.stmts.addOne(
-                  UserMacro(
-                    s"stmt!${stmt.astNodeId}",
-                    ctr.sort,
-                    bodyRef,
-                    params
-                  )
-                )
-
-                program.saveObjectRef(stmt.astNodeId.toString(), macroRef)
-
-                macroRef
-              }
-              case OperatorApplication(
-                  PolymorphicSelect(field),
-                  expr :: Nil
-                  ) => {
-
-                // we have an assignment like: expr.field = rhs
-                // and we want to turn it into: expr = ctr(field = rhs, expr.x for x in fields of expr datatype)
-
-                // first get the constructor for the type of expr
-                val exprCtrRef =
-                  program
-                    .stmts(
-                      inferTermType(program, exprToTerm(program, expr)).loc
-                    )
-                    .asInstanceOf[AbstractDataType]
-                    .defaultCtr()
-
-                val exprCtr =
-                  program.stmts(exprCtrRef.loc).asInstanceOf[Constructor]
-
-                // now get the components
-                val components: List[Expr] = exprCtr.selectors.map { s =>
-                  val sel = program.stmts(s.loc).asInstanceOf[Selector]
-                  if (field.name == sel.name) {
-                    rhs
-                  } else {
-                    // select from the expression
-                    OperatorApplication(
-                      PolymorphicSelect(Identifier(sel.name)),
-                      List(expr)
-                    )
-                  }
-                }
-
-                val newRhs =
-                  FuncApplication(Identifier(exprCtr.name), components)
-
-                stmtToTerm(
-                  program,
-                  params,
-                  ctrRef,
-                  AssignStmt(List(Lhs(expr)), List(newRhs))
-                )
-              }
-              case OperatorApplication(ArraySelect(indices), expr :: Nil) => {
-                val newRhs =
-                  OperatorApplication(ArrayUpdate(indices, rhs), List(expr))
-                stmtToTerm(
-                  program,
-                  params,
-                  ctrRef,
-                  AssignStmt(List(Lhs(expr)), List(newRhs))
-                )
-              }
-              case _ =>
-                throw new IllegalArgumentException(
-                  s"lhs not supported yet: ${stmt}"
-                )
             }
-          }
-          case _ =>
-            throw new IllegalArgumentException(
-              s"should not be reachable: ${stmt}"
+
+            val bodyRef = Ref(program.stmts.length)
+            program.stmts.addOne(Application(ctrRef, components))
+
+            val macroRef = Ref(program.stmts.length)
+            program.stmts.addOne(
+              UserMacro(
+                s"stmt!${stmt.astNodeId}",
+                ctr.sort,
+                bodyRef,
+                params
+              )
             )
+
+            program.saveObjectRef(stmt.astNodeId.toString(), macroRef)
+
+            macroRef
+          }
+          case OperatorApplication(
+              PolymorphicSelect(field),
+              expr :: Nil
+              ) => {
+
+            // we have an assignment like: expr.field = rhs
+            // and we want to turn it into: expr = ctr(field = rhs, expr.x for x in fields of expr datatype)
+
+            // first get the constructor for the type of expr
+            val exprCtrRef =
+              program
+                .stmts(
+                  inferTermType(program, exprToTerm(program, expr)).loc
+                )
+                .asInstanceOf[AbstractDataType]
+                .defaultCtr()
+
+            val exprCtr =
+              program.stmts(exprCtrRef.loc).asInstanceOf[Constructor]
+
+            // now get the components
+            val components: List[Expr] = exprCtr.selectors.map { s =>
+              val sel = program.stmts(s.loc).asInstanceOf[Selector]
+              if (field.name == sel.name) {
+                rhs
+              } else {
+                // select from the expression
+                OperatorApplication(
+                  PolymorphicSelect(Identifier(sel.name)),
+                  List(expr)
+                )
+              }
+            }
+
+            val newRhs =
+              FuncApplication(Identifier(exprCtr.name), components)
+
+            stmtToTerm(
+              program,
+              params,
+              ctrRef,
+              AssignStmt(List(Lhs(expr)), List(newRhs))
+            )
+          }
+          case OperatorApplication(ArraySelect(indices), expr :: Nil) => {
+            val newRhs =
+              OperatorApplication(ArrayUpdate(indices, rhs), List(expr))
+            stmtToTerm(
+              program,
+              params,
+              ctrRef,
+              AssignStmt(List(Lhs(expr)), List(newRhs))
+            )
+          }
+          case e =>
+            throw new ExprNotSupportedYet(e.pos, e)
         }
       }
     )
@@ -761,11 +712,11 @@ object Encoder {
 
     var outParams: List[Ref] = List.empty
     pair._2 match {
-      case BooleanType()        => None
-      case IntegerType()        => None
-      case EnumType(_, _)       => None
-      case UninterpretedType(_) => None
-      case RecordType(id, elements) => {
+      case BooleanType()       => None
+      case IntegerType()       => None
+      case EnumType(_)         => None
+      case UninterpretedType() => None
+      case RecordType(elements) => {
         // TODO instantiate elements if they are of module type
         None
       }
@@ -778,7 +729,10 @@ object Encoder {
         program.stmts(sortRef.loc) match {
           case _: middle.Module =>
             // get the sort to see if we need to create a new instance
-            val fieldRef = program.loadObjectRef(pair._1.name).get
+            val fieldRef = program.loadObjectRef(pair._1.name) match {
+              case Some(value) => value
+              case None        => throw new IdentifierOutOfScope(pair._1.pos, pair._1)
+            }
             val fieldSortRef = inferTermType(program, fieldRef)
             program.stmts(fieldSortRef.loc) match {
               case _: middle.Module =>
@@ -806,13 +760,68 @@ object Encoder {
     }
   }
 
-  def typeDeclToTerm(program: Program, typ: TypeDecl): Unit = {
-    val rhsRef = typeUseToTerm(program, typ.typ)
-    typ.id match {
-      case Some(value) => program.saveSortRef(value.name, rhsRef)
-      case None        =>
+  def typeDeclToTerm(program: Program, typ: TypeDecl): Unit =
+    typ.typ match {
+      case UninterpretedType() =>
+        program.loadSortRef(typ.id.name) match {
+          case Some(value) => throw new TypeOverride(typ.pos, typ)
+          case None => {
+            program.stmts.addOne(UserSort(typ.id.name))
+            program.saveSortRef(typ.id.name, Ref(program.stmts.length - 1))
+          }
+        }
+      case EnumType(variants) => {
+        program.loadSortRef(typ.id.name) match {
+          case Some(value) => throw new TypeOverride(typ.pos, typ)
+          case None => {
+            // add datatype placeholder
+            val dtRef = Ref(program.stmts.length)
+            program.stmts.addOne(DataType(typ.id.name, List.empty))
+            // add constructor for each id
+            val constructors = variants.map { i =>
+              val vRef = Ref(program.stmts.length)
+              program.stmts.addOne(Constructor(i.name, dtRef, List.empty))
+              program.saveObjectRef(i.name, vRef)
+              vRef
+            }
+            program.stmts.update(dtRef.loc, DataType(typ.id.name, constructors))
+            program.saveSortRef(typ.id.name, dtRef)
+          }
+        }
+      }
+      case RecordType(elements) => {
+        program.loadSortRef(typ.id.name) match {
+          case Some(value) => throw new TypeOverride(typ.pos, typ)
+          case None => {
+            // add datatype placeholder
+            val dtRef = Ref(program.stmts.length)
+            program.stmts.addOne(DataType(typ.id.name, List.empty))
+
+            val selecorRefs = elements.map { p =>
+              val tyepRef = typeUseToTerm(program, p._2)
+              program.stmts.addOne(Selector(p._1.name, tyepRef))
+              Ref(program.stmts.length - 1)
+            }
+
+            val ctrRef = Ref(program.stmts.length)
+            program.stmts.addOne(Constructor(typ.id.name, dtRef, selecorRefs))
+            program.saveObjectRef(typ.id.name, ctrRef)
+
+            program.stmts.update(dtRef.loc, DataType(typ.id.name, List(ctrRef)))
+
+            program.saveSortRef(typ.id.name, dtRef)
+          }
+        }
+      }
+      case _ => {
+        // assign typ.id (lhs) to whatever id is pointing to
+        program.loadSortRef(typ.id.name) match {
+          case Some(value) => throw new TypeOutOfScope(typ.typ.pos, typ.typ)
+          case None =>
+            program.saveSortRef(typ.id.name, typeUseToTerm(program, typ.typ))
+        }
+      }
     }
-  }
 
   def functionDeclToTerm(program: Program, fd: FunctionDecl): Unit = {
     val typeRefs =
@@ -857,7 +866,11 @@ object Encoder {
     program.stmts.addOne(
       middle.Module(m.id.name, Ref(-1), Ref(-1), Ref(-1), Ref(-1))
     )
-    program.saveSortRef(m.id.name, moduleRef)
+
+    program.loadSortRef(m.id.name) match {
+      case Some(value) => throw new ModuleOverride(m.pos, m)
+      case None        => program.saveSortRef(m.id.name, moduleRef)
+    }
 
     // input state
     val inputStateRef = Ref(program.stmts.length)
@@ -960,7 +973,7 @@ object Encoder {
   } // End Module to Term
 
   def run(
-    model: List[Decl],
+    model: List[TopLevelDecl],
     main: Option[String]
   ): Program = {
 
@@ -979,8 +992,6 @@ object Encoder {
             executeControl(program, mod.id.name, params._1, params._2, mod.cmds)
           }
         }
-        case _ =>
-          throw new IllegalArgumentException(s"must be a top level decl: ${m}")
       }
     }
 

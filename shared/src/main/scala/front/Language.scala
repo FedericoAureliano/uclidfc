@@ -38,68 +38,59 @@ sealed trait Operator extends ASTNode {
   val name: String
 }
 
-// This is the polymorphic operator type. They need to be re-written to the correct type
-sealed abstract class PolymorphicOperator extends Operator {}
-
-case class LTOp() extends PolymorphicOperator {
+case class LTOp() extends Operator {
   override val name = "<"
 }
 
-case class LEOp() extends PolymorphicOperator {
+case class LEOp() extends Operator {
   override val name = "<="
 }
 
-case class GTOp() extends PolymorphicOperator {
+case class GTOp() extends Operator {
   override val name = ">"
 }
 
-case class GEOp() extends PolymorphicOperator {
+case class GEOp() extends Operator {
   override val name = ">="
 }
 
-case class AddOp() extends PolymorphicOperator {
+case class AddOp() extends Operator {
   override val name = "+"
 }
 
-case class SubOp() extends PolymorphicOperator {
+case class SubOp() extends Operator {
   override val name = "-"
 }
 
-case class MulOp() extends PolymorphicOperator {
+case class MulOp() extends Operator {
   override val name = "*"
 }
 
-case class UnaryMinusOp() extends PolymorphicOperator {
+case class UnaryMinusOp() extends Operator {
   override val name = "-"
 }
 
-// Boolean operators.
-sealed abstract class BooleanOperator extends Operator {}
-
-case class ConjunctionOp() extends BooleanOperator {
+case class ConjunctionOp() extends Operator {
   override val name = "and"
 }
 
-case class DisjunctionOp() extends BooleanOperator {
+case class DisjunctionOp() extends Operator {
   override val name = "or"
 }
 
-case class IffOp() extends BooleanOperator {
+case class IffOp() extends Operator {
   override val name = "="
 }
 
-case class ImplicationOp() extends BooleanOperator {
+case class ImplicationOp() extends Operator {
   override val name = "=>"
 }
 
-case class NegationOp() extends BooleanOperator {
+case class NegationOp() extends Operator {
   override val name = "not"
 }
 
-// (In-)equality operators.
-sealed abstract class ComparisonOperator() extends Operator {}
-
-case class EqualityOp() extends ComparisonOperator {
+case class EqualityOp() extends Operator {
   override val name = "="
 }
 
@@ -168,8 +159,8 @@ sealed abstract class Type extends PositionedNode {
 
 /**  Uninterpreted types.
   */
-case class UninterpretedType(nameIn: Identifier) extends Type {
-  override val name = nameIn.toString
+case class UninterpretedType() extends Type {
+  override val name = "usort"
 }
 
 /** Regular types.
@@ -182,13 +173,12 @@ case class IntegerType() extends Type {
   override val name = "integer"
 }
 
-case class EnumType(id: Identifier, variants: List[Identifier]) extends Type {
-  override val name = id.name
+case class EnumType(variants: List[Identifier]) extends Type {
+  override val name = "enum"
 }
 
-case class RecordType(id: Identifier, elements: List[(Identifier, Type)])
-    extends Type {
-  override val name = id.name
+case class RecordType(elements: List[(Identifier, Type)]) extends Type {
+  override val name = "record"
 }
 
 case class ArrayType(inTypes: List[Type], outType: Type) extends Type {
@@ -217,7 +207,9 @@ case class ModuleNextCallStmt(expr: Expr) extends Statement {}
 
 sealed abstract class Decl extends ASTNode {}
 
-case class TypeDecl(id: Option[Identifier], typ: Type) extends Decl {}
+sealed abstract class TopLevelDecl extends Decl
+
+case class TypeDecl(id: Identifier, typ: Type) extends TopLevelDecl {}
 
 case class StateVarsDecl(ids: List[Identifier], typ: Type) extends Decl {}
 
@@ -232,13 +224,13 @@ case class DefineDecl(
   params: List[(Identifier, Type)],
   retTyp: Type,
   expr: Expr
-) extends Decl {}
+) extends TopLevelDecl {}
 
 case class FunctionDecl(
   id: Identifier,
   argTypes: List[Type],
   retTyp: Type
-) extends Decl {}
+) extends TopLevelDecl {}
 
 case class InitDecl(body: BlockStmt) extends Decl {}
 
@@ -255,7 +247,7 @@ case class ModuleDecl(
   id: Identifier,
   decls: List[Decl],
   cmds: List[ProofCommand]
-) extends Decl {
+) extends TopLevelDecl {
 
   // module types.
   val typeDecls: List[TypeDecl] =

@@ -2,13 +2,14 @@ package uclid
 
 import scala.util.parsing.combinator._
 import scala.collection.immutable._
-import front.{Identifier, ModuleDecl, _}
+import front._
 
 import scala.collection.mutable.ArrayBuffer
 
 import middle.Encoder
 import middle.Program
 import middle.Printer
+import middle.SemanticError
 
 import back.Solver
 import back.ProofResult
@@ -101,6 +102,9 @@ object UclidMain {
       case e: SyntaxError =>
         errorResult.messages = List(e.toString())
         errorResult
+      case e: SemanticError =>
+        errorResult.messages = List(e.toString())
+        errorResult
     }
   }
 
@@ -109,18 +113,18 @@ object UclidMain {
     srcFiles: Seq[java.io.File],
     mainModuleName: Identifier,
     test: Boolean = false
-  ): List[Decl] = {
+  ): List[TopLevelDecl] = {
     type NameCountMap = Map[Identifier, Int]
     var nameCnt: NameCountMap = Map().withDefaultValue(0)
 
     // Helper function to parse a single file.
-    def parseFile(srcFile: String): List[Decl] = {
+    def parseFile(srcFile: String): List[TopLevelDecl] = {
       val text = scala.io.Source.fromFile(srcFile).mkString
       UclidParser.parseModel(srcFile, text)
     }
 
-    val parsedModules = srcFiles.foldLeft(List.empty[Decl]) { (acc, srcFile) =>
-      acc ++ parseFile(srcFile.getPath())
+    val parsedModules = srcFiles.foldLeft(List.empty[TopLevelDecl]) {
+      (acc, srcFile) => acc ++ parseFile(srcFile.getPath())
     }
 
     parsedModules

@@ -1,0 +1,18 @@
+// UCLID TEST
+// Solver=z3
+// Result=None
+
+type fib;
+const x: fib;
+
+module main {
+    type fib;
+
+    var y : fib;
+
+    invariant cex: y == x;
+
+    control {
+        induction;
+    }
+}

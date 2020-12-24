@@ -1,0 +1,7 @@
+// UCLID TEST
+// Solver=cvc4
+// Result=None
+
+module main {
+    type main;
+}

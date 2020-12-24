@@ -53,8 +53,22 @@ class TestEndToEnd {
     }
   }
 
-  @Test def testErrors(): Unit = {
-    val tests = new File("models/errors").listFiles
+  @Test def testSyntaxErrors(): Unit = {
+    val tests = new File("models/errors/syntax").listFiles
+      .filter(_.isFile)
+      .map(f => readTestFile(f))
+      .flatten
+    tests.foreach { t =>
+      val answer = endToEnd(t._1, t._2)
+      assert(
+        t._3 == answer.result,
+        s"Failed: ${t._1}\nExpected: ${t._3}\nGot: ${answer.result}\nOutput: ${answer.messages.mkString("\n")}"
+      )
+    }
+  }
+
+  @Test def testSemanticErrors(): Unit = {
+    val tests = new File("models/errors/semantics").listFiles
       .filter(_.isFile)
       .map(f => readTestFile(f))
       .flatten

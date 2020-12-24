@@ -17,25 +17,25 @@ lazy val uclid = crossProject(JSPlatform, JVMPlatform)
     scalacOptions ++= Seq("-unchecked", "-deprecation", "-feature"),
     libraryDependencies += ("org.scala-lang.modules" %%% "scala-parser-combinators" % "1.1.2")
       .withSources(),
-    libraryDependencies += "com.novocode" % "junit-interface" % "0.11" % "test",
-    jacocoReportSettings := JacocoReportSettings(
-      "Jacoco Coverage Report",
-      None,
-      JacocoThresholds(
-        instruction = 70,
-        method = 50,
-        branch = 50,
-        complexity = 50,
-        line = 95,
-        clazz = 50
-      ),
-      Seq(JacocoReportFormats.ScalaHTML, JacocoReportFormats.XML),
-      "utf-8"
-    )
+    libraryDependencies += "com.novocode" % "junit-interface" % "0.11" % "test"
   )
   .jvmSettings(
     // JVM-specific settings
-    libraryDependencies += "com.github.scopt" %% "scopt" % "3.7.1"
+    libraryDependencies += "com.github.scopt" %% "scopt" % "3.7.1",
+    jacocoReportSettings := JacocoReportSettings(
+      "Jacoco Coverage Report",
+      Some("shared"),
+      JacocoThresholds(
+        instruction = 70,
+        method = 50,
+        branch = 40,
+        complexity = 40,
+        line = 90,
+        clazz = 50
+      ),
+      Seq(JacocoReportFormats.ScalaHTML),
+      "utf-8"
+    )
   )
   .jsSettings(
     // JS-specific settings

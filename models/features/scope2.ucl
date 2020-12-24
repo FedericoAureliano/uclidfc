@@ -1,0 +1,15 @@
+// UCLID TEST
+// Solver=z3
+// Result=Some(false)
+
+const x : integer = 7;
+
+module main {
+    var y : integer;
+
+    invariant cex: x == 7;
+
+    control {
+        induction;
+    }
+}

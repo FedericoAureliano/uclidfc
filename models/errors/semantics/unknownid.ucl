@@ -1,0 +1,11 @@
+// UCLID TEST
+// Solver=cvc4
+// Result=None
+
+module main {
+    invariant wrong: x > 0;
+
+    control {
+        unroll(10);
+    }
+}
