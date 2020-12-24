@@ -362,7 +362,8 @@ object Encoder {
             val macroRef = Ref(program.stmts.length)
             program.stmts.addOne(
               UserMacro(
-                s"stmt!${stmt.astNodeId}",
+                // line number, column number, ast id
+                s"line${lhs.expr.pos.line}col${lhs.expr.pos.column}!${stmt.astNodeId}", 
                 ctr.sort,
                 bodyRef,
                 params
