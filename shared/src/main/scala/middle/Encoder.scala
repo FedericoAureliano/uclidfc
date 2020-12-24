@@ -363,7 +363,7 @@ object Encoder {
             program.stmts.addOne(
               UserMacro(
                 // line number, column number, ast id
-                s"line${lhs.expr.pos.line}col${lhs.expr.pos.column}!${stmt.astNodeId}", 
+                s"line${lhs.expr.pos.line}col${lhs.expr.pos.column}!${stmt.astNodeId}",
                 ctr.sort,
                 bodyRef,
                 params
