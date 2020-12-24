@@ -86,7 +86,11 @@ object Printer {
 
     def theorymacroToQueryTerm(t: TheoryMacro): String =
       if (t.params.length > 0) {
-        s"${t.name} (${t.params.map(p => dispatch(p)).mkString(" ")})"
+        val args = t.params.map { s =>
+          val sel = term.stmts(s.loc).asInstanceOf[FunctionParameter]
+          s"(${sel.name} ${programPointToQueryTerm(term, sel.sort, 0)})"
+        }
+        s"${t.name} (${args.mkString(" ")})"
       } else {
         t.name
       }

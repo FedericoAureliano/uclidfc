@@ -141,6 +141,66 @@ object Encoder {
       case OperatorApplication(GetNextValueOp(), operands) => {
         throw new ExprNotSupportedYet(expr.pos, expr)
       }
+      case OperatorApplication(ForallOp(ids), operands) => {
+        assert(
+          operands.length == 1,
+          "forall must be applied to a single operand"
+        )
+
+        program.pushCache()
+        val selecorRefs = ids.map { p =>
+          val tyepRef = typeUseToTerm(program, p._2)
+          val selRef = Ref(program.stmts.length)
+          program.stmts.addOne(FunctionParameter(p._1.name, tyepRef))
+          program.saveObjectRef(p._1.name, selRef)
+          selRef
+        }
+
+        val opRef = {
+          program.stmts.addOne(TheoryMacro("forall", selecorRefs));
+          Ref(program.stmts.length - 1)
+        }
+        program.saveObjectRef(ForallOp(ids).name, opRef)
+
+        val bodyRef = exprToTerm(program, operands.head)
+        val resultRef = Ref(program.stmts.length)
+        program.stmts.addOne(Application(opRef, List(bodyRef)))
+
+        program.popCache()
+
+        resultRef
+
+      }
+      case OperatorApplication(ExistsOp(ids), operands) => {
+        assert(
+          operands.length == 1,
+          "exists must be applied to a single operand"
+        )
+
+        program.pushCache()
+        val selecorRefs = ids.map { p =>
+          val tyepRef = typeUseToTerm(program, p._2)
+          val selRef = Ref(program.stmts.length)
+          program.stmts.addOne(FunctionParameter(p._1.name, tyepRef))
+          program.saveObjectRef(p._1.name, selRef)
+          selRef
+        }
+
+        val opRef = {
+          program.stmts.addOne(TheoryMacro("exists", selecorRefs));
+          Ref(program.stmts.length - 1)
+        }
+        program.saveObjectRef(ExistsOp(ids).name, opRef)
+
+        val bodyRef = exprToTerm(program, operands.head)
+        val resultRef = Ref(program.stmts.length)
+        program.stmts.addOne(Application(opRef, List(bodyRef)))
+
+        program.popCache()
+
+        resultRef
+
+      }
       case OperatorApplication(op, operands) => {
         val opRef = program.loadOrSaveObjectRef(op.name, {
           program.stmts.addOne(TheoryMacro(op.name));

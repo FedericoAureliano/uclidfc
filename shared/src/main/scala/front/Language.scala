@@ -94,9 +94,26 @@ case class EqualityOp() extends Operator {
   override val name = "="
 }
 
-// ITE operator
 case class ITEOp() extends Operator {
   override val name = "ite"
+}
+
+sealed abstract class Quantifier extends Operator {
+  def variables: List[(Identifier, Type)]
+}
+
+case class ForallOp(vs: List[(Identifier, Type)]) extends Quantifier {
+  override def variables = vs
+
+  override val name =
+    s"forall${vs.map(p => p._1.name + p._2.name).mkString("")}"
+}
+
+case class ExistsOp(vs: List[(Identifier, Type)]) extends Quantifier {
+  override def variables = vs
+
+  override val name =
+    s"exists${vs.map(p => p._1.name + p._2.name).mkString("")}"
 }
 
 case class PolymorphicSelect(id: Identifier) extends Operator {

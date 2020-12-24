@@ -75,6 +75,8 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
   val KwDefault = "default"
   val KwEnum = "enum"
   val KwRecord = "record"
+  val KwForall = "forall"
+  val KwExists = "exists"
 
   lexical.delimiters ++= List(
     "(",
@@ -89,6 +91,7 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
     ":",
     ".",
     "*",
+    "::",
     OpAnd,
     OpOr,
     OpAdd,
@@ -147,7 +150,9 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
     KwEsac,
     KwDefault,
     KwEnum,
-    KwRecord
+    KwRecord,
+    KwForall,
+    KwExists
   )
 
   lazy val ast_binary: Expr ~ String ~ Expr => Expr = {
@@ -221,7 +226,17 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
   /* END of Literals. */
 
   lazy val E1Parser: PackratParser[Expr] =
-    E3Parser
+    KwForall ~> IdTypeListParser ~ ("::" ~> E1Parser) ^^ {
+      case ids ~ expr => {
+        OperatorApplication(ForallOp(ids), List(expr))
+      }
+    } |
+      KwExists ~> IdTypeListParser ~ ("::" ~> E1Parser) ^^ {
+        case ids ~ expr => {
+          OperatorApplication(ExistsOp(ids), List(expr))
+        }
+      } |
+      E3Parser
 
   /** E3Parser = E4Parser OpEquiv E3Parser | E4Parser  * */
   lazy val E3Parser: PackratParser[Expr] = positioned {

@@ -1,0 +1,29 @@
+// UCLID TEST
+// Solver=z3
+// Result=Some(true)
+
+module fib
+{
+    var a, b : integer;
+
+    init {
+        a = 0;
+        b = 1;
+    }
+
+    next {
+        a' = b;
+        b' = a + b;
+    }
+}
+
+module main
+{
+    var fibs : [integer]fib;
+
+    invariant b_are_eq : exists (x : integer, y : integer) :: fibs[x].a != fibs[y].a;
+
+    control {
+        induction;
+    }
+}
