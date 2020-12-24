@@ -73,7 +73,8 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
   val KwCase = "case"
   val KwEsac = "esac"
   val KwDefault = "default"
-  lazy val KwEnum = "enum"
+  val KwEnum = "enum"
+  val KwRecord = "record"
 
   lexical.delimiters ++= List(
     "(",
@@ -145,7 +146,8 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
     KwCase,
     KwEsac,
     KwDefault,
-    KwEnum
+    KwEnum,
+    KwRecord
   )
 
   lazy val ast_binary: Expr ~ String ~ Expr => Expr = {
@@ -445,6 +447,14 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
           "," ~> IdParser
         ) <~ "}") ^^ {
           case id ~ v1 ~ vs => TypeDecl(None, EnumType(id, List(v1) ++ vs))
+        } |
+        KwType ~> IdParser ~ ("=" ~> (KwRecord ~> ("{" ~> IdsTypeParser))) ~ (rep(
+          "," ~> IdsTypeParser
+        ) <~ "}") ^^ {
+          case id ~ v1 ~ vs => {
+            val elements: List[(Identifier, Type)] = v1 ++ vs.flatten
+            TypeDecl(None, RecordType(id, elements))
+          }
         } |
         KwType ~> IdParser ^^ {
           case id =>

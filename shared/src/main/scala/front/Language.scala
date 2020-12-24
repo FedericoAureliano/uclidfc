@@ -186,6 +186,11 @@ case class EnumType(id: Identifier, variants: List[Identifier]) extends Type {
   override val name = id.name
 }
 
+case class RecordType(id: Identifier, elements: List[(Identifier, Type)])
+    extends Type {
+  override val name = id.name
+}
+
 case class ArrayType(inTypes: List[Type], outType: Type) extends Type {
 
   override val name =

@@ -1,5 +1,5 @@
 // UCLID TEST
-// Solver=z3
+// Solver=cvc4
 // Result=Some(false)
 
 module fib
@@ -23,11 +23,8 @@ module main
     var fib2 : fib;
 
     next {
-        fib1.a = fib1.b;
-        fib2.a = fib2.b;
-
-        fib1.b = fib1.a + fib1.b;
-        fib2.b = fib2.a + fib2.b;
+        fib1 = fib(fib1.b, fib1.a + fib1.b);
+        fib2 = fib(fib2.b, fib2.a + fib2.b);
     }
 
     invariant b_are_eq : fib1.b == fib2.b;
@@ -35,4 +32,8 @@ module main
     invariant b_gt_0  : fib1.b > 0 && fib2.b > 0;
     invariant a_ge_0  : fib1.a >= 0 && fib2.a >= 0;
     invariant a_le_b  : fib1.a <= fib1.b && fib2.a <= fib2.b;
+
+    control {
+        induction(1);
+    }
 }

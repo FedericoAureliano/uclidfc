@@ -23,11 +23,8 @@ module main
     var fib2 : fib;
 
     next {
-        fib1.a = fib1.b;
-        fib2.a = fib2.b;
-
-        fib1.b = fib1.a + fib1.b;
-        fib2.b = fib2.a + fib2.b;
+        next(fib1);
+        next(fib2);
     }
 
     invariant b_are_eq : fib1.b == fib2.b;

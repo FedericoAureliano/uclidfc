@@ -8,6 +8,10 @@ import scala.collection.mutable.Stack
 // Essentially an AST node or edge.
 abstract class Instruction
 
+abstract class AbstractDataType extends Instruction {
+  def defaultCtr(): Ref
+}
+
 // Points to another position in the array
 case class Ref(loc: Int) extends Instruction {
   override def toString(): String = s"#$loc"
@@ -113,7 +117,8 @@ case class Selector(name: String, sort: Ref) extends Instruction {
   override def toString(): String = s"[slr]\t$name\t$sort"
 }
 
-case class DataType(name: String, constructors: List[Ref]) extends Instruction {
+case class DataType(name: String, constructors: List[Ref])
+    extends AbstractDataType {
 
   /*
   For algebraic datatypes like enums, records, and so on. For example a record R = {x: Int, y: Real} is
@@ -127,15 +132,19 @@ case class DataType(name: String, constructors: List[Ref]) extends Instruction {
    */
   override def toString(): String =
     s"[adt]\t$name\t${constructors.mkString("\t")}"
+
+  override def defaultCtr(): Ref = constructors.head
 }
 
 // ct is a constructor, so Module is often just treated like a datatype
 case class Module(name: String, ct: Ref, init: Ref, next: Ref, spec: Ref)
-    extends Instruction {
+    extends AbstractDataType {
   /*
   A module is a record with associated init function, next function, and spec function.
    */
   override def toString(): String = s"[mod]\t$name\t$ct\t$init\t$next\t$spec"
+
+  override def defaultCtr(): Ref = ct
 }
 
 case class Application(caller: Ref, args: List[Ref]) extends Instruction {
@@ -154,8 +163,6 @@ class Program(val stmts: ArrayBuffer[Instruction]) {
 
   override def toString(): String = stmts.mkString("\n")
 
-  var uniqueId = 0
-
   def pushCache(): Unit = {
     cache.sortCache.push(new HashMap[String, Ref]())
     cache.objectCache.push(new HashMap[String, Ref]())
@@ -164,7 +171,10 @@ class Program(val stmts: ArrayBuffer[Instruction]) {
   def popCache(): Unit = {
     cache.sortCache.pop()
     cache.objectCache.pop()
+    // don't pop auxParams, these need to accumulate
   }
+
+  var uniqueId = 0
 
   def freshSymbolName(): String = {
     uniqueId += 1

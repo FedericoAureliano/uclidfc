@@ -7,21 +7,6 @@ import scala.collection.mutable.Stack
 
 import front._
 
-// represents the current function we are building
-class FunctionFrame(
-  // signature of the function we're building
-  var stateParam: Ref, // points to a function parameter of module type
-  var auxParams: List[Ref], // auxiliary parameters (stuff like nondets)
-  var outputSort: Ref // sort the function is returning (a module to represent state)
-) {
-
-  def addNondetParam(nondetParam: Ref): Unit =
-    auxParams = auxParams.appended(nondetParam)
-
-  def getParams(): List[Ref] =
-    List(stateParam) ++ auxParams
-}
-
 object Encoder {
 
   // encode a type use (adds to program if type not yet used)
@@ -69,6 +54,29 @@ object Encoder {
               vRef
             }
             program.stmts.update(dtRef.loc, DataType(id.name, constructors))
+            dtRef
+          }
+        )
+      }
+      case RecordType(id, elements) => {
+        program.loadOrSaveSortRef(
+          id.name, {
+            // add datatype placeholder
+            val dtRef = Ref(program.stmts.length)
+            program.stmts.addOne(DataType(id.name, List.empty))
+
+            val selecorRefs = elements.map { p =>
+              val tyepRef = typeUseToTerm(program, p._2)
+              program.stmts.addOne(Selector(p._1.name, tyepRef))
+              Ref(program.stmts.length - 1)
+            }
+
+            val ctrRef = Ref(program.stmts.length)
+            program.stmts.addOne(Constructor(id.name, dtRef, selecorRefs))
+            program.saveObjectRef(id.name, ctrRef)
+
+            program.stmts.update(dtRef.loc, DataType(id.name, List(ctrRef)))
+
             dtRef
           }
         )
@@ -125,7 +133,7 @@ object Encoder {
   def exprToTerm(
     program: Program, // modified
     expr: Expr
-  ): Ref =
+  ): Ref = {
     expr match {
       case Identifier(name) => {
         // find selector
@@ -265,6 +273,7 @@ object Encoder {
           s"expression not implemented yet: ${expr}"
         )
     } // end helper exprToTerm
+  }
 
   def flattenStmts(
     stmts: List[Statement]
@@ -345,9 +354,11 @@ object Encoder {
         }
       )
 
+  // statements are encoded as functions.
   def stmtToTerm(
     program: Program, // modified
-    scope: FunctionFrame,
+    params: List[Ref],
+    ctrRef: Ref, // this is the constructor to build the target object
     stmt: Statement
   ): Ref =
     program.loadOrSaveObjectRef(
@@ -361,125 +372,27 @@ object Encoder {
 
             lhs.expr match {
               case OperatorApplication(GetNextValueOp(), expr :: Nil) => {
+                // TODO: handle primes correctly (right now we just ignore them)
                 stmtToTerm(
                   program,
-                  scope,
+                  params,
+                  ctrRef,
                   AssignStmt(List(Lhs(expr)), List(rhs))
                 )
               }
               case Identifier(id) => {
                 // get the constructor
-                val modRef = scope.outputSort
-                val ctrRef = program
-                  .stmts(modRef.loc)
-                  .asInstanceOf[middle.Module]
-                  .ct
-                val selRefs =
-                  program
-                    .stmts(ctrRef.loc)
-                    .asInstanceOf[Constructor]
-                    .selectors
+                val ctr = program
+                  .stmts(ctrRef.loc)
+                  .asInstanceOf[Constructor]
 
-                val components: List[Ref] = selRefs.map { s =>
-                  val sel = program.stmts(s.loc).asInstanceOf[Selector]
-                  lhs.expr match {
-                    case Identifier(name) if name == sel.name =>
-                      exprToTerm(program, rhs)
-                    case _ => program.loadObjectRef(sel.name).get
-                  }
-                }
-
-                val bodyRef = Ref(program.stmts.length)
-                program.stmts.addOne(Application(ctrRef, components))
-
-                val macroRef = Ref(program.stmts.length)
-                program.stmts.addOne(
-                  UserMacro(
-                    s"stmt!${stmt.astNodeId}",
-                    scope.outputSort,
-                    bodyRef,
-                    scope.getParams()
-                  )
-                )
-
-                program.saveObjectRef(stmt.astNodeId.toString(), macroRef)
-
-                macroRef
-              }
-              case OperatorApplication(
-                  PolymorphicSelect(field),
-                  expr :: Nil
-                  ) => {
-                val innerStateRef = exprToTerm(program, expr)
-                val innerModRef = inferTermType(program, innerStateRef)
-                val innerMod =
-                  program
-                    .stmts(innerModRef.loc)
-                    .asInstanceOf[middle.Module]
-
-                val innerCtr =
-                  program.stmts(innerMod.ct.loc).asInstanceOf[Constructor]
-                val innerGetters = innerCtr.selectors.map { selRef =>
-                  val getterRef = Ref(program.stmts.length)
-                  program.stmts.addOne(
-                    Application(
-                      selRef,
-                      List(innerStateRef)
-                    )
-                  )
-
-                  val name =
-                    program.stmts(selRef.loc).asInstanceOf[Selector].name
-
-                  (name, getterRef)
-                }
-
-                program.pushCache()
-                innerGetters.foreach(p => program.saveObjectRef(p._1, p._2))
-
-                val newScope = new FunctionFrame(
-                  scope.stateParam,
-                  scope.auxParams,
-                  innerModRef
-                )
-
-                val newLhs: Lhs = Lhs(field)
-
-                // create the inner function call
-                val innerFuncRef =
-                  stmtToTerm(
-                    program,
-                    newScope,
-                    AssignStmt(List(newLhs), List(rhs))
-                  )
-
-                program.popCache()
-
-                val modRef = scope.outputSort
-                val ctrRef = program
-                  .stmts(modRef.loc)
-                  .asInstanceOf[middle.Module]
-                  .ct
-                val selRefs =
-                  program
-                    .stmts(ctrRef.loc)
-                    .asInstanceOf[Constructor]
-                    .selectors
-
-                val components: List[Ref] = selRefs.map {
+                val components: List[Ref] = ctr.selectors.map {
                   s =>
                     val sel = program.stmts(s.loc).asInstanceOf[Selector]
                     lhs.expr match {
-                      case Identifier(name) if name == sel.name => {
-                        val exprRef = Ref(program.stmts.length)
-                        program.stmts.addOne(
-                          Application(
-                            innerFuncRef,
-                            scope.getParams()
-                          )
-                        )
-                        exprRef
-                      }
+                      // if we are looking at the current selector, then process it, otherwise just return the identity
+                      case Identifier(name) if name == sel.name =>
+                        exprToTerm(program, rhs)
                       case _ => program.loadObjectRef(sel.name).get
                     }
                 }
@@ -491,9 +404,9 @@ object Encoder {
                 program.stmts.addOne(
                   UserMacro(
                     s"stmt!${stmt.astNodeId}",
-                    scope.outputSort,
+                    ctr.sort,
                     bodyRef,
-                    scope.getParams()
+                    params
                   )
                 )
 
@@ -501,12 +414,57 @@ object Encoder {
 
                 macroRef
               }
+              case OperatorApplication(
+                  PolymorphicSelect(field),
+                  expr :: Nil
+                  ) => {
+
+                // we have an assignment like: expr.field = rhs
+                // and we want to turn it into: expr = ctr(field = rhs, expr.x for x in fields of expr datatype)
+
+                // first get the constructor for the type of expr
+                val exprCtrRef =
+                  program
+                    .stmts(
+                      inferTermType(program, exprToTerm(program, expr)).loc
+                    )
+                    .asInstanceOf[AbstractDataType]
+                    .defaultCtr()
+
+                val exprCtr =
+                  program.stmts(exprCtrRef.loc).asInstanceOf[Constructor]
+
+                // now get the components
+                val components: List[Expr] = exprCtr.selectors.map { s =>
+                  val sel = program.stmts(s.loc).asInstanceOf[Selector]
+                  if (field.name == sel.name) {
+                    rhs
+                  } else {
+                    // select from the expression
+                    OperatorApplication(
+                      PolymorphicSelect(Identifier(sel.name)),
+                      List(expr)
+                    )
+                  }
+                }
+
+                val newRhs =
+                  FuncApplication(Identifier(exprCtr.name), components)
+
+                stmtToTerm(
+                  program,
+                  params,
+                  ctrRef,
+                  AssignStmt(List(Lhs(expr)), List(newRhs))
+                )
+              }
               case OperatorApplication(ArraySelect(indices), expr :: Nil) => {
                 val newRhs =
                   OperatorApplication(ArrayUpdate(indices, rhs), List(expr))
                 stmtToTerm(
                   program,
-                  scope,
+                  params,
+                  ctrRef,
                   AssignStmt(List(Lhs(expr)), List(newRhs))
                 )
               }
@@ -526,54 +484,48 @@ object Encoder {
 
   def blockToTerm(
     program: Program, // modified
-    scope: FunctionFrame,
+    params: List[Ref],
+    ctrRef: Ref, // current module constructor
     stmts: List[Statement]
   ): Ref = {
     val flattened =
       flattenStmts(stmts).map(p => AssignStmt(List(p._1), List(p._2)))
 
     if (flattened.length > 0) {
-      val firstFuncRef = stmtToTerm(program, scope, flattened.head)
+      val firstFuncRef = stmtToTerm(program, params, ctrRef, flattened.head)
 
       val startRef = Ref(program.stmts.length)
       program.stmts.addOne(
-        Application(firstFuncRef, scope.getParams())
+        Application(firstFuncRef, params)
       )
 
       flattened.tail.foldLeft(startRef) { (acc, stmt) =>
-        val funcRef = stmtToTerm(program, scope, stmt)
+        val funcRef = stmtToTerm(program, params, ctrRef, stmt)
         val appRef = Ref(program.stmts.length)
         // add the nondet parameters at the end
         program.stmts.addOne(
-          Application(funcRef, List(acc) ++ scope.getParams().tail)
+          Application(funcRef, List(acc) ++ params.tail)
         )
         appRef
       }
     } else {
-      val inputSort = program
-        .stmts(scope.stateParam.loc)
-        .asInstanceOf[FunctionParameter]
-        .sort
-      if (inputSort == scope.outputSort) {
-        scope.stateParam
-      } else {
-        // TODO: we can't just return the input because the output state is different
-        scope.stateParam
-      }
+      params.head
     }
   }
 
   // encode a transition block and return a pointer to the function definition
   def transitionToTerm(
     program: Program, // modified
-    scope: FunctionFrame,
     funcName: String,
+    params: List[Ref],
+    ctrRef: Ref,
     block: BlockStmt
   ): Ref = {
 
     val bodyRef = blockToTerm(
       program,
-      scope,
+      params,
+      ctrRef,
       block.stmts
     )
 
@@ -581,9 +533,9 @@ object Encoder {
     program.stmts.addOne(
       UserMacro(
         funcName,
-        scope.outputSort,
+        program.stmts(ctrRef.loc).asInstanceOf[Constructor].sort,
         bodyRef,
-        scope.getParams()
+        params
       )
     )
 
@@ -592,15 +544,16 @@ object Encoder {
 
   def executeControl(
     program: Program, // modified
-    scope: FunctionFrame,
     moduleName: String,
+    initParams: List[Ref],
+    nextParams: List[Ref],
     cmds: List[ProofCommand]
   ): Unit =
     cmds.foreach(p =>
       p.name.name match {
         case "induction" => {
           // create all the variables you need
-          val variables = scope.getParams().map { p =>
+          val initVariables = initParams.map { p =>
             program.stmts(p.loc) match {
               case FunctionParameter(name, sort) => {
                 val vRef = Ref(program.stmts.length)
@@ -621,7 +574,7 @@ object Encoder {
           // base case
           // apply init
           val initAppRef = Ref(program.stmts.length)
-          program.stmts.addOne(Application(initRef, variables))
+          program.stmts.addOne(Application(initRef, initVariables))
 
           // apply spec to result of init
           val initSpecRef = Ref(program.stmts.length)
@@ -640,16 +593,17 @@ object Encoder {
           // induction step
           // holds on entry
           val entryRef = Ref(program.stmts.length)
-          program.stmts.addOne(Application(specRef, List(variables(0))))
+          program.stmts.addOne(Application(specRef, List(initVariables.head)))
+          // we can borrow the nondet state from init since we pop between asserts (this lets us just generate the auxiliary arguments when applying next)
 
           // Take k steps
           val k = p.k.getOrElse(IntLit(1)).value.toInt
 
-          var transRef = variables(0)
+          var transRef = initVariables.head
 
           (1 to k).foreach {
             i =>
-              val args = scope.auxParams.map { p =>
+              val args = nextParams.tail.map { p =>
                 program.stmts(p.loc) match {
                   case FunctionParameter(name, sort) => {
                     val vRef = Ref(program.stmts.length)
@@ -684,7 +638,7 @@ object Encoder {
         }
         case "unroll" => {
           // create all the variables you need
-          val variables = scope.getParams().map { p =>
+          val initVariables = initParams.map { p =>
             program.stmts(p.loc) match {
               case FunctionParameter(name, sort) => {
                 val vRef = Ref(program.stmts.length)
@@ -703,7 +657,7 @@ object Encoder {
           val specRef = mod.spec
 
           val initAppRef = Ref(program.stmts.length)
-          program.stmts.addOne(Application(initRef, variables))
+          program.stmts.addOne(Application(initRef, initVariables))
 
           // apply spec to result of init
           val initSpecRef = Ref(program.stmts.length)
@@ -726,7 +680,7 @@ object Encoder {
 
           (1 to k).foreach {
             i =>
-              val args = scope.auxParams.map { p =>
+              val args = nextParams.tail.map { p =>
                 program.stmts(p.loc) match {
                   case FunctionParameter(name, sort) => {
                     val vRef = Ref(program.stmts.length)
@@ -752,10 +706,10 @@ object Encoder {
   // get all the specs and create a function from them
   def specsToTerm(
     program: Program, // modified
-    scope: FunctionFrame,
     funcName: String,
+    params: List[Ref],
     properties: List[SpecDecl]
-  ) = {
+  ): Ref = {
     // spec needs Bool, so add Bool if it's not already there
     val boolRef = program.loadOrSaveSortRef("Bool", {
       program.stmts.addOne(TheorySort("Bool"));
@@ -792,7 +746,7 @@ object Encoder {
         funcName,
         boolRef,
         bodyRef,
-        List(scope.stateParam)
+        params
       )
     )
 
@@ -801,17 +755,23 @@ object Encoder {
 
   def createInitCalls(
     program: Program, // modified
-    scope: FunctionFrame,
+    params: List[Ref],
     pair: (Identifier, Type)
-  ): Option[(Expr)] =
+  ): Option[(Expr, List[Ref])] = {
+
+    var outParams: List[Ref] = List.empty
     pair._2 match {
       case BooleanType()        => None
       case IntegerType()        => None
       case EnumType(_, _)       => None
       case UninterpretedType(_) => None
+      case RecordType(id, elements) => {
+        // TODO instantiate elements if they are of module type
+        None
+      }
       case ArrayType(inTypes, outType) =>
-        createInitCalls(program, scope, (pair._1, outType)).flatMap(e =>
-          Some(ConstArray(e, pair._2))
+        createInitCalls(program, params, (pair._1, outType)).flatMap(e =>
+          Some(ConstArray(e._1, pair._2), e._2)
         )
       case SynonymType(id) => {
         val sortRef = program.loadSortRef(id.name).get
@@ -823,7 +783,8 @@ object Encoder {
             program.stmts(fieldSortRef.loc) match {
               case _: middle.Module =>
                 Some(
-                  ModuleInitCallExpr(pair._1)
+                  ModuleInitCallExpr(pair._1),
+                  outParams
                 )
               case _ => {
                 // anything else, create an instance and pipe it in
@@ -831,10 +792,11 @@ object Encoder {
                 val tmpName = program.freshSymbolName()
                 val fp = Ref(program.stmts.length)
                 program.stmts.addOne(FunctionParameter(tmpName, sortRef))
-                scope.addNondetParam(fp)
+                outParams = outParams.appended(fp)
                 program.saveObjectRef(tmpName, fp)
                 Some(
-                  ModuleInitCallExpr(Identifier(tmpName))
+                  ModuleInitCallExpr(Identifier(tmpName)),
+                  outParams
                 )
               }
             }
@@ -842,6 +804,7 @@ object Encoder {
         }
       }
     }
+  }
 
   def typeDeclToTerm(program: Program, typ: TypeDecl): Unit = {
     val rhsRef = typeUseToTerm(program, typ.typ)
@@ -884,7 +847,7 @@ object Encoder {
   def moduleToTerm(
     program: Program, // modified
     m: ModuleDecl
-  ): FunctionFrame = {
+  ): (List[Ref], List[Ref]) = { // returns init params and next params
 
     // deal with type declarations
     m.typeDecls.foreach(t => typeDeclToTerm(program, t))
@@ -925,15 +888,15 @@ object Encoder {
     // defines and constant literals
     m.defines.foreach(p => defineDeclToTerm(program, p))
 
-    val scope = new FunctionFrame(inputStateRef, List.empty, moduleRef)
-    program.pushCache()
-    selectorTerms.map(p => program.saveObjectRef(p._1, p._2))
-
     // add constructor and remember where it is
     val constructorRef = Ref(program.stmts.length)
     program.stmts.addOne(
-      Constructor(m.id.name + "!cntr", moduleRef, selectorRefs)
+      Constructor(m.id.name, moduleRef, selectorRefs)
     )
+    program.saveObjectRef(m.id.name, constructorRef)
+
+    program.pushCache()
+    selectorTerms.map(p => program.saveObjectRef(p._1, p._2))
 
     // update module with constructor; will need to update it fully at the end
     program.stmts.update(
@@ -941,11 +904,15 @@ object Encoder {
       middle.Module(m.id.name, constructorRef, Ref(-1), Ref(-1), Ref(-1))
     )
 
+    var initParams = List(inputStateRef)
     // add init and next
     val initInitCalls = fields.foldLeft(List.empty[Statement]) { (acc, p) =>
-      createInitCalls(program, scope, p) match {
-        case Some(e) => acc ++ List(AssignStmt(List(Lhs(p._1)), List(e)))
-        case None    => acc
+      createInitCalls(program, initParams, p) match {
+        case Some(e) => {
+          initParams = initParams ++ e._2
+          acc ++ List(AssignStmt(List(Lhs(p._1)), List(e._1)))
+        }
+        case None => acc
       }
     }
     val initBlock = m.init match {
@@ -954,24 +921,32 @@ object Encoder {
     }
     val initRef = transitionToTerm(
       program,
-      scope,
       m.id.name + "!init",
+      initParams,
+      constructorRef,
       initBlock
     )
 
+    var nextParams = List(inputStateRef)
     val nextBlock = m.next match {
       case Some(decl) => decl.body
       case None       => BlockStmt(List.empty)
     }
     val nextRef = transitionToTerm(
       program,
-      scope,
       m.id.name + "!next",
+      nextParams,
+      constructorRef,
       nextBlock
     )
 
     // Add spec function
-    val specRef = specsToTerm(program, scope, m.id.name + "!spec", m.properties)
+    val specRef = specsToTerm(
+      program,
+      m.id.name + "!spec",
+      List(inputStateRef),
+      m.properties
+    )
 
     // fill in placeholder for module
     program.stmts.update(
@@ -980,7 +955,8 @@ object Encoder {
     )
 
     program.popCache()
-    scope
+
+    (initParams, nextParams)
   } // End Module to Term
 
   def run(
@@ -998,9 +974,9 @@ object Encoder {
         case dd: DefineDecl   => defineDeclToTerm(program, dd)
         case fd: FunctionDecl => functionDeclToTerm(program, fd)
         case mod: ModuleDecl => {
-          val scope = moduleToTerm(program, mod)
+          val params = moduleToTerm(program, mod)
           if (Some(mod.id.name) == main) {
-            executeControl(program, scope, mod.id.name, mod.cmds)
+            executeControl(program, mod.id.name, params._1, params._2, mod.cmds)
           }
         }
         case _ =>

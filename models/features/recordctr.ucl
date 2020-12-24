@@ -1,0 +1,24 @@
+// UCLID TEST
+// Solver=cvc4
+// Result=Some(false)
+
+module main
+{
+    type frame = record {i : integer, b : boolean};
+
+    var a : frame;
+
+    init {
+        a = frame(0, true);
+    }
+
+    next {
+        a.i = a.i - 1;
+    }
+
+    invariant shouldhold: a.i <= 0;
+
+    control {
+        induction;
+    }
+}
