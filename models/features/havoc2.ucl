@@ -19,7 +19,7 @@ module main {
         }
     }
 
-    invariant cex: a >= 0;
+    invariant holds: a >= 0;
 
     control {
         induction;
