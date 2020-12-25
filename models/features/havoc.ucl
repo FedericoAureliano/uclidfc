@@ -1,0 +1,17 @@
+// UCLID TEST
+// Solver=cvc4
+// Result=Some(true)
+
+module main {
+    var a : integer;
+
+    next {
+        havoc a;
+    }
+
+    invariant cex: a * 5 - 1 == 0;
+
+    control {
+        unroll(5);
+    }
+}

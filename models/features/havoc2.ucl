@@ -1,0 +1,27 @@
+// UCLID TEST
+// Solver=z3
+// Result=Some(false)
+
+module main {
+    var a : integer;
+    var b : boolean;
+
+    init {
+        a = 0;
+    }
+
+    next {
+        havoc b;
+        if (b) {
+            a = 0;
+        } else {
+            a = a + 1;
+        }
+    }
+
+    invariant cex: a >= 0;
+
+    control {
+        induction;
+    }
+}

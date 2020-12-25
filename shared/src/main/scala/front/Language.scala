@@ -153,6 +153,11 @@ case class IntLit(value: BigInt) extends Literal {
   override def negate() = IntLit(-value)
 }
 
+case class FreshLit(toMatch: Identifier) extends Literal {
+  override def toString = "*"
+  override def negate() = FreshLit(toMatch)
+}
+
 case class ConstArray(exp: Expr, typ: Type) extends Expr {
   override def toString = "const(%s, %s)".format(exp.toString(), typ.toString())
 }
@@ -210,6 +215,8 @@ case class SynonymType(id: Identifier) extends Type {
 
 /** Statements * */
 sealed abstract class Statement extends ASTNode {}
+
+case class HavocStmt(havocable: Identifier) extends Statement {}
 
 case class AssignStmt(lhss: List[Lhs], rhss: List[Expr]) extends Statement {}
 
