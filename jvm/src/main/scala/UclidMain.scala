@@ -1,14 +1,9 @@
 package uclid
 
-import scala.util.parsing.combinator._
 import scala.collection.immutable._
 import front._
 
-import scala.collection.mutable.ArrayBuffer
-
 import middle.Encoder
-import middle.Program
-import middle.Printer
 import middle.SemanticError
 
 import back.Solver
@@ -86,8 +81,7 @@ object UclidMain {
     val errorResult =
       new ProofResult()
     try {
-      val mainModuleName = Identifier(config.mainModuleName)
-      val modules = compile(config.files, mainModuleName)
+      val modules = compile(config.files)
       val obs = Encoder.run(modules, Some(config.mainModuleName))
       val solver = config.solver match {
         case Solvers.z3 => new Solver("z3", List())
@@ -110,13 +104,8 @@ object UclidMain {
 
   /** Parse modules, typecheck them, inline procedures, create LTL monitors, etc. */
   def compile(
-    srcFiles: Seq[java.io.File],
-    mainModuleName: Identifier,
-    test: Boolean = false
+    srcFiles: Seq[java.io.File]
   ): List[TopLevelDecl] = {
-    type NameCountMap = Map[Identifier, Int]
-    var nameCnt: NameCountMap = Map().withDefaultValue(0)
-
     // Helper function to parse a single file.
     def parseFile(srcFile: String): List[TopLevelDecl] = {
       val text = scala.io.Source.fromFile(srcFile).mkString

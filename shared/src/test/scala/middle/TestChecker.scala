@@ -1,7 +1,6 @@
 package middle
 
 import org.junit.Test
-import org.junit.Assert._
 import scala.collection.mutable.ArrayBuffer
 
 class TestChecker {

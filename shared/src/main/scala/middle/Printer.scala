@@ -1,9 +1,5 @@
 package middle
 
-import front._
-
-import scala.collection.mutable.HashSet
-
 object Printer {
 
   val TAB = "  "

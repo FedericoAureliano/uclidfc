@@ -14,7 +14,7 @@ lazy val uclid = crossProject(JSPlatform, JVMPlatform)
     name := "uclid",
     version := "1.0",
     javacOptions ++= Seq("-source", "1.6", "-target", "1.6"),
-    scalacOptions ++= Seq("-unchecked", "-deprecation", "-feature"),
+    scalacOptions ++= Seq("-unchecked", "-deprecation", "-feature", "-Wunused"),
     libraryDependencies += ("org.scala-lang.modules" %%% "scala-parser-combinators" % "1.1.2")
       .withSources(),
     libraryDependencies += "com.novocode" % "junit-interface" % "0.11" % "test"

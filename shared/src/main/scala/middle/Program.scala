@@ -4,6 +4,8 @@ import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.ListBuffer
 import scala.collection.mutable.HashMap
 import scala.collection.mutable.Stack
+import front.Type
+import front.TermNode
 
 // Essentially an AST node or edge.
 abstract class Instruction
@@ -164,8 +166,8 @@ class Program(val stmts: ArrayBuffer[Instruction]) {
   override def toString(): String = stmts.mkString("\n")
 
   def pushCache(): Unit = {
-    cache.sortCache.push(new HashMap[String, Ref]())
-    cache.objectCache.push(new HashMap[String, Ref]())
+    cache.sortCache.push(new HashMap[Type, Ref]())
+    cache.objectCache.push(new HashMap[TermNode, Ref]())
   }
 
   def popCache(): Unit = {
@@ -181,12 +183,12 @@ class Program(val stmts: ArrayBuffer[Instruction]) {
     s"nondet!${uniqueId}"
   }
 
-  def saveSortRef(name: String, sort: Ref): Unit =
-    cache.sortCache.top.addOne((name, sort))
+  def saveSortRef(typ: Type, sort: Ref): Unit =
+    cache.sortCache.top.addOne((typ, sort))
 
-  def loadSortRef(name: String): Option[Ref] = {
+  def loadSortRef(typ: Type): Option[Ref] = {
     cache.sortCache.foreach { cache =>
-      cache.get(name) match {
+      cache.get(typ) match {
         case Some(value) => return Some(value)
         case None        =>
       }
@@ -194,18 +196,18 @@ class Program(val stmts: ArrayBuffer[Instruction]) {
     return None
   }
 
-  def loadOrSaveSortRef(name: String, sort: => Ref): Ref =
-    loadSortRef(name) match {
+  def loadOrSaveSortRef(typ: Type, sort: => Ref): Ref =
+    loadSortRef(typ) match {
       case Some(value) => value
-      case None        => val r = sort; saveSortRef(name, r); r
+      case None        => val r = sort; saveSortRef(typ, r); r
     }
 
-  def saveObjectRef(name: String, obj: Ref): Unit =
-    cache.objectCache.top.addOne((name, obj))
+  def saveObjectRef(term: TermNode, obj: Ref): Unit =
+    cache.objectCache.top.addOne((term, obj))
 
-  def loadObjectRef(name: String): Option[Ref] = {
+  def loadObjectRef(term: TermNode): Option[Ref] = {
     cache.objectCache.foreach { cache =>
-      cache.get(name) match {
+      cache.get(term) match {
         case Some(value) => return Some(value)
         case None        =>
       }
@@ -213,20 +215,20 @@ class Program(val stmts: ArrayBuffer[Instruction]) {
     return None
   }
 
-  def loadOrSaveObjectRef(name: String, obj: => Ref): Ref =
-    loadObjectRef(name) match {
+  def loadOrSaveObjectRef(term: TermNode, obj: => Ref): Ref =
+    loadObjectRef(term) match {
       case Some(value) => value
-      case None        => val r = obj; saveObjectRef(name, r); r
+      case None        => val r = obj; saveObjectRef(term, r); r
     }
 
   def inferLogic(): String = "ALL"
 }
 
 class CacheStack() {
-  // point type name to type location (modules are types)
-  val sortCache: Stack[HashMap[String, Ref]] = new Stack[HashMap[String, Ref]]()
+  // point type to program location (modules are types)
+  val sortCache: Stack[HashMap[Type, Ref]] = new Stack[HashMap[Type, Ref]]()
 
-  // point Object name to name location
-  val objectCache: Stack[HashMap[String, Ref]] =
-    new Stack[HashMap[String, Ref]]()
+  // point expr to program location
+  val objectCache: Stack[HashMap[TermNode, Ref]] =
+    new Stack[HashMap[TermNode, Ref]]()
 }

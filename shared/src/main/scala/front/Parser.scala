@@ -1,6 +1,5 @@
 package front
 
-import scala.util.parsing.input.Positional
 import scala.util.parsing.combinator.syntactical._
 import scala.util.parsing.combinator.PackratParsers
 
@@ -185,20 +184,22 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
   lazy val RelOpParser: Parser[String] =
     OpGT | OpLT | OpEQ | OpNE | OpGE | OpLE
 
-  lazy val PolymorphicSelectOpParser: Parser[PolymorphicSelect] = positioned {
-    ("." ~> IdParser) ^^ { case id => PolymorphicSelect(id) }
-  }
-
-  lazy val ArraySelectOpParser: Parser[ArraySelect] = positioned {
-    ("[" ~> ExprParser ~ rep("," ~> ExprParser) <~ "]") ^^ {
-      case e ~ es =>
-        ArraySelect(e :: es)
+  lazy val PolymorphicSelectOpParser: Parser[OperatorApplication] = positioned {
+    ("." ~> IdParser) ^^ {
+      case id => OperatorApplication(PolymorphicSelect(id), List.empty)
     }
   }
 
-  lazy val ArrayStoreOpParser: Parser[ArrayUpdate] = positioned {
-    ("[" ~> (ExprParser ~ rep("," ~> ExprParser) ~ ("->" ~> ExprParser)) <~ "]") ^^ {
-      case e ~ es ~ r => ArrayUpdate(e :: es, r)
+  lazy val ArraySelectOpParser: Parser[OperatorApplication] = positioned {
+    ("[" ~> ExprParser <~ "]") ^^ {
+      case e =>
+        OperatorApplication(ArraySelect(), List(e))
+    }
+  }
+
+  lazy val ArrayStoreOpParser: Parser[OperatorApplication] = positioned {
+    ("[" ~> (ExprParser ~ ("->" ~> ExprParser)) <~ "]") ^^ {
+      case e ~ r => OperatorApplication(ArrayUpdate(), List(e, r))
     }
   }
 
@@ -306,27 +307,27 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
   }
 
   /** ExpressionSuffixes. */
-  lazy val ExprSuffixParser: PackratParser[Operator] = positioned {
+  lazy val ExprSuffixParser: PackratParser[OperatorApplication] = positioned {
     ArraySelectOpParser | ArrayStoreOpParser | PolymorphicSelectOpParser
   }
 
   /** E12Parser = E12Parser (ExprList) | E12Parser ExprSuffix | E15Parser */
   lazy val E12Parser: PackratParser[Expr] = positioned {
     E12Parser ~ ExprSuffixParser ^^ {
-      case e ~ es => OperatorApplication(es, List(e))
+      case e ~ es => OperatorApplication(es.op, List(e) ++ es.operands)
     } |
-      E12Parser ~ ExprListParser ^^ { case e ~ f => FuncApplication(e, f) } |
+      E12Parser ~ ExprListParser ^^ { case e ~ f => FunctionApplication(e, f) } |
       E15Parser
   }
 
-  lazy val ConstArrayParser: PackratParser[ConstArray] = positioned {
-    KwConst ~ "(" ~> ExprParser ~ ("," ~> TypeParser) <~ ")" ^^ {
+  lazy val ConstArrayParser: PackratParser[OperatorApplication] = positioned {
+    KwConst ~ "(" ~> ExprParser ~ ("," ~> InlineTypeParser) <~ ")" ^^ {
       case (exp ~ typ) =>
-        ConstArray(exp, typ)
+        OperatorApplication(ConstArray(typ), List(exp))
     }
   }
 
-  /** E15Parser = false | true | Number | ConstArray | Id FuncApplication | (Expr) * */
+  /** E15Parser = false | true | Number | ConstArray | Id FunctionApplication | (Expr) * */
   lazy val E15Parser: PackratParser[Expr] = positioned {
     LiteralParser |
       KwIf ~> ("(" ~> ExprParser <~ ")") ~ (KwThen ~> ExprParser) ~ (KwElse ~> ExprParser) ^^ {
@@ -342,17 +343,13 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
       IdParser
   }
 
-  /** Expr = E1Parser (Used to be TemporalExpr0) * */
   lazy val ExprParser: PackratParser[Expr] = positioned {
     E1Parser |
       "(".? ~> ExprParser <~ ")".? <~ OpPrime ^^ {
         case e =>
-          throw new PrimeExpressionError(
-            e.pos,
-            filename
-          )
+          throw new PrimeExpressionError(e)
       }
-  } // Used to be TemporalExpr0``
+  }
 
   lazy val ExprListParser: Parser[List[Expr]] =
     ("(" ~> ExprParser ~ rep("," ~> ExprParser) <~ ")") ^^ {
@@ -360,66 +357,62 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
     } |
       "(" ~> ")" ^^ { case _ => List.empty[Expr] }
 
-  /** Examples of allowed types are bool | int | [int,int,bool] int * */
-  lazy val PrimitiveTypeParser: PackratParser[Type] = positioned {
+  lazy val PrimitiveTypeParser: PackratParser[InlineType] = positioned {
     KwBoolean ^^ { case _   => BooleanType() } |
       KwInteger ^^ { case _ => IntegerType() }
   }
 
   lazy val ArrayTypeParser: PackratParser[ArrayType] = positioned {
-    ("[") ~> TypeParser ~ (rep("," ~> TypeParser) <~ "]") ~ TypeParser ^^ {
+    ("[") ~> InlineTypeParser ~ (rep("," ~> InlineTypeParser) <~ "]") ~ InlineTypeParser ^^ {
       case t ~ ts ~ rt =>
         ArrayType(t :: ts, rt)
     }
   }
 
   // also handles module instance types
-  lazy val SynonymTypeParser: PackratParser[SynonymType] = positioned {
+  lazy val NamedTypeParser: PackratParser[NamedType] = positioned {
     IdParser ^^ {
-      case id => SynonymType(id)
+      case id => NamedType(id)
     }
   }
 
-  lazy val TypeParser: PackratParser[Type] = positioned {
-    ArrayTypeParser | SynonymTypeParser | PrimitiveTypeParser |
+  lazy val InlineTypeParser: PackratParser[InlineType] = positioned {
+    ArrayTypeParser | NamedTypeParser | PrimitiveTypeParser |
       (KwRecord ~> ("{" ~> IdsTypeParser)) ~ (rep(
         "," ~> IdsTypeParser
       ) <~ "}") ^^ {
-        case id ~ ids => throw new TypeMustBeNamed(id.head._1.pos, filename)
+        case id ~ _ => throw new TypeMustBeNamed(id.head._1)
       } |
       (KwEnum ~> ("{" ~> IdParser)) ~ (rep(
         "," ~> IdParser
       ) <~ "}") ^^ {
-        case v1 ~ vs => throw new TypeMustBeNamed(v1.pos, filename)
+        case v1 ~ _ => throw new TypeMustBeNamed(v1)
       }
   }
 
-  lazy val IdsTypeParser: PackratParser[List[(Identifier, Type)]] =
-    IdListParser ~ (":" ~> TypeParser) ^^ {
+  lazy val IdsTypeParser: PackratParser[List[(Identifier, InlineType)]] =
+    IdListParser ~ (":" ~> InlineTypeParser) ^^ {
       case ids ~ typ => (ids.map((_, typ)))
     }
 
-  lazy val IdTypeListParser: PackratParser[List[(Identifier, Type)]] =
+  lazy val IdTypeListParser: PackratParser[List[(Identifier, InlineType)]] =
     "(" ~> IdsTypeParser ~ (rep("," ~> IdsTypeParser) <~ ")") ^^ {
       case t ~ ts =>
         t ++ ts.flatMap(v => v)
     } |
-      "(" ~ ")" ^^ { case _ ~ _ => List.empty[(Identifier, Type)] }
+      "(" ~ ")" ^^ { case _ ~ _ => List.empty[(Identifier, InlineType)] }
 
-  lazy val LhsParser: PackratParser[Lhs] = positioned {
+  lazy val LhsParser: PackratParser[Expr] = positioned {
     ExprParser ^^ {
       case expr =>
         expr match {
-          case id: Identifier                               => Lhs(expr)
-          case OperatorApplication(PolymorphicSelect(_), _) => Lhs(expr)
-          case OperatorApplication(ArraySelect(_), _)       => Lhs(expr)
-          case OperatorApplication(GetNextValueOp(), _)     => Lhs(expr)
+          case _: Identifier => expr
+          case OperatorApplication(PolymorphicSelect(_), _) =>
+            expr // for polymorphic selects
+          case OperatorApplication(ArraySelect(), _)    => expr
+          case OperatorApplication(GetNextValueOp(), _) => expr
           case _ => {
-            throw new BadLeftHandSideError(
-              expr.pos,
-              filename,
-              expr
-            )
+            throw new BadLeftHandSideError(expr)
           }
         }
     }
@@ -433,11 +426,7 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
       StatementEndInSemicolon <~ ";" |
       StatementEndInSemicolon ^^ {
         case s =>
-          throw new MissingSemicolonStatement(
-            s.pos,
-            filename,
-            s
-          )
+          throw new MissingSemicolon(s)
       }
   }
 
@@ -445,7 +434,18 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
     LhsParser ~ rep("," ~> LhsParser) ~ "=" ~ ExprParser ~ rep(
       "," ~> ExprParser
     ) ^^ {
-      case l ~ ls ~ "=" ~ r ~ rs => AssignStmt(l :: ls, r :: rs)
+      case l ~ ls ~ "=" ~ r ~ rs => {
+        if (ls.length == rs.length) {
+          val assigns = ls
+            .zip(rs)
+            .foldLeft(List(AssignStmt(l, r)))((acc, p) =>
+              acc ++ List(AssignStmt(p._1, p._2))
+            )
+          BlockStmt(assigns)
+        } else {
+          throw new MismatchingAssign(l, ls.length, rs.length)
+        }
+      }
     } |
       KwNext ~ "(" ~> ExprParser <~ ")" ^^ {
         case expr =>
@@ -477,11 +477,7 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
     } |
       "{" ~> rep(StatementParser) ^^ {
         case stmts =>
-          throw new MissingCloseBracketStatement(
-            stmts.last.pos,
-            filename,
-            stmts.last
-          )
+          throw new MissingCloseBracket(stmts.last)
       }
   }
 
@@ -490,20 +486,16 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
       "," ~> IdsTypeParser
     ) <~ "}") ^^ {
       case id ~ v1 ~ vs => {
-        val elements: List[(Identifier, Type)] = v1 ++ vs.flatten
-        TypeDecl(id, RecordType(elements))
+        val elements: List[(Identifier, InlineType)] = v1 ++ vs.flatten
+        TypeDecl(id, Some(RecordType(elements)))
       }
     } |
       KwType ~> IdParser ~ ("=" ~> (KwRecord ~> ("{" ~> IdsTypeParser))) ~ (rep(
         "," ~> IdsTypeParser
       )) ^^ {
-        case id ~ v1 ~ vs => {
-          val elements: List[(Identifier, Type)] = v1 ++ vs.flatten
-          throw new MissingCloseBracketDecl(
-            elements.last._2.pos,
-            filename,
-            TypeDecl(id, RecordType(elements))
-          )
+        case _ ~ v1 ~ vs => {
+          val elements: List[(Identifier, InlineType)] = v1 ++ vs.flatten
+          throw new MissingCloseBracket(elements.last._2)
         }
       }
 
@@ -511,36 +503,32 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
     KwType ~> IdParser ~ ("=" ~> (KwEnum ~> ("{" ~> IdParser))) ~ (rep(
       "," ~> IdParser
     ) <~ "}") ^^ {
-      case id ~ v1 ~ vs => TypeDecl(id, EnumType(List(v1) ++ vs))
+      case id ~ v1 ~ vs => TypeDecl(id, Some(EnumType(List(v1) ++ vs)))
     } |
       KwType ~> IdParser ~ ("=" ~> (KwEnum ~> ("{" ~> IdParser))) ~ (rep(
         "," ~> IdParser
       )) ^^ {
-        case id ~ v1 ~ vs =>
-          throw new MissingCloseBracketDecl(
-            vs.last.pos,
-            filename,
-            TypeDecl(id, EnumType(List(v1) ++ vs))
-          )
+        case _ ~ _ ~ vs =>
+          throw new MissingCloseBracket(vs.last)
       }
 
   lazy val TypeDeclParserWithoutSemicolon: PackratParser[TypeDecl] =
     positioned {
       EnumDeclParser |
         RecordDeclParser |
-        KwType ~> IdParser ~ ("=" ~> TypeParser) ^^ {
+        KwType ~> IdParser ~ ("=" ~> InlineTypeParser) ^^ {
           case id ~ t =>
-            TypeDecl(id, t)
+            TypeDecl(id, Some(t))
         } |
         KwType ~> IdParser ^^ {
           case id =>
-            TypeDecl(id, UninterpretedType())
+            TypeDecl(id, None)
         }
     }
 
   lazy val VarsDeclParserWithoutSemicolon: PackratParser[StateVarsDecl] =
     positioned {
-      KwVar ~> IdListParser ~ ":" ~ TypeParser ^^ {
+      KwVar ~> IdListParser ~ ":" ~ InlineTypeParser ^^ {
         case ids ~ ":" ~ typ =>
           StateVarsDecl(ids, typ)
       }
@@ -548,7 +536,7 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
 
   lazy val InputsDeclParserWithoutSemicolon: PackratParser[InputVarsDecl] =
     positioned {
-      KwInput ~> IdListParser ~ ":" ~ TypeParser ^^ {
+      KwInput ~> IdListParser ~ ":" ~ InlineTypeParser ^^ {
         case ids ~ ":" ~ typ =>
           InputVarsDecl(ids, typ)
       }
@@ -556,7 +544,7 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
 
   lazy val OutputsDeclParserWithoutSemicolon: PackratParser[OutputVarsDecl] =
     positioned {
-      KwOutput ~> IdListParser ~ ":" ~ TypeParser ^^ {
+      KwOutput ~> IdListParser ~ ":" ~ InlineTypeParser ^^ {
         case ids ~ ":" ~ typ =>
           OutputVarsDecl(ids, typ)
       }
@@ -564,7 +552,7 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
 
   lazy val SharedVarsDeclParserWithoutSemicolon: PackratParser[SharedVarsDecl] =
     positioned {
-      KwSharedVar ~> IdListParser ~ ":" ~ TypeParser ^^ {
+      KwSharedVar ~> IdListParser ~ ":" ~ InlineTypeParser ^^ {
         case ids ~ ":" ~ typ =>
           SharedVarsDecl(ids, typ)
       }
@@ -572,21 +560,21 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
 
   lazy val DefineDeclParserWithoutSemicolon: PackratParser[DefineDecl] =
     positioned {
-      KwConst ~> IdParser ~ (":" ~> TypeParser) ~ ("=" ~> OpNeg) ~ ExprParser ^^ {
+      KwConst ~> IdParser ~ (":" ~> InlineTypeParser) ~ ("=" ~> OpNeg) ~ ExprParser ^^ {
         case id ~ typ ~ OpNeg ~ lit =>
           lit match {
             case l: Literal => DefineDecl(id, List.empty, typ, l.negate())
-            case _          => throw new ConstantMustBeLiteral(lit.pos, filename, lit)
+            case _          => throw new ConstantMustBeLiteral(lit)
           }
       } |
-        KwConst ~> IdParser ~ (":" ~> TypeParser) ~ ("=" ~> ExprParser) ^^ {
+        KwConst ~> IdParser ~ (":" ~> InlineTypeParser) ~ ("=" ~> ExprParser) ^^ {
           case id ~ typ ~ lit =>
             lit match {
               case l: Literal => DefineDecl(id, List.empty, typ, l)
-              case _          => throw new ConstantMustBeLiteral(lit.pos, filename, lit)
+              case _          => throw new ConstantMustBeLiteral(lit)
             }
         } |
-        KwDef ~> IdParser ~ IdTypeListParser ~ (":" ~> TypeParser) ~ ("=" ~> ExprParser) ^^ {
+        KwDef ~> IdParser ~ IdTypeListParser ~ (":" ~> InlineTypeParser) ~ ("=" ~> ExprParser) ^^ {
           case id ~ args ~ typ ~ expr =>
             DefineDecl(id, args, typ, expr)
         }
@@ -594,11 +582,11 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
 
   lazy val FunctionDeclParserWithoutSemicolon: PackratParser[FunctionDecl] =
     positioned {
-      KwConst ~> IdParser ~ (":" ~> TypeParser) ^^ {
+      KwConst ~> IdParser ~ (":" ~> InlineTypeParser) ^^ {
         case id ~ typ =>
           FunctionDecl(id, List.empty, typ)
       } |
-        KwFunc ~> IdParser ~ IdTypeListParser ~ (":" ~> TypeParser) ^^ {
+        KwFunc ~> IdParser ~ IdTypeListParser ~ (":" ~> InlineTypeParser) ^^ {
           case id ~ args ~ typ =>
             FunctionDecl(id, args.map(p => p._2), typ)
         }
@@ -620,8 +608,7 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
         (KwInvariant) ~> ":".? ~> ExprParser ^^ {
           case expr =>
             throw new InvariantMissingNameError(
-              expr.pos,
-              filename
+              expr
             )
         }
     }
@@ -645,9 +632,7 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
         DeclParserWithoutSemicolon <~ ";" |
         DeclParserWithoutSemicolon ^^ {
           case d =>
-            throw new MissingSemicolonDecl(
-              d.pos,
-              filename,
+            throw new MissingSemicolon(
               d
             )
         }
@@ -665,9 +650,7 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
     CmdParserWithoutSemicolon <~ ";" |
       CmdParserWithoutSemicolon ^^ {
         case c =>
-          throw new MissingSemicolonCommand(
-            c.pos,
-            filename,
+          throw new MissingSemicolon(
             c
           )
       }
@@ -677,9 +660,7 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
     KwControl ~ "{" ~> rep(CmdParser) <~ "}" |
       KwControl ~ "{" ~> rep(CmdParser) ^^ {
         case cmds =>
-          throw new MissingCloseBracketCommand(
-            cmds.last.pos,
-            filename,
+          throw new MissingCloseBracket(
             cmds.last
           )
       }
@@ -692,17 +673,13 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
         ModuleDecl(id, decls, List.empty)
     } |
       KwModule ~> IdParser ~ ("{" ~> rep(DeclParser) ~ (CmdBlockParser.?)) ^^ {
-        case id ~ (decls ~ Some(cs)) =>
-          throw new MissingCloseBracketDecl(
-            cs.last.pos,
-            filename,
-            ModuleDecl(id, decls, cs)
+        case _ ~ (_ ~ Some(cs)) =>
+          throw new MissingCloseBracket(
+            cs.last
           )
-        case id ~ (decls ~ None) =>
-          throw new MissingCloseBracketDecl(
-            decls.last.pos,
-            filename,
-            ModuleDecl(id, decls, List.empty)
+        case _ ~ (decls ~ None) =>
+          throw new MissingCloseBracket(
+            decls.last
           )
       }
   }
@@ -719,17 +696,13 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
       TopLevelParserWithoutSemicolon <~ ";" |
       TopLevelParserWithoutSemicolon ^^ {
         case d =>
-          throw new MissingSemicolonDecl(
-            d.pos,
-            filename,
+          throw new MissingSemicolon(
             d
           )
       } |
       DeclParser ^^ {
         case d =>
           throw new WrongTopeLevelDeclError(
-            d.pos,
-            filename,
             d
           )
       }
@@ -742,8 +715,8 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
     val tokens = new PackratReader(new lexical.Scanner(text))
     phrase(ModelParser)(tokens) match {
       case Success(decls, _) => decls
-      case NoSuccess(msg, next) =>
-        throw new ParseFailedError(next.pos, filename)
+      case NoSuccess(_, next) =>
+        throw new ParseFailedError(next.pos, Some(filename))
     }
   }
 

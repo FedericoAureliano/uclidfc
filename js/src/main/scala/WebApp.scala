@@ -1,6 +1,5 @@
 package web
 
-import scala.reflect.ClassTag
 import org.scalajs.dom.document
 import org.scalajs.dom
 import org.scalajs.dom.raw.{HTMLPreElement, HTMLTextAreaElement}
@@ -16,7 +15,7 @@ object WebApp {
   def main(args: Array[String]): Unit = {
     val areaFull =
       document.querySelector("#demofull").asInstanceOf[HTMLTextAreaElement]
-    areaFull.oninput = (e: dom.Event) =>
+    areaFull.oninput = (_: dom.Event) =>
       updateFull(areaFull.value, "demofullanswer")
   }
 

@@ -16,26 +16,26 @@ object Checker {
         s match {
           case Ref(j)                   => if (!checkRef(Ref(j))) return err
           case Numeral(_)               =>
-          case TheorySort(n, p)         => p.foreach(a => if (!checkRef(a)) return err)
-          case UserSort(n, a)           =>
-          case FunctionParameter(n, sr) => if (!checkRef(sr)) return err
-          case TheoryMacro(n, p)        => p.foreach(a => if (!checkRef(a)) return err)
-          case UserMacro(n, sr, b, p) => {
+          case TheorySort(_, p)         => p.foreach(a => if (!checkRef(a)) return err)
+          case UserSort(_, _)           =>
+          case FunctionParameter(_, sr) => if (!checkRef(sr)) return err
+          case TheoryMacro(_, p)        => p.foreach(a => if (!checkRef(a)) return err)
+          case UserMacro(_, sr, b, p) => {
             if (!checkRef(sr)) return err
             if (!checkRef(b)) return err
             p.foreach(a => if (!checkRef(a)) return err)
           }
-          case UserFunction(n, sr, p) => {
+          case UserFunction(_, sr, p) => {
             if (!checkRef(sr)) return err
             p.foreach(a => if (!checkRef(a)) return err)
           }
-          case Constructor(n, sr, p) => {
+          case Constructor(_, sr, p) => {
             if (!checkRef(sr)) return err
             p.foreach(a => if (!checkRef(a)) return err)
           }
-          case Selector(n, sr) => if (!checkRef(sr)) return err
-          case DataType(n, p)  => p.foreach(a => if (!checkRef(a)) return err)
-          case Module(n, d, in, x, v) => {
+          case Selector(_, sr) => if (!checkRef(sr)) return err
+          case DataType(_, p)  => p.foreach(a => if (!checkRef(a)) return err)
+          case Module(_, d, in, x, v) => {
             if (!checkRef(d)) return err
             if (!checkRef(in)) return err
             if (!checkRef(x)) return err

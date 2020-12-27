@@ -4,7 +4,6 @@ import middle._
 
 import sys.process._
 import java.io.{File, PrintWriter}
-import scala.collection.mutable.ListBuffer
 
 class Solver(
   cmnd: String,

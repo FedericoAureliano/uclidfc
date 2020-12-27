@@ -1,17 +1,13 @@
 package front
 
-import scala.collection.immutable.Map
-import scala.collection.mutable.{Map => MutableMap}
 import scala.util.parsing.input.Positional
 import scala.util.parsing.input.Position
-import scala.reflect.ClassTag
 
 /** Singleton that generates unique ids for AST nodes. */
 object IdGenerator {
-  type Id = Int
-  var idCounter: Id = 0
+  var idCounter: Int = 0
 
-  def newId(): Id = {
+  def newId(): Int = {
     val id = idCounter
     idCounter = idCounter + 1
     return id
@@ -27,14 +23,14 @@ sealed trait PositionedNode extends Positional {
   def position = ASTPosition(filename, pos)
 }
 
-/** All elements in the AST are derived from this class.
-  *  The plan is to stick an ID into this later so that we can use the ID to store auxiliary information.
-  */
 sealed trait ASTNode extends Positional with PositionedNode {
   val astNodeId = IdGenerator.newId()
 }
 
-sealed trait Operator extends ASTNode {
+// operators (interpreted symbols), statements, and expressions
+sealed trait TermNode extends ASTNode
+
+sealed trait Operator extends TermNode {
   val name: String
 }
 
@@ -99,33 +95,24 @@ case class ITEOp() extends Operator {
 }
 
 sealed abstract class Quantifier extends Operator {
-  def variables: List[(Identifier, Type)]
+  def variables: List[(Identifier, InlineType)]
 }
 
-case class ForallOp(vs: List[(Identifier, Type)]) extends Quantifier {
+case class ForallOp(vs: List[(Identifier, InlineType)]) extends Quantifier {
   override def variables = vs
-
-  override val name =
-    s"forall${vs.map(p => p._1.name + p._2.name).mkString("")}"
+  override val name = "forall"
 }
 
-case class ExistsOp(vs: List[(Identifier, Type)]) extends Quantifier {
+case class ExistsOp(vs: List[(Identifier, InlineType)]) extends Quantifier {
   override def variables = vs
-
-  override val name =
-    s"exists${vs.map(p => p._1.name + p._2.name).mkString("")}"
+  override val name = "exists"
 }
 
-case class PolymorphicSelect(id: Identifier) extends Operator {
-  val ident = id
-  override val name = id.toString()
-}
-
-case class ArraySelect(indices: List[Expr]) extends Operator {
+case class ArraySelect() extends Operator {
   override val name = "select"
 }
 
-case class ArrayUpdate(indices: List[Expr], value: Expr) extends Operator {
+case class ArrayUpdate() extends Operator {
   override val name = "store"
 }
 
@@ -133,92 +120,72 @@ case class GetNextValueOp() extends Operator {
   override val name = "'"
 }
 
-sealed abstract class Expr extends ASTNode {}
-
-case class Identifier(name: String) extends Expr {
-  override def toString = name.toString
+case class ConstArray(typ: Type) extends Operator {
+  override val name = "as const"
 }
+
+case class PolymorphicSelect(id: Identifier) extends Operator {
+  override val name = ""
+}
+
+sealed abstract class Expr extends TermNode {}
+
+case class Identifier(name: String) extends Expr {}
 
 sealed abstract class Literal extends Expr {
   def negate(): Literal
+  def value(): String
 }
 
-case class BoolLit(value: Boolean) extends Literal {
-  override def toString = value.toString
-  override def negate() = BoolLit(!value)
+case class BoolLit(literal: Boolean) extends Literal {
+  override def negate() = BoolLit(!literal)
+  override def value(): String = literal.toString()
 }
 
-case class IntLit(value: BigInt) extends Literal {
-  override def toString = value.toString
-  override def negate() = IntLit(-value)
+case class IntLit(literal: BigInt) extends Literal {
+  override def negate() = IntLit(-literal)
+  override def value(): String = literal.toString()
 }
 
 case class FreshLit(typ: Type) extends Literal {
-  override def toString = "*"
   override def negate() = FreshLit(typ)
+  override def value(): String = "???"
 }
 
-case class ConstArray(exp: Expr, typ: Type) extends Expr {
-  override def toString = "const(%s, %s)".format(exp.toString(), typ.toString())
-}
+case class ModuleNextCallExpr(expr: Expr) extends Expr {}
+
+case class ModuleInitCallExpr(expr: Expr) extends Expr {}
 
 //for symbols interpreted by underlying Theory solvers
 case class OperatorApplication(op: Operator, operands: List[Expr])
     extends Expr {}
 
 //for uninterpreted function symbols
-case class FuncApplication(e: Expr, args: List[Expr]) extends Expr {}
+case class FunctionApplication(e: Expr, args: List[Expr]) extends Expr {}
 
-case class ModuleNextCallExpr(expr: Expr) extends Expr {}
+sealed abstract class Type extends ASTNode {}
 
-case class ModuleInitCallExpr(expr: Expr) extends Expr {}
+sealed abstract class InlineType extends Type {} // types that can be used in line without first declaring
 
-case class Lhs(val expr: Expr) extends ASTNode {}
+case class BooleanType() extends InlineType {}
 
-sealed abstract class Type extends PositionedNode {
-  val name: String
-}
+case class IntegerType() extends InlineType {}
 
-/**  Uninterpreted types.
-  */
-case class UninterpretedType() extends Type {
-  override val name = "usort"
-}
+case class EnumType(variants: List[Identifier]) extends Type {}
 
-/** Regular types.
-  */
-case class BooleanType() extends Type {
-  override val name = "boolean"
-}
+case class RecordType(elements: List[(Identifier, InlineType)]) extends Type {}
 
-case class IntegerType() extends Type {
-  override val name = "integer"
-}
+case class ArrayType(inTypes: List[InlineType], outType: InlineType)
+    extends InlineType {}
 
-case class EnumType(variants: List[Identifier]) extends Type {
-  override val name = "enum"
-}
-
-case class RecordType(elements: List[(Identifier, Type)]) extends Type {
-  override val name = "record"
-}
-
-case class ArrayType(inTypes: List[Type], outType: Type) extends Type {
-
-  override val name =
-    s"[${inTypes.map(p => p.name).mkString("")}]${outType.name}"
-}
-
-case class SynonymType(id: Identifier) extends Type {
-  override val name = id.name
-}
+case class NamedType(id: Identifier) extends InlineType {}
 
 /** Statements * */
-sealed abstract class Statement extends ASTNode {}
+sealed abstract class Statement extends TermNode {}
 
-case class HavocStmt(havocable: Identifier) extends Statement {}
+case class HavocStmt(toHavoc: Identifier) extends Statement {}
 
-case class AssignStmt(lhss: List[Lhs], rhss: List[Expr]) extends Statement {}
+case class AssignStmt(lhs: Expr, rhs: Expr) extends Statement {}
 
 case class BlockStmt(stmts: List[Statement]) extends Statement {}
 
@@ -233,19 +200,19 @@ sealed abstract class Decl extends ASTNode {}
 
 sealed abstract class TopLevelDecl extends Decl
 
-case class TypeDecl(id: Identifier, typ: Type) extends TopLevelDecl {}
+case class TypeDecl(id: Identifier, typ: Option[Type]) extends TopLevelDecl {}
 
-case class StateVarsDecl(ids: List[Identifier], typ: Type) extends Decl {}
+case class StateVarsDecl(ids: List[Identifier], typ: InlineType) extends Decl {}
 
-case class InputVarsDecl(ids: List[Identifier], typ: Type) extends Decl {}
+case class InputVarsDecl(ids: List[Identifier], typ: InlineType) extends Decl {}
 
-case class OutputVarsDecl(ids: List[Identifier], typ: Type) extends Decl {}
+case class OutputVarsDecl(ids: List[Identifier], typ: InlineType) extends Decl {}
 
-case class SharedVarsDecl(ids: List[Identifier], typ: Type) extends Decl {}
+case class SharedVarsDecl(ids: List[Identifier], typ: InlineType) extends Decl {}
 
 case class DefineDecl(
   id: Identifier,
-  params: List[(Identifier, Type)],
+  params: List[(Identifier, InlineType)],
   retTyp: Type,
   expr: Expr
 ) extends TopLevelDecl {}
@@ -279,24 +246,24 @@ case class ModuleDecl(
       .collect { case typs: TypeDecl => typs }
 
   // module inputs.
-  val inputs: List[(Identifier, Type)] =
+  val inputs: List[(Identifier, InlineType)] =
     decls
       .collect { case inps: InputVarsDecl => inps }
       .flatMap(i => i.ids.map(id => (id, i.typ)))
 
   // module outputs.
-  val outputs: List[(Identifier, Type)] =
+  val outputs: List[(Identifier, InlineType)] =
     decls
       .collect { case outs: OutputVarsDecl => outs }
       .flatMap(o => o.ids.map(id => (id, o.typ)))
 
   // module state variables.
-  val vars: List[(Identifier, Type)] =
+  val vars: List[(Identifier, InlineType)] =
     decls
       .collect { case vars: StateVarsDecl => vars }
       .flatMap(v => v.ids.map(id => (id, v.typ)))
 
-  val sharedVars: List[(Identifier, Type)] =
+  val sharedVars: List[(Identifier, InlineType)] =
     decls
       .collect { case sVars: SharedVarsDecl => sVars }
       .flatMap(sVar => sVar.ids.map(id => (id, sVar.typ)))

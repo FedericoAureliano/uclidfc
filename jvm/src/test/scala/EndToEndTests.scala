@@ -1,7 +1,6 @@
 package uclid
 
 import org.junit.Test
-import org.junit.Assert.assertEquals
 import org.junit.Assert.fail
 import back.ProofResult
 import scala.io.Source
