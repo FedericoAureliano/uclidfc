@@ -1,0 +1,24 @@
+// UCLID TEST
+// Solver=z3
+// Result=Some(false)
+
+module main
+{
+    type intholder = record {x : integer, y : integer, z : integer};
+    type intholderholder = record {first: intholder, second: intholder};
+    type intholderholderholder = record {only: intholderholder};
+
+    var t: intholderholderholder;
+
+    init {
+        t.only.first.x = -66;
+        t.only.second.z = -66;
+    }
+
+    invariant musthold: t.only.first.x == t.only.second.z;
+
+    control
+    {
+        induction;
+    }
+}

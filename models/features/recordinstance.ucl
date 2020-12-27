@@ -1,0 +1,25 @@
+// UCLID TEST
+// Solver=z3
+// Result=Some(false)
+
+module simple {
+    var a: integer;
+
+    init {
+        a = 135;
+    }
+}
+
+module main
+{
+    type test = record {b : boolean, s : simple};
+
+    var t: test;
+
+    invariant willholdifinitworks: t.s.a == 135;
+
+    control
+    {
+        induction;
+    }
+}

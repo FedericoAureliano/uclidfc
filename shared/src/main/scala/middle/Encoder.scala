@@ -133,10 +133,26 @@ object Encoder {
       }
 
       case OperatorApplication(PolymorphicSelect(id), exp :: Nil) => {
-        val opRef = program.loadOrSaveObjectRef(PolymorphicSelect(id), {
-          program.stmts.addOne(TheoryMacro(id.name));
-          Ref(program.stmts.length - 1)
-        })
+        val opRef = program.loadOrSaveObjectRef(
+          PolymorphicSelect(id), {
+            val exprCtrRef = {
+              val res = exprToTerm(exp)
+              program
+                .stmts(
+                  inferTermType(res._1).loc
+                )
+                .asInstanceOf[AbstractDataType]
+                .defaultCtr()
+            }
+            val ctr = program.stmts(exprCtrRef.loc).asInstanceOf[Constructor]
+            ctr.selectors
+              .find { s =>
+                val sel = program.stmts(s.loc).asInstanceOf[Selector]
+                sel.name == id.name
+              }
+              .getOrElse(throw new IdentifierOutOfScope(id))
+          }
+        )
 
         val expRef = {
           val res = exprToTerm(exp)
