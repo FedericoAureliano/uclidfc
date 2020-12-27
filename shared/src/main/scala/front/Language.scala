@@ -153,9 +153,9 @@ case class IntLit(value: BigInt) extends Literal {
   override def negate() = IntLit(-value)
 }
 
-case class FreshLit(toMatch: Identifier) extends Literal {
+case class FreshLit(typ: Type) extends Literal {
   override def toString = "*"
-  override def negate() = FreshLit(toMatch)
+  override def negate() = FreshLit(typ)
 }
 
 case class ConstArray(exp: Expr, typ: Type) extends Expr {
@@ -171,7 +171,7 @@ case class FuncApplication(e: Expr, args: List[Expr]) extends Expr {}
 
 case class ModuleNextCallExpr(expr: Expr) extends Expr {}
 
-case class ModuleInitCallExpr(id: Identifier) extends Expr {}
+case class ModuleInitCallExpr(expr: Expr) extends Expr {}
 
 case class Lhs(val expr: Expr) extends ASTNode {}
 

@@ -10,7 +10,7 @@ abstract class SemanticError(
   def info(): String
 
   override def toString(): String =
-    s"Semantic error on line ${pos.line}: ${info()}\n\n${pos.longString}"
+    s"Semantic error on line ${pos.line}: ${info()}\n\n${pos.longString}\n"
 }
 
 class ExprNotSupportedYet(
@@ -71,4 +71,11 @@ class IdentifierOutOfScope(
   val id: Identifier
 ) extends SemanticError(pos) {
   def info(): String = s"Identifier ${id.name} not declared in scope!"
+}
+
+class Unreachable(
+  override val pos: Position,
+  val codePos: String
+) extends SemanticError(pos) {
+  def info(): String = s"Should not be reachable at ${codePos}!"
 }

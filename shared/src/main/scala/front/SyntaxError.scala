@@ -9,7 +9,7 @@ abstract class SyntaxError(
   def info(): String
 
   override def toString(): String =
-    s"Syntax error on line ${pos.line} of ${filename}: ${info()}\n\n${pos.longString}"
+    s"Syntax error on line ${pos.line} of ${filename}: ${info()}\n\n${pos.longString}\n"
 }
 
 class ParseFailedError(

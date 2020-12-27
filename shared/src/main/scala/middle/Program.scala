@@ -178,7 +178,7 @@ class Program(val stmts: ArrayBuffer[Instruction]) {
 
   def freshSymbolName(): String = {
     uniqueId += 1
-    s"nd!${uniqueId}"
+    s"nondet!${uniqueId}"
   }
 
   def saveSortRef(name: String, sort: Ref): Unit =

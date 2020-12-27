@@ -1,0 +1,27 @@
+// UCLID TEST
+// Solver=cvc4
+// Result=Some(false)
+
+module main {
+    var a : integer;
+    var b : boolean;
+
+    init {
+        a = 0;
+    }
+
+    next {
+        if (b) {
+            a = 0;
+            havoc b;
+        } else {
+            havoc a;
+        }
+    }
+
+    invariant holds: a == 0 || !b;
+
+    control {
+        induction;
+    }
+}
