@@ -313,87 +313,8 @@ object Encoder {
     } // end helper exprToTerm
   }
 
-  def flattenStmts(
-    stmts: List[Statement]
-  ): List[(Expr, Expr)] =
-    // find the assignment
-    stmts
-      .foldLeft(List[(Expr, Expr)]())((acc, p) =>
-        p match {
-          case AssignStmt(lhs, rhs) =>
-            acc ++ List((lhs, rhs))
-          case ModuleNextCallStmt(expr) =>
-            acc ++ List(Tuple2(expr, ModuleNextCallExpr(expr)))
-          case IfElseStmt(cond, ifblock, elseblock) => {
-            val left = flattenStmts(List(ifblock))
-            val right = flattenStmts(List(elseblock))
-
-            val identifiers: List[Expr] = (left ++ right).map(p => p._1)
-
-            val total = identifiers.foldLeft(List.empty: List[(Expr, Expr)]) {
-              (acc1, lhs) =>
-                val leftTmp = left.filter(pair2 => pair2._1 == lhs)
-                val rightTmp = right.filter(pair2 => pair2._1 == lhs)
-
-                val leftFiltered = if (leftTmp.length == 0) {
-                  List(Tuple2(lhs, lhs))
-                } else {
-                  leftTmp
-                }
-                val rightFiltered = if (rightTmp.length == 0) {
-                  List(Tuple2(lhs, lhs))
-                } else {
-                  rightTmp
-                }
-
-                val zipped: List[(Expr, Expr)] =
-                  leftFiltered.foldLeft(List.empty: List[(Expr, Expr)]) {
-                    (acc2, l) =>
-                      val inner: List[(Expr, Expr)] =
-                        rightFiltered
-                          .foldLeft(List.empty: List[(Expr, Expr)]) {
-                            (acc3, r) =>
-                              val e = if (l._2 == r._2) {
-                                Tuple2(l._1, l._2)
-                              } else {
-                                Tuple2(
-                                  l._1,
-                                  OperatorApplication(
-                                    ITEOp(),
-                                    List(cond, l._2, r._2)
-                                  )
-                                )
-                              }
-                              acc3 ++ List(e)
-                          }
-                      acc2 ++ inner
-                  }
-
-                acc1 ++ zipped
-            }
-
-            acc ++ total.distinct
-
-          }
-          case CaseStmt(body) => {
-            val nested = body.reverse.foldLeft(
-              BlockStmt(List.empty): Statement
-            )((acc, f) =>
-              IfElseStmt(f._1, BlockStmt(List(f._2)), BlockStmt(List(acc)))
-            )
-            acc ++ flattenStmts(List(nested))
-          }
-          case BlockStmt(bstmts) =>
-            acc ++ flattenStmts(bstmts)
-          case HavocStmt(toMatch) =>
-            acc ++ List(Tuple2(toMatch, FreshLit(getTypeFromId(toMatch))))
-          case s =>
-            throw new NotSupportedYet(s)
-        }
-      )
-
   // statements are encoded as functions.
-  def stmtToTerm(
+  def assignToMacro(
     stateParam: Ref,
     ctrRef: Ref, // this is the constructor to build the target object
     stmt: AssignStmt
@@ -408,7 +329,7 @@ object Encoder {
           lhs match {
             case OperatorApplication(GetNextValueOp(), expr :: Nil) => {
               // TODO: handle primes correctly (right now we just ignore them)
-              val res = stmtToTerm(
+              val res = assignToMacro(
                 stateParam,
                 ctrRef,
                 AssignStmt(expr, rhs)
@@ -500,7 +421,7 @@ object Encoder {
               val newRhs =
                 FunctionApplication(Identifier(exprCtr.name), components)
 
-              val res = stmtToTerm(
+              val res = assignToMacro(
                 stateParam,
                 ctrRef,
                 AssignStmt(expr, newRhs)
@@ -511,7 +432,7 @@ object Encoder {
             case OperatorApplication(ArraySelect(), expr :: index :: Nil) => {
               val newRhs =
                 OperatorApplication(ArrayUpdate(), List(expr, index, rhs))
-              val res = stmtToTerm(
+              val res = assignToMacro(
                 stateParam,
                 ctrRef,
                 AssignStmt(expr, newRhs)
@@ -528,20 +449,18 @@ object Encoder {
     )
   }
 
-  def blockToTerm(
+  def blockToMacro(
     stateParam: Ref,
     ctrRef: Ref, // current module constructor
-    stmts: List[Statement]
+    block: BlockStmt
   ): (Ref, List[Ref]) = {
     var newParams: List[Ref] = List.empty
     var mostRecentParams: List[Ref] = List.empty
-    val flattened =
-      flattenStmts(stmts).map(p => AssignStmt(p._1, p._2))
 
-    if (flattened.length > 0) {
+    val bodyRef = if (block.stmts.length > 0) {
       val firstFuncRef = {
         val res =
-          stmtToTerm(stateParam, ctrRef, flattened.head)
+          stmtToMacro(stateParam, ctrRef, block.stmts.head)
         newParams ++= res._2
         mostRecentParams = res._2
         res._1
@@ -552,9 +471,9 @@ object Encoder {
         Application(firstFuncRef, List(stateParam) ++ mostRecentParams)
       )
 
-      (flattened.tail.foldLeft(startRef) { (acc, stmt) =>
+      block.stmts.tail.foldLeft(startRef) { (acc, stmt) =>
         val funcRef = {
-          val res = stmtToTerm(stateParam, ctrRef, stmt)
+          val res = stmtToMacro(stateParam, ctrRef, stmt)
           newParams ++= res._2
           mostRecentParams = res._2
           res._1
@@ -565,11 +484,93 @@ object Encoder {
           Application(funcRef, List(acc) ++ mostRecentParams)
         )
         appRef
-      }, newParams)
+      }
     } else {
-      (stateParam, newParams)
+      stateParam
     }
+
+    val blockRef = Ref(program.stmts.length)
+    program.stmts.addOne(
+      UserMacro(
+        s"line${block.pos.line}col${block.pos.column}!${block.astNodeId}",
+        program.stmts(ctrRef.loc).asInstanceOf[Constructor].sort,
+        bodyRef,
+        List(stateParam) ++ newParams
+      )
+    )
+
+    (blockRef, newParams)
   }
+
+  def ifelseToMacro(
+    stateParam: Ref,
+    ctrRef: Ref, // current module constructor
+    ifelse: IfElseStmt
+  ): (Ref, List[Ref]) = {
+    val left = stmtToMacro(stateParam, ctrRef, ifelse.ifblock)
+    val leftAppRef = Ref(program.stmts.length)
+    program.stmts.addOne(Application(left._1, List(stateParam) ++ left._2))
+
+    val right = stmtToMacro(stateParam, ctrRef, ifelse.elseblock)
+    val rightAppRef = Ref(program.stmts.length)
+    program.stmts.addOne(Application(right._1, List(stateParam) ++ right._2))
+
+    val cond = exprToTerm(ifelse.cond)
+
+    val iteRef = program.loadOrSaveObjectRef(ITEOp(), {
+      program.stmts.addOne(TheoryMacro("ite"));
+      Ref(program.stmts.length - 1)
+    })
+
+    val bodyRef = Ref(program.stmts.length)
+    program.stmts.addOne(
+      Application(iteRef, List(cond._1, leftAppRef, rightAppRef))
+    )
+
+    val macroRef = Ref(program.stmts.length)
+    program.stmts.addOne(
+      UserMacro(
+        s"line${ifelse.pos.line}col${ifelse.pos.column}!${ifelse.astNodeId}",
+        program.stmts(ctrRef.loc).asInstanceOf[Constructor].sort,
+        bodyRef,
+        List(stateParam) ++ cond._2 ++ left._2 ++ right._2
+      )
+    )
+
+    (macroRef, cond._2 ++ left._2 ++ right._2)
+  }
+
+  def stmtToMacro(stateParam: Ref, ctrRef: Ref, stmt: Statement): (
+    Ref,
+    List[Ref]
+  ) = // returns a pointer to the macro and the extra args you need for it
+    stmt match {
+      case a: AssignStmt => assignToMacro(stateParam, ctrRef, a)
+      case b: BlockStmt  => blockToMacro(stateParam, ctrRef, b)
+      case i: IfElseStmt => ifelseToMacro(stateParam, ctrRef, i)
+      case c: CaseStmt => {
+        val nested = c.body.reverse.foldLeft(
+          BlockStmt(List.empty): Statement
+        )((acc, f) =>
+          IfElseStmt(f._1, BlockStmt(List(f._2)), BlockStmt(List(acc)))
+        )
+        stmtToMacro(stateParam, ctrRef, nested)
+      }
+      case h: HavocStmt => {
+        assignToMacro(
+          stateParam,
+          ctrRef,
+          AssignStmt(h.toHavoc, FreshLit(getTypeFromId(h.toHavoc)))
+        )
+      }
+      case n: ModuleNextCallStmt => {
+        assignToMacro(
+          stateParam,
+          ctrRef,
+          AssignStmt(n.expr, ModuleNextCallExpr(n.expr))
+        )
+      }
+    }
 
   // encode a transition block and return a pointer to the function definition
   def transitionToTerm(
@@ -578,28 +579,18 @@ object Encoder {
     ctrRef: Ref,
     block: BlockStmt
   ): (Ref, List[Ref]) = {
-    var newParams: List[Ref] = List.empty
-    val bodyRef = {
-      val res = blockToTerm(
-        stateParam,
-        ctrRef,
-        block.stmts
-      )
-      newParams ++= res._2
-      res._1
-    }
-
-    val transitionBlockRef = Ref(program.stmts.length)
-    program.stmts.addOne(
-      UserMacro(
-        funcName,
-        program.stmts(ctrRef.loc).asInstanceOf[Constructor].sort,
-        bodyRef,
-        List(stateParam) ++ newParams
-      )
+    val res = stmtToMacro(
+      stateParam,
+      ctrRef,
+      block
     )
 
-    (transitionBlockRef, newParams)
+    val um = program.stmts(res._1.loc).asInstanceOf[UserMacro]
+
+    program.stmts
+      .update(res._1.loc, UserMacro(funcName, um.sort, um.body, um.params))
+
+    res
   }
 
   def executeControl(
