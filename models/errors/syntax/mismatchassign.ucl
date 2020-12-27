@@ -1,0 +1,13 @@
+// UCLID TEST
+// Solver=z3
+// Result=None
+
+module ModuleName
+{
+    var a, b : int;
+
+    init
+    {
+        a, b = 0;    
+    }
+}

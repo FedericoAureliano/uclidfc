@@ -92,6 +92,7 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
     ".",
     "*",
     "::",
+    "->",
     OpAnd,
     OpOr,
     OpAdd,

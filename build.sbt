@@ -28,8 +28,8 @@ lazy val uclid = crossProject(JSPlatform, JVMPlatform)
       JacocoThresholds(
         instruction = 70,
         method = 50,
-        branch = 40,
-        complexity = 40,
+        branch = 45,
+        complexity = 45,
         line = 90,
         clazz = 50
       ),
