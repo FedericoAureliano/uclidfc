@@ -77,6 +77,8 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
   val KwForall = "forall"
   val KwExists = "exists"
   val KwHavoc = "havoc"
+  val KwAssume = "assume"
+  val KwAssert = "assert"
 
   lexical.delimiters ++= List(
     "(",
@@ -154,7 +156,9 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
     KwRecord,
     KwForall,
     KwExists,
-    KwHavoc
+    KwHavoc,
+    KwAssume,
+    KwAssert
   )
 
   lazy val ast_binary: Expr ~ String ~ Expr => Expr = {
@@ -452,7 +456,9 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
         case expr =>
           ModuleNextCallStmt(expr)
       } |
-      KwHavoc ~> IdParser ^^ { case id => HavocStmt(id) }
+      KwHavoc ~> IdParser ^^ { case id                 => HavocStmt(id) } |
+      KwAssume ~> "(" ~> ExprParser <~ ")" ^^ { case e => AssumeStmt(e) } |
+      KwAssert ~> "(" ~> ExprParser <~ ")" ^^ { case e => AssertStmt(e) }
   }
 
   lazy val StatementEndInBracket: PackratParser[Statement] = positioned {

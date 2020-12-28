@@ -51,4 +51,32 @@ object Checker {
 
     None
   }
+
+  def inferTermType(
+    program: Program,
+    app: Ref
+  ): Ref =
+    program.stmts(app.loc) match {
+      case Application(caller, args) => {
+        program.stmts(caller.loc) match {
+          case TheoryMacro("ite", _) => inferTermType(program, args.head)
+          case TheoryMacro("store", _) =>
+            inferTermType(program, args.head)
+          case TheoryMacro("select", _) => {
+            val arrayRef = inferTermType(program, args.head)
+            val arraySort =
+              program.stmts(arrayRef.loc).asInstanceOf[TheorySort]
+            arraySort.params.last
+          }
+          case _ => inferTermType(program, caller)
+        }
+      }
+      case Constructor(_, sort, _)    => sort
+      case FunctionParameter(_, sort) => sort
+      case Selector(_, sort)          => sort
+      case _ =>
+        throw new IllegalArgumentException(
+          s"type inference not yet supported: ${program.stmts(app.loc)}"
+        )
+    }
 }

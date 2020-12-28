@@ -1,0 +1,22 @@
+// UCLID TEST
+// Solver=z3
+// Result=Some(false)
+
+module main {
+    var d : integer;
+
+    init {
+        d = 1;
+    }
+
+    next {
+        havoc d;
+        assume(d > 0);
+    }
+
+    invariant musthold: d > 0;
+
+    control {
+        induction;
+    }
+}

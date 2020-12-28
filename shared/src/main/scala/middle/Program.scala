@@ -6,6 +6,8 @@ import scala.collection.mutable.HashMap
 import scala.collection.mutable.Stack
 import front.Type
 import front.TermNode
+import front.ConjunctionOp
+import front.DisjunctionOp
 
 // Essentially an AST node or edge.
 abstract class Instruction
@@ -116,9 +118,7 @@ case class Module(name: String, ct: Ref, init: Ref, next: Ref, spec: Ref)
   override def defaultCtr(): Ref = ct
 }
 
-case class Application(caller: Ref, args: List[Ref]) extends Instruction {
-  s"[app]\t${(List(caller) ++ args).mkString("\t")}"
-}
+case class Application(caller: Ref, args: List[Ref]) extends Instruction {}
 
 class Program(val stmts: ArrayBuffer[Instruction]) {
   var isSynthesisQuery = false
@@ -126,7 +126,101 @@ class Program(val stmts: ArrayBuffer[Instruction]) {
   pushCache()
 
   val assertions: ListBuffer[Ref] = new ListBuffer()
+  // after generating assertions, we will traverse to finds calls of ._1 and add assertions that call ._2 with the same arguments
+  val inlineAssumes: HashMap[Ref, Ref] = new HashMap()
+  val inlineAsserts: HashMap[Ref, Ref] = new HashMap()
   var options: List[(String, String)] = List.empty
+
+  def addAssertion(ass: Ref): Unit = {
+    val assumes = new ListBuffer[Ref]()
+    val asserts = new ListBuffer[Ref]()
+
+    def updateTerm(position: Ref, updates: Map[Ref, Ref]): Ref = {
+      val newPos = stmts(position.loc) match {
+        case Application(caller, args) => {
+          val newArgs =
+            args.map(a => updateTerm(a, updates))
+          if (newArgs != args) {
+            stmts.addOne(Application(caller, newArgs))
+            Ref(stmts.length - 1)
+          } else {
+            position
+          }
+        }
+        case a: Ref => updates.getOrElse(a, a)
+        case _      => updates.getOrElse(position, position)
+      }
+      newPos
+    }
+
+    def searchInline(
+      curr: Ref,
+      inlines: HashMap[Ref, Ref],
+      keepTrack: ListBuffer[Ref],
+      updates: Map[Ref, Ref]
+    ): Unit =
+      stmts(curr.loc) match {
+        case Application(caller, args) => {
+          stmts(caller.loc) match {
+            case TheoryMacro(_, _) | Constructor(_, _, _) | Selector(_, _) |
+                UserFunction(_, _, _) => {
+              // just continue search in children
+              args.foreach(p => searchInline(p, inlines, keepTrack, updates))
+            }
+            case UserMacro(_, _, body, params) => {
+              val newArgs = args.map(a => updateTerm(a, updates))
+              if (inlines.contains(caller)) {
+                // we found a an assume or assert!
+                val newAppRef = Ref(stmts.length)
+                stmts.addOne(Application(inlines(caller), newArgs))
+                keepTrack.addOne(newAppRef)
+              } else {
+                // keep searching in children
+                args.foreach(p => searchInline(p, inlines, keepTrack, updates))
+                // update bindings
+                val bindings = params.zip(newArgs).toMap
+                // recurse search into body
+                searchInline(body, inlines, keepTrack, bindings)
+              }
+            }
+            case _ => // do nothing
+          }
+        }
+        case _ => // do nothing
+      }
+    searchInline(ass, inlineAssumes, assumes, Map.empty)
+    searchInline(ass, inlineAsserts, asserts, Map.empty)
+
+    val inner = if (asserts.length > 0) {
+      val orRef = loadOrSaveObjectRef(DisjunctionOp(), {
+        stmts.addOne(TheoryMacro("or"));
+        Ref(stmts.length - 1)
+      })
+
+      val appRef = Ref(stmts.length)
+      stmts.addOne(Application(orRef, List(ass) ++ asserts.toList))
+
+      appRef
+    } else {
+      ass
+    }
+
+    val outer = if (assumes.length > 0) {
+      val andRef = loadOrSaveObjectRef(ConjunctionOp(), {
+        stmts.addOne(TheoryMacro("and"));
+        Ref(stmts.length - 1)
+      })
+
+      val appRef = Ref(stmts.length)
+      stmts.addOne(Application(andRef, List(inner) ++ assumes.toList))
+
+      appRef
+    } else {
+      inner
+    }
+
+    assertions.addOne(outer)
+  }
 
   def pushCache(): Unit = {
     cache.sortCache.push(new HashMap[Type, Ref]())

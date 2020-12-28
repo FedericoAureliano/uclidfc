@@ -185,6 +185,10 @@ sealed abstract class Statement extends TermNode {}
 
 case class HavocStmt(toHavoc: Identifier) extends Statement {}
 
+case class AssumeStmt(pred: Expr) extends Statement {}
+
+case class AssertStmt(pred: Expr) extends Statement {}
+
 case class AssignStmt(lhs: Expr, rhs: Expr) extends Statement {}
 
 case class BlockStmt(stmts: List[Statement]) extends Statement {}

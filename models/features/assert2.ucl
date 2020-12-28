@@ -1,0 +1,29 @@
+// UCLID TEST
+// Solver=cvc4
+// Result=Some(true)
+
+module intarray
+{
+
+    var arr : [integer]integer;
+
+    init
+    {
+        arr = const(0, [integer]integer);
+    }
+
+    next
+    {
+        assert(forall (x: integer, y:integer) :: arr[x] != arr[y]);
+    }
+}
+
+module main {
+    var arr : intarray;
+    next {
+        next(arr);
+    }
+    control {
+        unroll(2);
+    }
+}

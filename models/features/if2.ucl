@@ -1,0 +1,28 @@
+// UCLID TEST
+// Solver=cvc4
+// Result=Some(true)
+
+module main {
+    var i : integer;
+    var d : integer;
+
+    init {
+        i = 0;
+    }
+
+    next {
+        if (d > 0) {
+            havoc i;
+        } else {
+            havoc i;
+        }
+
+        havoc d;
+    }
+
+    invariant cex: i == 0;
+
+    control {
+        unroll(2);
+    }
+}

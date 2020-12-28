@@ -4,11 +4,11 @@ object Collector {
 
   def mark(term: Program): Array[Boolean] = {
     val marks = Array.fill[Boolean](term.stmts.length)(false)
-    term.assertions.foreach(r => mark_i(term, r.loc, marks))
+    term.assertions.foreach(r => mark_i(term, r, marks))
     marks
   }
 
-  def mark_i(term: Program, position: Int, marks: Array[Boolean]): Unit = {
+  def mark_i(term: Program, position: Ref, marks: Array[Boolean]): Unit = {
     def markParams(params: List[Ref]) =
       params.foreach { p =>
         if (!marks(p.loc)) {
@@ -43,7 +43,7 @@ object Collector {
           markInstruction(caller); args.foreach(i => markInstruction(i))
       }
 
-    marks(position) = true
-    markInstruction(term.stmts(position))
+    marks(position.loc) = true
+    markInstruction(term.stmts(position.loc))
   }
 }

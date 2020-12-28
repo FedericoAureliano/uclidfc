@@ -1,0 +1,29 @@
+// UCLID TEST
+// Solver=cvc4
+// Result=Some(false)
+
+module main {
+    var i : integer;
+    var d : integer;
+
+    init {
+        i = 0;
+    }
+
+    next {
+        assume(d > 0);
+        havoc i;
+
+        if (d > 0) {
+            assume(i == 0);
+        }
+
+        havoc d;
+    }
+
+    invariant musthold: i == 0;
+
+    control {
+        unroll(4);
+    }
+}
