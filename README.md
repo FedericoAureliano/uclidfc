@@ -1,10 +1,10 @@
-# Trilingual Uclid
+# Uclid First-Class
 
 ## Dependencies
 
 - [Install SBT](https://www.scala-lang.org/download/)
 - [Install Z3](https://github.com/Z3Prover/z3)
-- (Optional) [Install CVC4](https://github.com/CVC4/CVC4)
+- [Install CVC4](https://github.com/CVC4/CVC4)
 
 ## Users
 
@@ -17,12 +17,13 @@ sbt assembly
 ### Run
 
 ```
-./uclid [options] <file> ...
+./uclidfc [options] <file> ...
 
-  -m, --main <Module>   Name of the main module.
-  -s, --solver <value>  Solver to use (<available list>)
-  -p, --print           Print the query without solving.
-  <file> ...            List of files to analyze.
+  -m, --main <module>    Name of the main module.
+  -s, --solver <solver>  Use <solver> (z3, cvc4)
+  -r, --run <boolean>    Run the solver?
+  -o, --out <file>       Write query to <file>.
+  <file> ...             List of files to analyze.
 ```
 
 ## Developers
@@ -49,6 +50,6 @@ sbt "uclidJVM/run [options] <file> ..."
 ### Run JS
 
 ```
-sbt fullOptJS; cp js/target/scala-2.13/uclid-opt.js docs/js/uclid-opt.js
+sbt fullOptJS; cp js/target/scala-2.13/uclidfc-opt.js docs/js/uclidfc-opt.js
 open docs/index.html
 ```

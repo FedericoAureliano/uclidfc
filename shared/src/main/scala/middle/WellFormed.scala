@@ -1,16 +1,17 @@
 package middle
 
+import scala.collection.mutable.ArrayBuffer
+
 /*
-Passing semantic checks must gurantee a well formed smt-lib query
-(except for functions to synthesize and procedure calls)
+Passing semantic checks must gurantee a well formed query
  */
 
-object Checker {
+class WellFormed(stmts: ArrayBuffer[Instruction]) extends TermGraph(stmts) {
 
-  def checkRefBounds(term: Program): Option[String] = {
-    def checkRef(r: Ref): Boolean = r.loc < term.stmts.length && r.loc >= 0
+  def checkRefBounds(): Option[String] = {
+    def checkRef(r: Ref): Boolean = r.loc < stmts.length && r.loc >= 0
 
-    term.stmts.zipWithIndex.foreach {
+    stmts.zipWithIndex.foreach {
       case (s, i) => {
         val err = Some(s"${i}: ${s} >>> REFERENCE OUT OF BOUNDS!")
         s match {
@@ -53,22 +54,21 @@ object Checker {
   }
 
   def inferTermType(
-    program: Program,
     app: Ref
   ): Ref =
-    program.stmts(app.loc) match {
+    stmts(app.loc) match {
       case Application(caller, args) => {
-        program.stmts(caller.loc) match {
-          case TheoryMacro("ite", _) => inferTermType(program, args.head)
+        stmts(caller.loc) match {
+          case TheoryMacro("ite", _) => inferTermType(args.head)
           case TheoryMacro("store", _) =>
-            inferTermType(program, args.head)
+            inferTermType(args.head)
           case TheoryMacro("select", _) => {
-            val arrayRef = inferTermType(program, args.head)
+            val arrayRef = inferTermType(args.head)
             val arraySort =
-              program.stmts(arrayRef.loc).asInstanceOf[TheorySort]
+              stmts(arrayRef.loc).asInstanceOf[TheorySort]
             arraySort.params.last
           }
-          case _ => inferTermType(program, caller)
+          case _ => inferTermType(caller)
         }
       }
       case Constructor(_, sort, _)    => sort
@@ -76,7 +76,7 @@ object Checker {
       case Selector(_, sort)          => sort
       case _ =>
         throw new IllegalArgumentException(
-          s"type inference not yet supported: ${program.stmts(app.loc)}"
+          s"type inference not yet supported: ${stmts(app.loc)}"
         )
     }
 }

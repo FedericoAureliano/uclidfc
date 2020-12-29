@@ -1,19 +1,21 @@
 package middle
 
-object Collector {
+import scala.collection.mutable.ArrayBuffer
 
-  def mark(term: Program): Array[Boolean] = {
-    val marks = Array.fill[Boolean](term.stmts.length)(false)
-    term.assertions.foreach(r => mark_i(term, r, marks))
+class Minimal(stmts: ArrayBuffer[Instruction]) extends WellFormed(stmts) {
+
+  def mark(): Array[Boolean] = {
+    val marks = Array.fill[Boolean](stmts.length)(false)
+    assertionRefs.foreach(r => mark_i(r, marks))
     marks
   }
 
-  def mark_i(term: Program, position: Ref, marks: Array[Boolean]): Unit = {
+  def mark_i(position: Ref, marks: Array[Boolean]): Unit = {
     def markParams(params: List[Ref]) =
       params.foreach { p =>
         if (!marks(p.loc)) {
           marks(p.loc) = true
-          markInstruction(term.stmts(p.loc))
+          markInstruction(stmts(p.loc))
         }
       }
 
@@ -22,7 +24,7 @@ object Collector {
         case Ref(i) => {
           if (!marks(i)) {
             marks(i) = true
-            markInstruction(term.stmts(i))
+            markInstruction(stmts(i))
           }
         }
         case Numeral(_)              =>
@@ -44,6 +46,6 @@ object Collector {
       }
 
     marks(position.loc) = true
-    markInstruction(term.stmts(position.loc))
+    markInstruction(stmts(position.loc))
   }
 }

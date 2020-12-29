@@ -11,13 +11,14 @@ lazy val root = project
 lazy val uclid = crossProject(JSPlatform, JVMPlatform)
   .in(file("."))
   .settings(
-    name := "uclid",
+    name := "uclidfc",
     version := "1.0",
     javacOptions ++= Seq("-source", "1.6", "-target", "1.6"),
     scalacOptions ++= Seq("-unchecked", "-deprecation", "-feature", "-Wunused"),
     libraryDependencies += ("org.scala-lang.modules" %%% "scala-parser-combinators" % "1.1.2")
       .withSources(),
-    libraryDependencies += "com.novocode" % "junit-interface" % "0.11" % "test"
+    libraryDependencies += "com.novocode" % "junit-interface" % "0.11" % "test",
+    test in assembly := {}
   )
   .jvmSettings(
     // JVM-specific settings
@@ -31,7 +32,7 @@ lazy val uclid = crossProject(JSPlatform, JVMPlatform)
         branch = 45,
         complexity = 45,
         line = 90,
-        clazz = 50
+        clazz = 60
       ),
       Seq(JacocoReportFormats.ScalaHTML),
       "utf-8"

@@ -44,26 +44,34 @@ object UclidMain {
   case class Config(
     mainModuleName: String = "main",
     solver: Solvers.Value = Solvers.z3,
-    printOnly: Boolean = false,
+    run: Boolean = true,
+    outFile: Option[String] = None,
     files: Seq[java.io.File] = Seq()
   )
 
   def parseOptions(args: Array[String]): Option[Config] = {
-    val parser = new scopt.OptionParser[Config]("uclid") {
-      head("uclid", "1.0")
+    val parser = new scopt.OptionParser[Config]("uclidfc") {
+      head("uclidfc", "1.0")
 
       opt[String]('m', "main")
-        .valueName("<Module>")
+        .valueName("<module>")
         .action((x, c) => c.copy(mainModuleName = x))
         .text("Name of the main module.")
 
       opt[Solvers.Value]('s', "solver")
+        .valueName("<solver>")
         .action((x, c) => c.copy(solver = x))
-        .text(s"Solver to use (${Solvers.values.mkString(", ")})")
+        .text(s"Use <solver> (${Solvers.values.mkString(", ")})")
 
-      opt[Unit]('p', "print")
-        .action((_, c) => c.copy(printOnly = true))
-        .text("Print the query without solving.")
+      opt[String]('r', "run")
+        .valueName("<boolean>")
+        .action((x, c) => c.copy(run = x.toBoolean))
+        .text("Run the solver?")
+
+      opt[String]('o', "out")
+        .valueName("<file>")
+        .action((x, c) => c.copy(outFile = Some(x)))
+        .text("Write query to <file>.")
 
       arg[java.io.File]("<file> ...")
         .unbounded()
@@ -88,7 +96,7 @@ object UclidMain {
         case Solvers.cvc4 =>
           new Solver("cvc4", List(("incremental", "true")))
       }
-      solver.solve(obs, config.printOnly)
+      solver.solve(obs, config.run, config.outFile)
     } catch {
       case (e: java.io.FileNotFoundException) =>
         errorResult.messages = List(e.toString())

@@ -4,8 +4,6 @@ import org.scalajs.dom.document
 import org.scalajs.dom
 import org.scalajs.dom.raw.{HTMLPreElement, HTMLTextAreaElement}
 
-import scala.collection.mutable.ArrayBuffer
-
 import middle._
 
 import front.UclidParser
@@ -27,7 +25,7 @@ object WebApp {
 
       val pResult = Encoder.run(parsed, Some("main"))
 
-      result.textContent = Printer.programToQuery(pResult)
+      result.textContent = pResult.programToQuery()
     } catch {
       case e: Throwable => result.textContent = e.toString()
     }

@@ -23,40 +23,52 @@ class Solver(
     (out.reverse, err.reverse, exit)
   }
 
-  def writeQueryToTmpFile(
-    query: String
+  def writeQueryToFile(
+    query: String,
+    outFile: Option[String]
   ): File = {
-    val tempFi = File.createTempFile("tmp", ".smt2")
-    tempFi.deleteOnExit()
-    new PrintWriter(tempFi) {
+    val f = outFile match {
+      case Some(value) => new File(value)
+      case None => {
+        val tempFi = File.createTempFile("tmp", ".smt2")
+        tempFi.deleteOnExit()
+        tempFi
+      }
+    }
+
+    new PrintWriter(f) {
       try {
         write(query)
       } finally {
         close()
       }
     }
-    tempFi
+    f
   }
 
   def solve(
-    program: Program,
-    printOnly: Boolean
+    program: Interfaced,
+    run: Boolean,
+    outFile: Option[String]
   ): ProofResult = {
     val logic = s"(set-logic ${program.inferLogic()})"
     val queryOpts = options ++ program.options
-    val query = Printer.programToQuery(program)
+    val query = program.programToQuery()
 
     val processedQuery =
       (List(logic) ++ queryOpts.map(o => s"(set-option :${o._1} ${o._2})") ++ List(
         query
       )).mkString("\n")
 
-    if (printOnly) {
-      println(processedQuery)
-      return new ProofResult(None, None, List("Print only"))
+    val qfile = writeQueryToFile(processedQuery, outFile).getAbsolutePath()
+
+    if (!run) {
+      return new ProofResult(
+        None,
+        List("User opted out of running the solver.")
+      )
     }
 
-    val qfile = writeQueryToTmpFile(processedQuery).getAbsolutePath()
     val result = runProcess(s"$cmnd ${qfile}")
 
     val answer = " " + result._1.mkString("\n")
@@ -64,12 +76,12 @@ class Solver(
     if (!result._2.isEmpty || answer.contains("error") || answer.contains(
           "unknown"
         )) {
-      new ProofResult(None, None, result._1)
+      new ProofResult(None, result._1)
     } else {
       if ("(\\ssat)".r.findFirstIn(answer).isDefined) {
-        new ProofResult(Some(true), None, result._1)
+        new ProofResult(Some(true), result._1)
       } else {
-        new ProofResult(Some(false), None, result._1)
+        new ProofResult(Some(false), result._1)
       }
     }
   }
@@ -77,7 +89,6 @@ class Solver(
 
 class ProofResult(
   var result: Option[Boolean] = None,
-  var model: Option[Ref] = None,
   var messages: List[String] = List.empty
 ) {
 

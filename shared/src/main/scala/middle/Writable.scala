@@ -1,18 +1,24 @@
 package middle
 
-object Printer {
+import scala.collection.mutable.ArrayBuffer
+
+class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
 
   val TAB = "  "
 
+  def inferLogic(): String = "ALL"
+
+  var isSynthesisQuery = false
+  var options: List[(String, String)] = List.empty
+
   def programPointToQueryTerm(
-    term: Program,
     point: Ref,
     indentInput: Int = 0
   ): String = {
     var indent = indentInput
 
     def dispatch(position: Ref): String =
-      term.stmts(position.loc) match {
+      stmts(position.loc) match {
         case a: Application       => applicationToQueryTerm(a)
         case c: Constructor       => constructorToQueryTerm(c)
         case d: DataType          => datatypeToQueryTerm(d)
@@ -39,9 +45,9 @@ object Printer {
               val t = dispatch(p._1)
 
               // if we have a constructor lets label the arguments
-              if (term.stmts(a.caller.loc).isInstanceOf[Constructor]) {
+              if (stmts(a.caller.loc).isInstanceOf[Constructor]) {
                 //get the ith selector
-                val ctr = term.stmts(a.caller.loc).asInstanceOf[Constructor]
+                val ctr = stmts(a.caller.loc).asInstanceOf[Constructor]
                 val comment =
                   s"; assigning to ${dispatch(ctr.selectors(p._2))}\n${TAB * indent}"
                 comment + t
@@ -83,8 +89,8 @@ object Printer {
     def theorymacroToQueryTerm(t: TheoryMacro): String =
       if (t.params.length > 0) {
         val args = t.params.map { s =>
-          val sel = term.stmts(s.loc).asInstanceOf[FunctionParameter]
-          s"(${sel.name} ${programPointToQueryTerm(term, sel.sort, 0)})"
+          val sel = stmts(s.loc).asInstanceOf[FunctionParameter]
+          s"(${sel.name} ${programPointToQueryTerm(sel.sort, 0)})"
         }
         s"${t.name} (${args.mkString(" ")})"
       } else {
@@ -113,14 +119,14 @@ object Printer {
     dispatch(point)
   }
 
-  def programToQueryCtx(term: Program): String = {
+  def programToQueryCtx(): String = {
     var indent = 0
-    val toDeclare = Collector.mark(term)
+    val toDeclare = mark()
 
     def dispatch(position: Ref): Option[String] =
       if (toDeclare(position.loc)) {
         toDeclare.update(position.loc, false)
-        term.stmts(position.loc) match {
+        stmts(position.loc) match {
           case r: Ref          => dispatch(r)
           case d: DataType     => Some(datatypeToQueryCtx(d))
           case u: UserFunction => Some(userfunctionToQueryCtx(u))
@@ -157,13 +163,13 @@ object Printer {
       // for each constructor
       tmp ++= s"${TAB * indent}(declare-datatypes ((${d.name} 0)) (("
       d.constructors.foreach { ct =>
-        val ctr = term.stmts(ct.loc).asInstanceOf[Constructor]
+        val ctr = stmts(ct.loc).asInstanceOf[Constructor]
         tmp ++= s"(${ctr.name}"
         indent += 1
         ctr.selectors.foreach { s =>
           tmp ++= "\n"
-          val sel = term.stmts(s.loc).asInstanceOf[Selector]
-          tmp ++= s"${TAB * indent}(${sel.name} ${programPointToQueryTerm(term, sel.sort, indent)})"
+          val sel = stmts(s.loc).asInstanceOf[Selector]
+          tmp ++= s"${TAB * indent}(${sel.name} ${programPointToQueryTerm(sel.sort, indent)})"
         }
         tmp ++= ")"
       }
@@ -177,12 +183,12 @@ object Printer {
       val tmp = new StringBuilder()
       if (u.params.length > 0) {
         tmp ++= s"${TAB * indent}(declare-fun ${u.name} ${u.params
-          .map(p => s"(${programPointToQueryTerm(term, p, indent)})")
+          .map(p => s"(${programPointToQueryTerm(p, indent)})")
           .mkString(" ")} "
       } else {
         tmp ++= s"${TAB * indent}(declare-const ${u.name} "
       }
-      tmp ++= s"${programPointToQueryTerm(term, u.sort, indent)})\n"
+      tmp ++= s"${programPointToQueryTerm(u.sort, indent)})\n"
 
       tmp.toString()
     }
@@ -191,14 +197,14 @@ object Printer {
       val tmp = new StringBuilder()
       tmp ++= s"${TAB * indent}(define-fun ${u.name} (${u.params
         .map { p =>
-          val fp = term.stmts(p.loc).asInstanceOf[FunctionParameter]
-          s"(${fp.name} ${programPointToQueryTerm(term, fp.sort, indent)})"
+          val fp = stmts(p.loc).asInstanceOf[FunctionParameter]
+          s"(${fp.name} ${programPointToQueryTerm(fp.sort, indent)})"
         }
         .mkString(" ")}) "
 
-      tmp ++= s"${programPointToQueryTerm(term, u.sort, indent)}\n"
+      tmp ++= s"${programPointToQueryTerm(u.sort, indent)}\n"
       indent += 1
-      tmp ++= s"${TAB * indent}${programPointToQueryTerm(term, u.body, indent)})\n"
+      tmp ++= s"${TAB * indent}${programPointToQueryTerm(u.body, indent)})\n"
       indent -= 1
 
       tmp.toString()
@@ -209,15 +215,15 @@ object Printer {
 
     def moduleToQueryCtx(m: middle.Module): String = {
       val tmp = new StringBuilder()
-      val ctr = term.stmts(m.ct.loc).asInstanceOf[Constructor]
+      val ctr = stmts(m.ct.loc).asInstanceOf[Constructor]
       tmp ++= s"${TAB * indent}; declaring module ${m.name} \n"
       indent += 1
       tmp ++= s"${TAB * indent}(declare-datatypes ((${m.name} 0)) (((${ctr.name}"
       indent += 1
       ctr.selectors.foreach { s =>
         tmp ++= "\n"
-        val sel = term.stmts(s.loc).asInstanceOf[Selector]
-        tmp ++= s"${TAB * indent}(${sel.name} ${programPointToQueryTerm(term, sel.sort, indent)})"
+        val sel = stmts(s.loc).asInstanceOf[Selector]
+        tmp ++= s"${TAB * indent}(${sel.name} ${programPointToQueryTerm(sel.sort, indent)})"
       }
       tmp ++= "))))\n\n"
       indent -= 1
@@ -232,18 +238,17 @@ object Printer {
       tmp.toString()
     }
 
-    term.stmts.zipWithIndex.map(p => dispatch(Ref(p._2))).flatten.mkString("\n")
+    stmts.zipWithIndex.map(p => dispatch(Ref(p._2))).flatten.mkString("\n")
   }
 
-  def programToQuery(term: Program): String = {
-    val assertions = term.assertions
-      .map(r =>
-        s"(push 1)\n(assert ${programPointToQueryTerm(term, r)})\n(check-sat)\n(pop 1)\n"
-      )
-      .mkString("\n")
+  def programToQuery(): String =
+    if (assertionRefs.length > 0) {
+      val assertionStrings = assertionRefs
+        .map(r => s"${programPointToQueryTerm(r)}\n")
+        .mkString("\n")
 
-    programToQueryCtx(
-      term
-    ) + "\n" + assertions
-  }
+      programToQueryCtx() + "\n" + "(assert (or\n" + assertionStrings + "))\n(check-sat)"
+    } else {
+      "; nothing to verify"
+    }
 }

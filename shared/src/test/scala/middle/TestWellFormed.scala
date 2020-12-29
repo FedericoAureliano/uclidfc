@@ -3,7 +3,7 @@ package middle
 import org.junit.Test
 import scala.collection.mutable.ArrayBuffer
 
-class TestChecker {
+class TestWellFormed {
 
   @Test def testCheckBounds1(): Unit = {
     // declare a function f(x) = x + x
@@ -13,9 +13,9 @@ class TestChecker {
     val plus = TheoryMacro("+") // 3
     val integer = TheorySort("Int") // 4
 
-    val f = new Program(ArrayBuffer(head, body, arg, plus, integer))
+    val f = new WellFormed(ArrayBuffer(head, body, arg, plus, integer))
 
-    val check = Checker.checkRefBounds(f)
+    val check = f.checkRefBounds()
 
     assert(check.isDefined, f)
   }
@@ -28,9 +28,9 @@ class TestChecker {
     val plus = TheoryMacro("+") // 3
     val integer = TheorySort("Int") // 4
 
-    val f = new Program(ArrayBuffer(head, body, arg, plus, integer))
+    val f = new WellFormed(ArrayBuffer(head, body, arg, plus, integer))
 
-    val check = Checker.checkRefBounds(f)
+    val check = f.checkRefBounds()
 
     assert(check.isDefined, f)
   }
@@ -43,9 +43,9 @@ class TestChecker {
     val plus = TheoryMacro("+") // 3
     val integer = TheorySort("Int") // 4
 
-    val f = new Program(ArrayBuffer(head, body, arg, plus, integer))
+    val f = new WellFormed(ArrayBuffer(head, body, arg, plus, integer))
 
-    val check = Checker.checkRefBounds(f)
+    val check = f.checkRefBounds()
 
     assert(check.isEmpty, f)
   }
