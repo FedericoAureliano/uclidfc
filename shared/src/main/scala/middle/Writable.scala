@@ -326,26 +326,26 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
   }
 
   def programToQuery(): String = {
-    val logic = s"(set-logic ${inferLogic()})\n"
+    val logic = s"(set-logic ${inferLogic()})"
     val opts = options.map(o => s"(set-option :${o._1} ${o._2})").mkString("\n")
 
     val body = if (assertionRefs.length > 0) {
       val assertionStrings = assertionRefs
-        .map(r => s"${programPointToQueryTerm(r)}\n")
+        .map(r => s"${programPointToQueryTerm(r)}")
         .mkString("\n")
 
-      val spec = "\n(or\n" + assertionStrings + ")"
+      val spec = "(or\n" + assertionStrings + ")"
 
       if (isSynthesisQuery) {
-        programToQueryCtx() + "\n(constraint (not " + spec + "))\n(check-synth)"
+        programToQueryCtx() + "\n(constraint (not " + spec + "))\n\n(check-synth)"
       } else {
-        programToQueryCtx() + "\n(assert " + spec + ")\n(check-sat)"
+        programToQueryCtx() + "\n(assert " + spec + ")\n\n(check-sat)"
       }
 
     } else {
       "\n; nothing to verify"
     }
 
-    logic + opts + body
+    s"$logic\n$opts\n\n$body"
   }
 }
