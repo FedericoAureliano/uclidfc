@@ -1,0 +1,24 @@
+// UCLID TEST
+// Solver=cvc4
+// Result=None
+
+module main {
+  synthesis function h(x : integer, y : integer) : boolean;
+  var a, b : integer;
+
+  function f(integer) : integer;
+
+  init {
+    a = f(0);
+    b = f(1);
+  }
+  next {
+    a', b' = b, a + b;
+  }
+
+  invariant a_le_b: a <= b && h(a, b);
+
+  control {
+    induction;
+  }
+}

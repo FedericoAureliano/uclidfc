@@ -4,10 +4,10 @@ import scala.collection.immutable._
 import front._
 
 import middle.Encoder
-import front.SemanticError
 
 import back.Solver
 import back.ProofResult
+import middle.EncodingError
 
 object Solvers extends Enumeration {
   type Solvers = Value
@@ -112,7 +112,7 @@ object UclidMain {
       case e: SemanticError =>
         errorResult.messages = List(e.toString())
         errorResult
-      case e: InternalError =>
+      case e: EncodingError =>
         errorResult.messages = List(e.toString())
         errorResult
       case e: UclidJvmError =>

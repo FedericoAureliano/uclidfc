@@ -415,6 +415,13 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
     } |
       "(" ~ ")" ^^ { case _ ~ _ => List.empty[(Identifier, InlineType)] }
 
+  lazy val TypeListParser: PackratParser[List[InlineType]] =
+    "(" ~> InlineTypeParser ~ (rep("," ~> InlineTypeParser) <~ ")") ^^ {
+      case t ~ ts =>
+        List(t) ++ ts.flatMap(v => List(v))
+    } |
+      "(" ~ ")" ^^ { case _ ~ _ => List.empty[InlineType] }
+
   lazy val LhsParser: PackratParser[Expr] = positioned {
     ExprParser ^^ {
       case expr =>
@@ -601,6 +608,10 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
         case id ~ typ =>
           FunctionDecl(id, List.empty, typ)
       } |
+        KwFunc ~> IdParser ~ TypeListParser ~ (":" ~> InlineTypeParser) ^^ {
+          case id ~ args ~ typ =>
+            FunctionDecl(id, args, typ)
+        } |
         KwFunc ~> IdParser ~ IdTypeListParser ~ (":" ~> InlineTypeParser) ^^ {
           case id ~ args ~ typ =>
             FunctionDecl(id, args.map(p => p._2), typ)
