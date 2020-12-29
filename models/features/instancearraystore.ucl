@@ -22,6 +22,14 @@ module main
     var fibs : [integer]fib;
     var fib1 : fib;
 
+    type othertype;
+
+    var a : integer;
+    var b : boolean;
+    var c : [integer][boolean]integer;
+
+    var d : othertype;
+
     init {
         fibs[0] = fib1;
     }

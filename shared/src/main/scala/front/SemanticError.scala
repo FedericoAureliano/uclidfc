@@ -1,6 +1,4 @@
-package middle
-
-import front._
+package front
 
 import scala.util.parsing.input.Position
 

@@ -1,7 +1,6 @@
 package middle
 
 import scala.collection.mutable.ArrayBuffer
-import scala.collection.mutable.ListBuffer
 
 // Essentially an AST node or edge.
 abstract class Instruction
@@ -114,6 +113,4 @@ case class Module(name: String, ct: Ref, init: Ref, next: Ref, spec: Ref)
 
 case class Application(caller: Ref, args: List[Ref]) extends Instruction {}
 
-class TermGraph(val stmts: ArrayBuffer[Instruction]) {
-  val assertionRefs: ListBuffer[Ref] = new ListBuffer()
-}
+class TermGraph(val stmts: ArrayBuffer[Instruction]) {}

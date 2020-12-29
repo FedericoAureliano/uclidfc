@@ -1,6 +1,7 @@
 package middle
 
 import scala.collection.mutable.ArrayBuffer
+import scala.collection.mutable.ListBuffer
 
 class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
 
@@ -10,6 +11,8 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
 
   var isSynthesisQuery = false
   var options: List[(String, String)] = List.empty
+
+  val assertionRefs: ListBuffer[Ref] = new ListBuffer()
 
   def programPointToQueryTerm(
     point: Ref,
@@ -121,7 +124,7 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
 
   def programToQueryCtx(): String = {
     var indent = 0
-    val toDeclare = mark()
+    val toDeclare = mark(assertionRefs)
 
     def dispatch(position: Ref): Option[String] =
       if (toDeclare(position.loc)) {

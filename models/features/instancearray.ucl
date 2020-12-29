@@ -20,6 +20,10 @@ module fib
 module main
 {
     var fibs : [integer]fib;
+    
+    var a : integer;
+    var b : boolean;
+    var c : [integer][boolean]integer;
 
     next {
         next(fibs[1]);

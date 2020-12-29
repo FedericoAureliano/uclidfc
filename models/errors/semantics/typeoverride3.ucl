@@ -1,0 +1,8 @@
+// UCLID TEST
+// Solver=z3
+// Result=None
+
+module main {
+    type a = [integer]boolean;
+    type a = [integer]boolean;
+}

@@ -21,6 +21,9 @@ module main
 {
     var fib1 : fib;
     var fib2 : fib;
+    var a : integer;
+    var b : boolean;
+    var c : [integer][boolean]integer;
 
     next {
         fib1.a = fib1.b;

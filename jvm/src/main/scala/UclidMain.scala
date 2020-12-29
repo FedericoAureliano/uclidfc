@@ -4,7 +4,7 @@ import scala.collection.immutable._
 import front._
 
 import middle.Encoder
-import middle.SemanticError
+import front.SemanticError
 
 import back.Solver
 import back.ProofResult

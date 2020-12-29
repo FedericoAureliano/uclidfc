@@ -35,8 +35,7 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
           val newArgs =
             args.map(a => updateTerm(a, updates))
           if (newArgs != args) {
-            stmts.addOne(Application(caller, newArgs))
-            Ref(stmts.length - 1)
+            memoAddInstruction(Application(caller, newArgs))
           } else {
             position
           }
@@ -65,8 +64,9 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
               val newArgs = args.map(a => updateTerm(a, updates))
               if (inlines.contains(caller)) {
                 // we found a an assume or assert!
-                val newAppRef = Ref(stmts.length)
-                stmts.addOne(Application(inlines(caller), newArgs))
+                val newAppRef = memoAddInstruction(
+                  Application(inlines(caller), newArgs)
+                )
                 keepTrack.addOne(newAppRef)
               } else {
                 // keep searching in children
@@ -86,13 +86,11 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
     searchInline(ass, inlineAsserts, asserts, Map.empty)
 
     val inner = if (asserts.length > 0) {
-      val orRef = loadOrSaveObjectRef(DisjunctionOp(), {
-        stmts.addOne(TheoryMacro("or"));
-        Ref(stmts.length - 1)
-      })
+      val orRef = memoAddInstruction(TheoryMacro("or"))
 
-      val appRef = Ref(stmts.length)
-      stmts.addOne(Application(orRef, List(ass) ++ asserts.toList))
+      val appRef = memoAddInstruction(
+        Application(orRef, List(ass) ++ asserts.toList)
+      )
 
       appRef
     } else {
@@ -100,13 +98,11 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
     }
 
     val outer = if (assumes.length > 0) {
-      val andRef = loadOrSaveObjectRef(ConjunctionOp(), {
-        stmts.addOne(TheoryMacro("and"));
-        Ref(stmts.length - 1)
-      })
+      val andRef = memoAddInstruction(TheoryMacro("and"))
 
-      val appRef = Ref(stmts.length)
-      stmts.addOne(Application(andRef, List(inner) ++ assumes.toList))
+      val appRef = memoAddInstruction(
+        Application(andRef, List(inner) ++ assumes.toList)
+      )
 
       appRef
     } else {
@@ -147,12 +143,6 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
     return None
   }
 
-  def loadOrSaveSortRef(typ: Type, sort: => Ref): Ref =
-    loadSortRef(typ) match {
-      case Some(value) => value
-      case None        => val r = sort; saveSortRef(typ, r); r
-    }
-
   def saveObjectRef(term: TermNode, obj: Ref): Unit =
     cache.objectCache.top.addOne((term, obj))
 
@@ -178,29 +168,12 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
     t: Type
   ): Ref =
     t match {
-      case BooleanType() =>
-        loadOrSaveSortRef(
-          t, {
-            stmts.addOne(TheorySort("Bool"))
-            Ref(stmts.length - 1)
-          }
-        )
-      case IntegerType() =>
-        loadOrSaveSortRef(
-          t, {
-            stmts.addOne(TheorySort("Int"))
-            Ref(stmts.length - 1)
-          }
-        )
+      case BooleanType() => memoAddInstruction(TheorySort("Bool"))
+      case IntegerType() => memoAddInstruction(TheorySort("Int"))
       case ArrayType(inTypes, outType) => {
-        loadOrSaveSortRef(
-          t, {
-            val args =
-              (inTypes ++ List(outType)).map(arg => typeUseToSortRef(arg))
-            stmts.addOne(TheorySort("Array", args))
-            Ref(stmts.length - 1)
-          }
-        )
+        val args =
+          (inTypes ++ List(outType)).map(arg => typeUseToSortRef(arg))
+        memoAddInstruction(TheorySort("Array", args))
       }
       case NamedType(_) =>
         loadSortRef(t)
@@ -250,17 +223,15 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
       }
       case FreshLit(typ) => {
         val sortRef = typeUseToSortRef(typ)
-        newNondets = newNondets.appended(Ref(stmts.length))
-        stmts.addOne(
-          FunctionParameter(freshSymbolName(), sortRef)
+        newNondets = newNondets.appended(
+          memoAddInstruction(
+            FunctionParameter(freshSymbolName(), sortRef)
+          )
         )
         (newNondets.last, newNondets)
       }
       case l: Literal => {
-        (loadOrSaveObjectRef(l, {
-          stmts.addOne(TheoryMacro(l.value().toString()));
-          Ref(stmts.length - 1)
-        }), newNondets)
+        (memoAddInstruction(TheoryMacro(l.value().toString())), newNondets)
       }
       case OperatorApplication(GetNextValueOp(), _) => {
         throw new NotSupportedYet(expr)
@@ -292,8 +263,7 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
           res._1
         }
 
-        val appRef = Ref(stmts.length)
-        stmts.addOne(Application(opRef, List(expRef)))
+        val appRef = memoAddInstruction(Application(opRef, List(expRef)))
 
         (appRef, newNondets)
       }
@@ -308,16 +278,15 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
 
         val asConstAppRef = loadOrSaveObjectRef(
           ConstArray(typ), {
-            val asConstRef = Ref(stmts.length)
-            stmts.addOne(TheoryMacro("as const"))
+            val asConstRef = memoAddInstruction(TheoryMacro("as const"))
             val typeRef = typeUseToSortRef(typ)
-            stmts.addOne(Application(asConstRef, List(typeRef)))
-            Ref(stmts.length - 1)
+            memoAddInstruction(Application(asConstRef, List(typeRef)))
           }
         )
 
-        val appRef = Ref(stmts.length)
-        stmts.addOne(Application(asConstAppRef, List(expRef)))
+        val appRef = memoAddInstruction(
+          Application(asConstAppRef, List(expRef))
+        )
 
         (appRef, newNondets)
       }
@@ -326,16 +295,12 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
         pushCache()
         val selecorRefs = ids.map { p =>
           val tyepRef = typeUseToSortRef(p._2)
-          val selRef = Ref(stmts.length)
-          stmts.addOne(FunctionParameter(p._1.name, tyepRef))
+          val selRef = memoAddInstruction(FunctionParameter(p._1.name, tyepRef))
           saveObjectRef(p._1, selRef)
           selRef
         }
 
-        val opRef = {
-          stmts.addOne(TheoryMacro("forall", selecorRefs));
-          Ref(stmts.length - 1)
-        }
+        val opRef = memoAddInstruction(TheoryMacro("forall", selecorRefs))
         saveObjectRef(ForallOp(ids), opRef)
 
         val bodyRef = {
@@ -344,8 +309,7 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
           res._1
         }
 
-        val resultRef = Ref(stmts.length)
-        stmts.addOne(Application(opRef, List(bodyRef)))
+        val resultRef = memoAddInstruction(Application(opRef, List(bodyRef)))
 
         popCache()
 
@@ -356,16 +320,12 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
         pushCache()
         val selecorRefs = ids.map { p =>
           val tyepRef = typeUseToSortRef(p._2)
-          val selRef = Ref(stmts.length)
-          stmts.addOne(FunctionParameter(p._1.name, tyepRef))
+          val selRef = memoAddInstruction(FunctionParameter(p._1.name, tyepRef))
           saveObjectRef(p._1, selRef)
           selRef
         }
 
-        val opRef = {
-          stmts.addOne(TheoryMacro("exists", selecorRefs));
-          Ref(stmts.length - 1)
-        }
+        val opRef = memoAddInstruction(TheoryMacro("exists", selecorRefs))
         saveObjectRef(ExistsOp(ids), opRef)
 
         val bodyRef = {
@@ -374,8 +334,7 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
           res._1
         }
 
-        val resultRef = Ref(stmts.length)
-        stmts.addOne(Application(opRef, List(bodyRef)))
+        val resultRef = memoAddInstruction(Application(opRef, List(bodyRef)))
 
         popCache()
 
@@ -383,10 +342,7 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
 
       }
       case OperatorApplication(op, operands) => {
-        val opRef = loadOrSaveObjectRef(op, {
-          stmts.addOne(TheoryMacro(op.name));
-          Ref(stmts.length - 1)
-        })
+        val opRef = memoAddInstruction(TheoryMacro(op.name))
 
         val operandRefs = new ListBuffer[Ref]()
         operands.foreach { x =>
@@ -395,8 +351,7 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
           operandRefs.addOne(loc._1)
         }
 
-        val appRef = Ref(stmts.length)
-        stmts.addOne(Application(opRef, operandRefs.toList))
+        val appRef = memoAddInstruction(Application(opRef, operandRefs.toList))
 
         (appRef, newNondets)
       }
@@ -414,8 +369,7 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
           operandRefs.addOne(loc._1)
         }
 
-        val appRef = Ref(stmts.length)
-        stmts.addOne(Application(opRef, operandRefs.toList))
+        val appRef = memoAddInstruction(Application(opRef, operandRefs.toList))
 
         (appRef, newNondets)
       }
@@ -432,9 +386,9 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
         // find next function location
         val nextRef =
           stmts(modRef.loc).asInstanceOf[middle.Module].next
-        // fill in the placeholder from before
-        val nextCallRef = Ref(stmts.length)
-        stmts.addOne(Application(nextRef, List(instanceRef)))
+        val nextCallRef = memoAddInstruction(
+          Application(nextRef, List(instanceRef))
+        )
 
         (nextCallRef, newNondets)
       }
@@ -451,9 +405,9 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
         // find init function location
         val initRef =
           stmts(modRef.loc).asInstanceOf[middle.Module].init
-        // fill in the placeholder from before
-        val initCallRef = Ref(stmts.length)
-        stmts.addOne(Application(initRef, List(instanceRef)))
+        val initCallRef = memoAddInstruction(
+          Application(initRef, List(instanceRef))
+        )
 
         (initCallRef, newNondets)
       }
@@ -508,11 +462,9 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
               }
             }
 
-            val bodyRef = Ref(stmts.length)
-            stmts.addOne(Application(ctrRef, components))
+            val bodyRef = memoAddInstruction(Application(ctrRef, components))
 
-            val macroRef = Ref(stmts.length)
-            stmts.addOne(
+            val macroRef = memoAddInstruction(
               UserMacro(
                 // line number, column number, ast id
                 s"line${lhs.pos.line}col${lhs.pos.column}!${stmt.astNodeId}",
@@ -608,8 +560,7 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
         res._1
       }
 
-      val startRef = Ref(stmts.length)
-      stmts.addOne(
+      val startRef = memoAddInstruction(
         Application(firstFuncRef, List(stateParam) ++ mostRecentParams)
       )
 
@@ -620,9 +571,8 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
           mostRecentParams = res._2
           res._1
         }
-        val appRef = Ref(stmts.length)
         // add the nondet parameters at the end
-        stmts.addOne(
+        val appRef = memoAddInstruction(
           Application(funcRef, List(acc) ++ mostRecentParams)
         )
         appRef
@@ -631,8 +581,7 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
       stateParam
     }
 
-    val blockRef = Ref(stmts.length)
-    stmts.addOne(
+    val blockRef = memoAddInstruction(
       UserMacro(
         s"line${block.pos.line}col${block.pos.column}!${block.astNodeId}",
         stmts(ctrRef.loc).asInstanceOf[Constructor].sort,
@@ -650,27 +599,24 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
     ifelse: IfElseStmt
   ): (Ref, List[Ref]) = {
     val left = stmtToMacro(stateParam, ctrRef, ifelse.ifblock)
-    val leftAppRef = Ref(stmts.length)
-    stmts.addOne(Application(left._1, List(stateParam) ++ left._2))
+    val leftAppRef = memoAddInstruction(
+      Application(left._1, List(stateParam) ++ left._2)
+    )
 
     val right = stmtToMacro(stateParam, ctrRef, ifelse.elseblock)
-    val rightAppRef = Ref(stmts.length)
-    stmts.addOne(Application(right._1, List(stateParam) ++ right._2))
+    val rightAppRef = memoAddInstruction(
+      Application(right._1, List(stateParam) ++ right._2)
+    )
 
     val cond = exprToTerm(ifelse.cond)
 
-    val iteRef = loadOrSaveObjectRef(ITEOp(), {
-      stmts.addOne(TheoryMacro("ite"));
-      Ref(stmts.length - 1)
-    })
+    val iteRef = memoAddInstruction(TheoryMacro("ite"))
 
-    val bodyRef = Ref(stmts.length)
-    stmts.addOne(
+    val bodyRef = memoAddInstruction(
       Application(iteRef, List(cond._1, leftAppRef, rightAppRef))
     )
 
-    val macroRef = Ref(stmts.length)
-    stmts.addOne(
+    val macroRef = memoAddInstruction(
       UserMacro(
         s"line${ifelse.pos.line}col${ifelse.pos.column}!${ifelse.astNodeId}",
         stmts(ctrRef.loc).asInstanceOf[Constructor].sort,
@@ -723,15 +669,11 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
 
     val bodyRef = exprToTerm(ass.pred)._1
 
-    val boolRef = loadOrSaveSortRef(BooleanType(), {
-      stmts.addOne(TheorySort("Bool"));
-      Ref(stmts.length - 1)
-    })
+    val boolRef = memoAddInstruction(TheorySort("Bool"))
 
     val funcName = s"line${ass.pos.line}col${ass.pos.column}!${ass.astNodeId}"
     // macro we'll use for the assert
-    val specMacroRef = Ref(stmts.length)
-    stmts.addOne(
+    val specMacroRef = memoAddInstruction(
       UserMacro(
         funcName + "!inline",
         boolRef,
@@ -741,8 +683,7 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
     )
 
     // identity macro
-    val macroRef = Ref(stmts.length)
-    stmts.addOne(
+    val macroRef = memoAddInstruction(
       UserMacro(
         funcName,
         stmts(ctrRef.loc).asInstanceOf[Constructor].sort,
@@ -764,15 +705,11 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
 
     val bodyRef = exprToTerm(OperatorApplication(NegationOp(), List(ass.pred)))._1
 
-    val boolRef = loadOrSaveSortRef(BooleanType(), {
-      stmts.addOne(TheorySort("Bool"));
-      Ref(stmts.length - 1)
-    })
+    val boolRef = memoAddInstruction(TheorySort("Bool"))
 
     val funcName = s"line${ass.pos.line}col${ass.pos.column}!${ass.astNodeId}"
     // macro we'll use for the assert
-    val specMacroRef = Ref(stmts.length)
-    stmts.addOne(
+    val specMacroRef = memoAddInstruction(
       UserMacro(
         funcName + "!inline",
         boolRef,
@@ -782,8 +719,7 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
     )
 
     // identity macro
-    val macroRef = Ref(stmts.length)
-    stmts.addOne(
+    val macroRef = memoAddInstruction(
       UserMacro(
         funcName,
         stmts(ctrRef.loc).asInstanceOf[Constructor].sort,
@@ -832,8 +768,8 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
           val initVariables = initParams.map { p =>
             stmts(p.loc) match {
               case FunctionParameter(name, sort) => {
-                val vRef = Ref(stmts.length)
-                stmts.addOne(UserFunction(s"$name!step!0", sort))
+                val vRef =
+                  memoAddInstruction(UserFunction(s"$name!step!0", sort))
                 vRef
               }
             }
@@ -848,27 +784,24 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
 
           // base case
           // apply init
-          val initAppRef = Ref(stmts.length)
-          stmts.addOne(Application(initRef, initVariables))
+          val initAppRef =
+            memoAddInstruction(Application(initRef, initVariables))
 
           // apply spec to result of init
-          val initSpecRef = Ref(stmts.length)
-          stmts.addOne(Application(specRef, List(initAppRef)))
+          val initSpecRef =
+            memoAddInstruction(Application(specRef, List(initAppRef)))
 
-          val negRef = loadOrSaveObjectRef(NegationOp(), {
-            stmts.addOne(TheoryMacro("not"))
-            Ref(stmts.length - 1)
-          })
+          val negRef = memoAddInstruction(TheoryMacro("not"))
 
-          val baseRef = Ref(stmts.length)
-          stmts.addOne(Application(negRef, List(initSpecRef)))
+          val baseRef =
+            memoAddInstruction(Application(negRef, List(initSpecRef)))
 
           addAssertion(baseRef)
 
           // induction step
           // holds on entry
-          val entryRef = Ref(stmts.length)
-          stmts.addOne(Application(specRef, List(initVariables.head)))
+          val entryRef =
+            memoAddInstruction(Application(specRef, List(initVariables.head)))
           // we can borrow the nondet state from init since we pop between asserts (this lets us just generate the auxiliary arguments when applying next)
 
           // Take k steps
@@ -876,35 +809,29 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
 
           var transRef = initVariables.head
 
-          (1 to k).foreach {
-            i =>
-              val args = nextParams.tail.map { p =>
-                stmts(p.loc) match {
-                  case FunctionParameter(name, sort) => {
-                    val vRef = Ref(stmts.length)
-                    stmts.addOne(UserFunction(s"$name!step!$i", sort))
-                    vRef
-                  }
+          (1 to k).foreach { i =>
+            val args = nextParams.tail.map { p =>
+              stmts(p.loc) match {
+                case FunctionParameter(name, sort) => {
+                  val vRef =
+                    memoAddInstruction(UserFunction(s"$name!step!$i", sort))
+                  vRef
                 }
               }
-              stmts.addOne(Application(nextRef, List(transRef) ++ args))
-              transRef = Ref(stmts.length - 1)
+            }
+            transRef =
+              memoAddInstruction(Application(nextRef, List(transRef) ++ args))
           }
 
           // holds on exit
-          val exitRef = Ref(stmts.length)
-          stmts.addOne(Application(specRef, List(transRef)))
+          val exitRef = memoAddInstruction(Application(specRef, List(transRef)))
 
-          val negExitRef = Ref(stmts.length)
-          stmts.addOne(Application(negRef, List(exitRef)))
+          val negExitRef =
+            memoAddInstruction(Application(negRef, List(exitRef)))
 
-          val andRef = loadOrSaveObjectRef(ConjunctionOp(), {
-            stmts.addOne(TheoryMacro("and"))
-            Ref(stmts.length - 1)
-          })
+          val andRef = memoAddInstruction(TheoryMacro("and"))
 
-          val inductiveRef = Ref(stmts.length)
-          stmts.addOne(
+          val inductiveRef = memoAddInstruction(
             Application(andRef, List(entryRef, negExitRef))
           )
 
@@ -916,8 +843,8 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
           val initVariables = initParams.map { p =>
             stmts(p.loc) match {
               case FunctionParameter(name, sort) => {
-                val vRef = Ref(stmts.length)
-                stmts.addOne(UserFunction(s"$name!step!0", sort))
+                val vRef =
+                  memoAddInstruction(UserFunction(s"$name!step!0", sort))
                 vRef
               }
             }
@@ -930,20 +857,17 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
           val nextRef = mod.next
           val specRef = mod.spec
 
-          val initAppRef = Ref(stmts.length)
-          stmts.addOne(Application(initRef, initVariables))
+          val initAppRef =
+            memoAddInstruction(Application(initRef, initVariables))
 
           // apply spec to result of init
-          val initSpecRef = Ref(stmts.length)
-          stmts.addOne(Application(specRef, List(initAppRef)))
+          val initSpecRef =
+            memoAddInstruction(Application(specRef, List(initAppRef)))
 
-          val negRef = loadOrSaveObjectRef(NegationOp(), {
-            stmts.addOne(TheoryMacro("not"))
-            Ref(stmts.length - 1)
-          })
+          val negRef = memoAddInstruction(TheoryMacro("not"))
 
-          val baseRef = Ref(stmts.length)
-          stmts.addOne(Application(negRef, List(initSpecRef)))
+          val baseRef =
+            memoAddInstruction(Application(negRef, List(initSpecRef)))
 
           addAssertion(baseRef)
 
@@ -957,19 +881,19 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
               val args = nextParams.tail.map { p =>
                 stmts(p.loc) match {
                   case FunctionParameter(name, sort) => {
-                    val vRef = Ref(stmts.length)
-                    stmts.addOne(UserFunction(s"$name!step!$i", sort))
+                    val vRef =
+                      memoAddInstruction(UserFunction(s"$name!step!$i", sort))
                     vRef
                   }
                 }
               }
-              stmts.addOne(Application(nextRef, List(transRef) ++ args))
-              transRef = Ref(stmts.length - 1)
+              transRef =
+                memoAddInstruction(Application(nextRef, List(transRef) ++ args))
               // holds on exit
-              val exitRef = Ref(stmts.length)
-              stmts.addOne(Application(specRef, List(transRef)))
-              val negExitRef = Ref(stmts.length)
-              stmts.addOne(Application(negRef, List(exitRef)))
+              val exitRef =
+                memoAddInstruction(Application(specRef, List(transRef)))
+              val negExitRef =
+                memoAddInstruction(Application(negRef, List(exitRef)))
 
               addAssertion(negExitRef)
           }
@@ -984,37 +908,26 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
     properties: List[SpecDecl]
   ): Ref = {
     // spec needs Bool, so add Bool if it's not already there
-    val boolRef = loadOrSaveSortRef(BooleanType(), {
-      stmts.addOne(TheorySort("Bool"));
-      Ref(stmts.length - 1)
-    })
+    val boolRef = memoAddInstruction(TheorySort("Bool"))
 
     val specConjuncts = new ListBuffer[Ref]()
 
     val bodyRef = if (properties.length > 1) {
-      val andRef = loadOrSaveObjectRef(ConjunctionOp(), {
-        stmts.addOne(TheoryMacro("and"));
-        Ref(stmts.length - 1)
-      })
+      val andRef = memoAddInstruction(TheoryMacro("and"))
       properties.foreach { d =>
         val t = exprToTerm(d.expr)._1 //specs shouldn't create new nondets
         specConjuncts.addOne(t)
         t
       }
-      stmts.addOne(Application(andRef, specConjuncts.toList))
-      Ref(stmts.length - 1)
+      memoAddInstruction(Application(andRef, specConjuncts.toList))
     } else if (properties.length == 1) {
       exprToTerm(properties(0).expr)._1 //specs shouldn't create new nondets
     } else {
-      val trueRef = loadOrSaveObjectRef(BoolLit(true), {
-        stmts.addOne(TheoryMacro("true"));
-        Ref(stmts.length - 1)
-      })
+      val trueRef = memoAddInstruction(TheoryMacro("true"))
       trueRef
     }
 
-    val specRef = Ref(stmts.length)
-    stmts.addOne(
+    val specRef = memoAddInstruction(
       UserMacro(
         funcName,
         boolRef,
@@ -1091,10 +1004,10 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
         loadSortRef(NamedType(typ.id)) match {
           case Some(_) => throw new TypeOverride(typ)
           case None => {
-            stmts.addOne(UserSort(typ.id.name))
+            val uRef = memoAddInstruction(UserSort(typ.id.name))
             saveSortRef(
               NamedType(typ.id),
-              Ref(stmts.length - 1)
+              uRef
             )
           }
         }
@@ -1103,16 +1016,15 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
           case Some(_) => throw new TypeOverride(typ)
           case None => {
             // add datatype placeholder
-            val dtRef = Ref(stmts.length)
-            stmts.addOne(DataType(typ.id.name, List.empty))
+            val dtRef = addInstruction(DataType(typ.id.name, List.empty))
             // add constructor for each id
             val constructors = variants.map { i =>
-              val vRef = Ref(stmts.length)
-              stmts.addOne(Constructor(i.name, dtRef, List.empty))
+              val vRef =
+                memoAddInstruction(Constructor(i.name, dtRef, List.empty))
               saveObjectRef(Identifier(i.name), vRef)
               vRef
             }
-            stmts.update(dtRef.loc, DataType(typ.id.name, constructors))
+            memoUpdateInstruction(dtRef, DataType(typ.id.name, constructors))
             saveSortRef(NamedType(typ.id), dtRef)
           }
         }
@@ -1122,20 +1034,19 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
           case Some(_) => throw new TypeOverride(typ)
           case None => {
             // add datatype placeholder
-            val dtRef = Ref(stmts.length)
-            stmts.addOne(DataType(typ.id.name, List.empty))
+            val dtRef = addInstruction(DataType(typ.id.name, List.empty))
 
             val selecorRefs = elements.map { p =>
               val tyepRef = typeUseToSortRef(p._2)
-              stmts.addOne(Selector(p._1.name, tyepRef))
-              Ref(stmts.length - 1)
+              memoAddInstruction(Selector(p._1.name, tyepRef))
             }
 
-            val ctrRef = Ref(stmts.length)
-            stmts.addOne(Constructor(typ.id.name, dtRef, selecorRefs))
+            val ctrRef = memoAddInstruction(
+              Constructor(typ.id.name, dtRef, selecorRefs)
+            )
             saveObjectRef(typ.id, ctrRef)
 
-            stmts.update(dtRef.loc, DataType(typ.id.name, List(ctrRef)))
+            memoUpdateInstruction(dtRef, DataType(typ.id.name, List(ctrRef)))
 
             saveSortRef(NamedType(typ.id), dtRef)
           }
@@ -1145,7 +1056,7 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
         // assign typ.id (lhs) to whatever id is pointing to
         loadSortRef(NamedType(typ.id)) match {
           case Some(_) =>
-            throw new TypeOutOfScope(NamedType(typ.id))
+            throw new TypeOverride(typ)
           case None =>
             saveSortRef(
               NamedType(typ.id),
@@ -1158,8 +1069,7 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
   def functionDeclToTerm(fd: FunctionDecl): Unit = {
     val typeRefs =
       (List(fd.retTyp) ++ fd.argTypes).map(t => typeUseToSortRef(t))
-    val funcRef = Ref(stmts.length)
-    stmts.addOne(
+    val funcRef = memoAddInstruction(
       UserFunction(fd.id.name, typeRefs.head, typeRefs.tail)
     )
     saveObjectRef(fd.id, funcRef)
@@ -1169,8 +1079,7 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
     pushCache()
     val params = dd.params.map { a =>
       val typeRef = typeUseToSortRef(a._2)
-      val selRef = Ref(stmts.length)
-      stmts.addOne(FunctionParameter(a._1.name, typeRef))
+      val selRef = memoAddInstruction(FunctionParameter(a._1.name, typeRef))
 
       saveObjectRef(a._1, selRef)
 
@@ -1179,8 +1088,9 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
     val typeRef = typeUseToSortRef(dd.retTyp)
     val bodyRef = exprToTerm(dd.expr)._1 // defines cannot create new variables
     popCache()
-    val funcRef = Ref(stmts.length)
-    stmts.addOne(UserMacro(dd.id.name, typeRef, bodyRef, params))
+    val funcRef = memoAddInstruction(
+      UserMacro(dd.id.name, typeRef, bodyRef, params)
+    )
     saveObjectRef(dd.id, funcRef)
   }
 
@@ -1193,8 +1103,7 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
     m.typeDecls.foreach(t => typeDeclToTerm(t))
 
     // add placeholder for module and remember where it is
-    val moduleRef = Ref(stmts.length)
-    stmts.addOne(
+    val moduleRef = addInstruction(
       middle.Module(m.id.name, Ref(-1), Ref(-1), Ref(-1), Ref(-1))
     )
 
@@ -1204,8 +1113,7 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
     }
 
     // input state
-    val inputStateRef = Ref(stmts.length)
-    stmts.addOne(FunctionParameter("in", moduleRef))
+    val inputStateRef = memoAddInstruction(FunctionParameter("in", moduleRef))
 
     val fields =
       (m.vars ++ m.sharedVars ++ m.inputs ++ m.outputs)
@@ -1215,12 +1123,11 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
     val selectorRefs =
       fields.map { v =>
         val typeRef = typeUseToSortRef(v._2)
-        val selRef = Ref(stmts.length)
-        stmts.addOne(Selector(v._1.name, typeRef))
+        val selRef = memoAddInstruction(Selector(v._1.name, typeRef))
 
         // create application for scope
-        val getterRef = Ref(stmts.length)
-        stmts.addOne(Application(selRef, List(inputStateRef)))
+        val getterRef =
+          memoAddInstruction(Application(selRef, List(inputStateRef)))
         selectorTerms.addOne((v._1.name, getterRef))
 
         selRef
@@ -1233,8 +1140,7 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
     m.defines.foreach(p => defineDeclToTerm(p))
 
     // add constructor and remember where it is
-    val constructorRef = Ref(stmts.length)
-    stmts.addOne(
+    val constructorRef = memoAddInstruction(
       Constructor(m.id.name, moduleRef, selectorRefs)
     )
     saveObjectRef(m.id, constructorRef)
@@ -1243,8 +1149,8 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
     selectorTerms.map(p => saveObjectRef(Identifier(p._1), p._2))
 
     // update module with constructor; will need to update it fully at the end
-    stmts.update(
-      moduleRef.loc,
+    memoUpdateInstruction(
+      moduleRef,
       middle.Module(m.id.name, constructorRef, Ref(-1), Ref(-1), Ref(-1))
     )
 
@@ -1289,8 +1195,8 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
     )
 
     // fill in placeholder for module
-    stmts.update(
-      moduleRef.loc,
+    memoUpdateInstruction(
+      moduleRef,
       middle.Module(m.id.name, constructorRef, initRef, nextRef, specRef)
     )
 

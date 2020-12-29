@@ -1,12 +1,36 @@
 package middle
 
 import scala.collection.mutable.ArrayBuffer
+import scala.collection.mutable.HashMap
 
 class Minimal(stmts: ArrayBuffer[Instruction]) extends WellFormed(stmts) {
 
-  def mark(): Array[Boolean] = {
+  val memo: HashMap[Instruction, Ref] =
+    new HashMap().addAll(stmts.zipWithIndex.map(p => (p._1, Ref(p._2))))
+
+  def memoAddInstruction(inst: Instruction): Ref =
+    memo.getOrElse(inst, {
+      val newLoc = Ref(stmts.length)
+      stmts.addOne(inst)
+      memo(inst) = newLoc
+      newLoc
+    })
+
+  def addInstruction(inst: Instruction): Ref = {
+    stmts.addOne(inst)
+    Ref(stmts.length - 1)
+  }
+
+  def memoUpdateInstruction(r: Ref, newInstruction: Instruction): Unit = {
+    val old = stmts(r.loc)
+    stmts.update(r.loc, newInstruction)
+    memo.remove(old)
+    memo(newInstruction) = r
+  }
+
+  def mark(startingPoints: Iterable[Ref]): Array[Boolean] = {
     val marks = Array.fill[Boolean](stmts.length)(false)
-    assertionRefs.foreach(r => mark_i(r, marks))
+    startingPoints.foreach(r => mark_i(r, marks))
     marks
   }
 
