@@ -52,19 +52,18 @@
       </p>
 
       <textarea id="demofull">module main {
+  synthesis function h(x : integer, y : integer) : boolean;
   var a, b : integer;
 
   init {
     a = 0;
     b = 1;
   }
-
   next {
-    a' = b;
-    b' = a + b;
+    a', b' = b, a + b;
   }
 
-  invariant a_le_b: a &lt;= b;
+  invariant a_le_b: a &lt;= b && h(a, b);
 
   control {
     induction;
@@ -74,37 +73,44 @@
       <p>
 
         is semantically equivalent to the following
-         <span style="font-variant: small-caps;">smt-lib</span>.<label for="sn-1" class="sidenote-toggle
+        <span style="font-variant: small-caps;">smt-lib</span>/<span style="font-variant: small-caps;">s</span>y<span
+          style="font-variant: small-caps;">g</span>u<span style="font-variant: small-caps;">s</span>-<span
+          style="font-variant: small-caps;">if</span></span>.<label for="sn-1" class="sidenote-toggle
           sidenote-number"></label> <input type="checkbox" id="sn-1" class="sidenote-toggle" /> <span
-            class="sidenote">Interactive translation is a work in progress: don't expect too much. Check the query with CVC4's online interface [<a
-              href="https://cvc4.github.io/app/#temp_be5b8691-1e6e-405a-8053-f6c47abd9607" target="_blank">2</a>].</span>
+          class="sidenote">Try out the interactive translation and check the generated query with
+          CVC4's online interface [<a href="https://cvc4.github.io/app/#temp_be5b8691-1e6e-405a-8053-f6c47abd9607"
+            target="_blank">2</a>].</span>
 
       </p>
 
-      <pre><code id="demofullanswer">; declaring module main 
-  (declare-datatypes ((main 0)) (((main!cntr
+      <pre><code id="demofullanswer">(set-logic DTLIA)
+(set-option :produce-models true)
+(set-option :dump-models true)
+
+; declaring module main 
+  (declare-datatypes ((main 0)) (((main
     (a Int)
     (b Int)))))
 
-  (define-fun stmt!1017 ((in main)) main
-    (main!cntr
+  (define-fun line11col5!18 ((in main)) main
+    (main
       ; assigning to a
       (a in)
       ; assigning to b
       1))
 
-  (define-fun stmt!1016 ((in main)) main
-    (main!cntr
+  (define-fun line10col5!14 ((in main)) main
+    (main
       ; assigning to a
       0
       ; assigning to b
       (b in)))
 
   (define-fun main!init ((in main)) main
-    (stmt!1017 (stmt!1016 in)))
+    (line11col5!18 (line10col5!14 in)))
 
-  (define-fun stmt!1020 ((in main)) main
-    (main!cntr
+  (define-fun line14col9!63 ((in main)) main
+    (main
       ; assigning to a
       (a in)
       ; assigning to b
@@ -112,29 +118,37 @@
         (a in)
         (b in))))
 
-  (define-fun stmt!1019 ((in main)) main
-    (main!cntr
+  (define-fun line14col5!61 ((in main)) main
+    (main
       ; assigning to a
       (b in)
       ; assigning to b
       (b in)))
 
   (define-fun main!next ((in main)) main
-    (stmt!1020 (stmt!1019 in)))
+    (line14col9!63 (line14col5!61 in)))
+
+  (synth-fun h ((x Int) (y Int)) Bool)
 
   (define-fun main!spec ((in main)) Bool
-    (&lt;=
-      (a in)
-      (b in)))
+    (and
+      (&lt;=
+        (a in)
+        (b in))
+      (h
+        (a in)
+        (b in))))
 ; done declaring module main
 
-(declare-const in main)
+(declare-var in!step!0 main)
 
-(assert (or
-  (not (main!spec (main!init in)))
+(constraint (not (or
+  (not (main!spec (main!init in!step!0)))
   (and
-    (main!spec in)
-    (not (main!spec (main!next in))))))</code></pre>
+    (main!spec in!step!0)
+    (not (main!spec (main!next in!step!0)))))))
+
+(check-synth)</code></pre>
 
       <p>
 
