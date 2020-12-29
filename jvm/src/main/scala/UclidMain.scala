@@ -27,7 +27,11 @@ object UclidMain {
       case None => sys.exit(2)
       case Some(config) => {
         val pResults = main(config)
-        println(pResults)
+        if (config.run) {
+          println(pResults)
+        } else {
+          println(pResults.messages.mkString("\n"))
+        }
         sys.exit(pResults.result match {
           case Some(false) => 0
           case Some(true)  => 1

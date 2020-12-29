@@ -5,6 +5,7 @@
 - [Install SBT](https://www.scala-lang.org/download/)
 - [Install Z3](https://github.com/Z3Prover/z3)
 - [Install CVC4](https://github.com/CVC4/CVC4)
+- (Optional) fswatch (`brew install fswatch`)
 
 ## Users
 
@@ -24,6 +25,12 @@ sbt assembly
   -r, --run <boolean>    Run the solver?
   -o, --out <file>       Write query to <file>.
   <file> ...             List of files to analyze.
+```
+
+## Live Edit
+
+```
+./live <uclid file to watch> <query file to watch>
 ```
 
 ## Developers
