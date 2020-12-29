@@ -1,0 +1,37 @@
+// UCLID TEST
+// Solver=cvc4
+// Result=Some(false)
+
+module fib {
+  var a, b : integer;
+
+  init {
+    a = 0;
+    b = 1;
+  }
+
+  next {
+    a' = b;
+    b' = a + b;
+  }
+
+  invariant a_le_b: a <= b;
+}
+
+module main {
+    type FibAndInt = fib && integer;
+    type BoolAndFib = boolean && fib;
+    type both = FibAndInt && BoolAndFib;
+
+    var double : both;
+
+    next {
+        next(double);
+    }
+
+    invariant shouldhold: double.left.left.a == double.right.right.a && double.left.left.b == double.right.right.b;
+
+    control {
+        induction;
+    }
+}

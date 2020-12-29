@@ -177,6 +177,11 @@ case class EnumType(variants: List[Identifier]) extends Type {}
 
 case class RecordType(elements: List[(Identifier, InlineType)]) extends Type {}
 
+sealed abstract class ComposedType extends Type {}
+
+case class ConjunctionComposition(left: InlineType, right: InlineType)
+    extends ComposedType {}
+
 case class ArrayType(inTypes: List[InlineType], outType: InlineType)
     extends InlineType {}
 

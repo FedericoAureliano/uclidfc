@@ -1,0 +1,35 @@
+// UCLID TEST
+// Solver=cvc4
+// Result=Some(true)
+
+module fib {
+  var a, b : integer;
+
+  init {
+    a = 0;
+    b = 1;
+  }
+
+  next {
+    a' = b;
+    b' = a + b;
+  }
+
+  invariant a_le_b: a <= b;
+}
+
+type twofib = fib && fib;
+
+module main {
+    var double : twofib;
+
+    next {
+        next(double);
+    }
+
+    invariant shouldnothold: double.left.a == double.right.b;
+
+    control {
+        induction;
+    }
+}

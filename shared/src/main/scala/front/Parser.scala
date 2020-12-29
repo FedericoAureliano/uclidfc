@@ -534,10 +534,16 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
           throw new MissingCloseBracket(vs.last)
       }
 
+  lazy val ComposedTypeDeclParser: PackratParser[TypeDecl] =
+    KwType ~> IdParser ~ ("=" ~> InlineTypeParser) ~ ("&&" ~> InlineTypeParser) ^^ {
+      case id ~ t1 ~ t2 => TypeDecl(id, Some(ConjunctionComposition(t1, t2)))
+    }
+
   lazy val TypeDeclParserWithoutSemicolon: PackratParser[TypeDecl] =
     positioned {
       EnumDeclParser |
         RecordDeclParser |
+        ComposedTypeDeclParser |
         KwType ~> IdParser ~ ("=" ~> InlineTypeParser) ^^ {
           case id ~ t =>
             TypeDecl(id, Some(t))

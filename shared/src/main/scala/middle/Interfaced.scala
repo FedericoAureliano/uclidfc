@@ -378,15 +378,19 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
           res._1
         }
         // get the module it belongs to
-        val modRef = inferTermType(instanceRef)
+        val mod = stmts(inferTermType(instanceRef).loc)
+          .asInstanceOf[middle.Module]
         // find next function location
-        val nextRef =
-          stmts(modRef.loc).asInstanceOf[middle.Module].next
+        val nextMacro =
+          stmts(mod.next.loc).asInstanceOf[UserMacro]
+
+        val extraArgs = nextMacro.params.tail
+
         val nextCallRef = memoAddInstruction(
-          Application(nextRef, List(instanceRef))
+          Application(mod.next, List(instanceRef) ++ extraArgs)
         )
 
-        (nextCallRef, newNondets)
+        (nextCallRef, newNondets ++ extraArgs)
       }
 
       case ModuleInitCallExpr(expr) => {
@@ -397,15 +401,19 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
           res._1
         }
         // get the module it belongs to
-        val modRef = inferTermType(instanceRef)
+        val mod = stmts(inferTermType(instanceRef).loc)
+          .asInstanceOf[middle.Module]
         // find init function location
-        val initRef =
-          stmts(modRef.loc).asInstanceOf[middle.Module].init
+        val initMacro =
+          stmts(mod.init.loc).asInstanceOf[UserMacro]
+
+        val extraArgs = initMacro.params.tail
+
         val initCallRef = memoAddInstruction(
-          Application(initRef, List(instanceRef))
+          Application(mod.init, List(instanceRef) ++ extraArgs)
         )
 
-        (initCallRef, newNondets)
+        (initCallRef, newNondets ++ extraArgs)
       }
       case _ => throw new NotSupportedYet(expr)
     } // end helper exprToTerm
@@ -1013,25 +1021,25 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
         None // don't need to be inited
     }
 
-  def typeDeclToTerm(typ: TypeDecl): Unit =
-    typ.typ match {
+  def typeDeclToTerm(td: TypeDecl): Unit =
+    td.typ match {
       case None =>
-        loadSortRef(NamedType(typ.id)) match {
-          case Some(_) => throw new TypeOverride(typ)
+        loadSortRef(NamedType(td.id)) match {
+          case Some(_) => throw new TypeOverride(td)
           case None => {
-            val uRef = memoAddInstruction(UserSort(typ.id.name))
+            val uRef = memoAddInstruction(UserSort(td.id.name))
             saveSortRef(
-              NamedType(typ.id),
+              NamedType(td.id),
               uRef
             )
           }
         }
       case Some(EnumType(variants)) => {
-        loadSortRef(NamedType(typ.id)) match {
-          case Some(_) => throw new TypeOverride(typ)
+        loadSortRef(NamedType(td.id)) match {
+          case Some(_) => throw new TypeOverride(td)
           case None => {
             // add datatype placeholder
-            val dtRef = addInstruction(DataType(typ.id.name, List.empty))
+            val dtRef = addInstruction(DataType(td.id.name, List.empty))
             // add constructor for each id
             val constructors = variants.map { i =>
               val vRef =
@@ -1039,17 +1047,17 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
               saveObjectRef(Identifier(i.name), vRef)
               vRef
             }
-            memoUpdateInstruction(dtRef, DataType(typ.id.name, constructors))
-            saveSortRef(NamedType(typ.id), dtRef)
+            memoUpdateInstruction(dtRef, DataType(td.id.name, constructors))
+            saveSortRef(NamedType(td.id), dtRef)
           }
         }
       }
       case Some(RecordType(elements)) => {
-        loadSortRef(NamedType(typ.id)) match {
-          case Some(_) => throw new TypeOverride(typ)
+        loadSortRef(NamedType(td.id)) match {
+          case Some(_) => throw new TypeOverride(td)
           case None => {
             // add datatype placeholder
-            val dtRef = addInstruction(DataType(typ.id.name, List.empty))
+            val dtRef = addInstruction(DataType(td.id.name, List.empty))
 
             val selecorRefs = elements.map { p =>
               val tyepRef = typeUseToSortRef(p._2)
@@ -1057,25 +1065,51 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
             }
 
             val ctrRef = memoAddInstruction(
-              Constructor(typ.id.name, dtRef, selecorRefs)
+              Constructor(td.id.name, dtRef, selecorRefs)
             )
-            saveObjectRef(typ.id, ctrRef)
+            saveObjectRef(td.id, ctrRef)
 
-            memoUpdateInstruction(dtRef, DataType(typ.id.name, List(ctrRef)))
+            memoUpdateInstruction(dtRef, DataType(td.id.name, List(ctrRef)))
 
-            saveSortRef(NamedType(typ.id), dtRef)
+            saveSortRef(NamedType(td.id), dtRef)
           }
         }
       }
+      case Some(ConjunctionComposition(left, right)) => {
+        // create a module decl and then process that instead
+        // val leftField = StateVarsDecl(List(Identifier("left")), left)
+        // val rightField = StateVarsDecl(List(Identifier("right")), right)
+        val leftField = ("left", left)
+        val rightField = ("right", right)
+
+        val nextDecl = {
+          // if either left or right is a module, then we need to call their nexts
+          NextDecl(BlockStmt(List(leftField, rightField).map { f =>
+            val sortRef = typeUseToSortRef(f._2)
+            stmts(sortRef.loc) match {
+              case _: Module => Some(ModuleNextCallStmt(Identifier(f._1)))
+              case _         => None
+            }
+          }.flatten))
+        }
+
+        val decls = List(leftField, rightField).map(f =>
+          StateVarsDecl(List(Identifier(f._1)), f._2)
+        ) ++ List(nextDecl)
+
+        val mod = ModuleDecl(td.id, decls, List.empty)
+
+        moduleToTerm(mod)
+      }
       case Some(_) => {
-        // assign typ.id (lhs) to whatever id is pointing to
-        loadSortRef(NamedType(typ.id)) match {
+        // assign td.id (lhs) to whatever id is pointing to
+        loadSortRef(NamedType(td.id)) match {
           case Some(_) =>
-            throw new TypeOverride(typ)
+            throw new TypeOverride(td)
           case None =>
             saveSortRef(
-              NamedType(typ.id),
-              typeUseToSortRef(typ.typ.get)
+              NamedType(td.id),
+              typeUseToSortRef(td.typ.get)
             )
         }
       }
