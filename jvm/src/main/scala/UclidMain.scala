@@ -91,11 +91,16 @@ object UclidMain {
     try {
       val modules = compile(config.files)
       val obs = Encoder.run(modules, Some(config.mainModuleName))
+
       val solver = config.solver match {
-        case Solvers.z3 => new Solver("z3", List())
-        case Solvers.cvc4 =>
-          new Solver("cvc4", List(("incremental", "true")))
+        case Solvers.z3   => new Solver("z3")
+        case Solvers.cvc4 => new Solver("cvc4 --dump-models")
       }
+
+      if (obs.isSynthesisQuery && config.solver != Solvers.cvc4) {
+        throw new SolverMismatchError("Must use CVC4 for synthesis queries")
+      }
+
       solver.solve(obs, config.run, config.outFile)
     } catch {
       case (e: java.io.FileNotFoundException) =>
@@ -105,6 +110,12 @@ object UclidMain {
         errorResult.messages = List(e.toString())
         errorResult
       case e: SemanticError =>
+        errorResult.messages = List(e.toString())
+        errorResult
+      case e: InternalError =>
+        errorResult.messages = List(e.toString())
+        errorResult
+      case e: UclidJvmError =>
         errorResult.messages = List(e.toString())
         errorResult
     }

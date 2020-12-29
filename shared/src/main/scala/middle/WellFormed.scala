@@ -34,6 +34,10 @@ class WellFormed(stmts: ArrayBuffer[Instruction]) extends TermGraph(stmts) {
             if (!checkRef(sr)) throw new RefOutOfBoundsError(err)
             p.foreach(a => if (!checkRef(a)) throw new RefOutOfBoundsError(err))
           }
+          case Synthesis(_, sr, p) => {
+            if (!checkRef(sr)) throw new RefOutOfBoundsError(err)
+            p.foreach(a => if (!checkRef(a)) throw new RefOutOfBoundsError(err))
+          }
           case Constructor(_, sr, p) => {
             if (!checkRef(sr)) throw new RefOutOfBoundsError(err)
             p.foreach(a => if (!checkRef(a)) throw new RefOutOfBoundsError(err))

@@ -10,7 +10,7 @@
 
 <body id="top">
   <header>
-    <h1>Uclid First-Class</h1>
+    <h1>First-Class Modules in Uclid5</h1>
     <p class="author">
       Federico Mora
     </p>
@@ -18,30 +18,6 @@
 
   <main>
     <article>
-      <h2 id="intro">Introduction</h2>
-
-      <p>
-
-        In this document, we propose a decomposition of Uclid5 into three
-        languages: core, procedure, and proof. We focus on the semantics of the
-        core language and demonstrate a useful intermediate representation,
-        logic assembly. The core language interacts with the procedure language
-        and the proof language. We do not define these other languages here,
-        but we do describe the interface between the languages.
-
-      </p>
-
-      <p>
-
-        Ultimately, we have three goals. First, we want to support first-class
-        modules natively and then use this support to verify P programs.
-        Second, we want to separate Uclid5 components so that they can be
-        engineered and optimized independently. Third, we want to add
-        flexibility to the proof language so that it can support arbitrary
-        verification oracles and implement techniques like specification
-        mining.
-
-      </p>
 
       <h2 id="semantics">1. Core Language</h2>
       <p>
@@ -260,23 +236,6 @@
       <h2><a href="middle.html">Intermediate Representation</a></h2>
       <h2><a href="procedure.html">Procedure Langauge</a></h2>
       <h2><a href="proof.html">Proof Langauge</a></h2>
-
-      <h2>TODO</h2>
-      <p>
-      <ul>
-        <li>Init modules inside records</li>
-        <li>Parser error on "=" in expression</li>
-        <li>Parser error on havocing expressions</li>
-        <li>Inline assumptions and assertions</li>
-        <li>Support bitvectors and strings</li>
-        <li>Composition and simulation in core language</li>
-        <li>Formal definition of proof language</li>
-        <li>Support procedure and proof language</li>
-        <li>Implementation including fuzzing with equivalence checks on transformations</li>
-        <li>Update P to Uclid5 translation</li>
-        <li>Prove things about P programs; write a paper</li>
-      </ul>
-      </p>
 
     </article>
   </main>

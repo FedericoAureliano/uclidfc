@@ -59,6 +59,7 @@ class Minimal(stmts: ArrayBuffer[Instruction]) extends WellFormed(stmts) {
         case UserMacro(_, s, b, p) =>
           markInstruction(s); markInstruction(b); markParams(p)
         case UserFunction(_, s, p) => markInstruction(s); markParams(p)
+        case Synthesis(_, s, p)    => markInstruction(s); markParams(p)
         case Constructor(_, _, p)  => markParams(p)
         case Selector(_, s)        => markInstruction(s)
         case DataType(_, p)        => markParams(p)

@@ -80,6 +80,12 @@ User functions are uninterpreted functions. For example, f(x : Int) : Int would 
 case class UserFunction(name: String, sort: Ref, params: List[Ref] = List.empty)
     extends Instruction {}
 
+case class Synthesis(
+  name: String,
+  sort: Ref,
+  params: List[Ref] = List.empty
+) extends Instruction {}
+
 case class Constructor(
   name: String,
   sort: Ref,

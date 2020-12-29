@@ -5,6 +5,8 @@ import scala.collection.mutable.ListBuffer
 
 class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
 
+  var isSynthesisQuery = false
+
   val TAB = "  "
 
   def inferLogic(): String = {
@@ -43,7 +45,7 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
       }
     )
 
-    s"${if (qf) { "QF_" }
+    s"${if (qf && !isSynthesisQuery) { "QF_" }
     else { "" }}${if (uf) { "UF" }
     else { "" }}${if (a) { "A" }
     else { "" }}${if (dt) { "DT" }
@@ -53,7 +55,8 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
     else { "" }}"
   }
 
-  var options: List[(String, String)] = List.empty
+  var options: List[(String, String)] =
+    List(("produce-models", "true"), ("dump-models", "true"))
 
   val assertionRefs: ListBuffer[Ref] = new ListBuffer()
 
@@ -75,6 +78,7 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
         case t: TheoryMacro       => theorymacroToQueryTerm(t)
         case t: TheorySort        => theorysortToQueryTerm(t)
         case u: UserFunction      => userfunctionToQueryTerm(u)
+        case s: Synthesis         => synthesisToQueryTerm(s)
         case u: UserMacro         => usermacroToQueryTerm(u)
         case u: UserSort          => usersortToQueryTerm(u)
         case m: middle.Module     => moduleToQueryTerm(m)
@@ -156,6 +160,13 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
     def usermacroToQueryTerm(u: UserMacro): String =
       u.name
 
+    def synthesisToQueryTerm(s: Synthesis): String = {
+      if (!isSynthesisQuery) {
+        throw new NotSupportedSynthesis("Must be a synthesis query!")
+      }
+      s.name
+    }
+
     def usersortToQueryTerm(u: UserSort): String =
       u.name
 
@@ -176,6 +187,7 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
           case r: Ref          => dispatch(r)
           case d: DataType     => Some(datatypeToQueryCtx(d))
           case u: UserFunction => Some(userfunctionToQueryCtx(u))
+          case s: Synthesis    => Some(synthesisToQueryCtx(s))
           case u: UserMacro => {
             val dispatched =
               List(dispatch(u.body), Some(usermacroToQueryCtx(u))).flatten
@@ -228,11 +240,20 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
     def userfunctionToQueryCtx(u: UserFunction): String = {
       val tmp = new StringBuilder()
       if (u.params.length > 0) {
+        if (isSynthesisQuery) {
+          throw new NotSupportedSynthesis(
+            "Uninterpreted functions are not supported for synthesis"
+          )
+        }
         tmp ++= s"${TAB * indent}(declare-fun ${u.name} ${u.params
           .map(p => s"(${programPointToQueryTerm(p, indent)})")
           .mkString(" ")} "
       } else {
-        tmp ++= s"${TAB * indent}(declare-const ${u.name} "
+        if (isSynthesisQuery) {
+          tmp ++= s"${TAB * indent}(declare-var ${u.name} "
+        } else {
+          tmp ++= s"${TAB * indent}(declare-const ${u.name} "
+        }
       }
       tmp ++= s"${programPointToQueryTerm(u.sort, indent)})\n"
 
@@ -252,6 +273,23 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
       indent += 1
       tmp ++= s"${TAB * indent}${programPointToQueryTerm(u.body, indent)})\n"
       indent -= 1
+
+      tmp.toString()
+    }
+
+    def synthesisToQueryCtx(u: Synthesis): String = {
+      if (!isSynthesisQuery) {
+        throw new NotSupportedSynthesis("Must be a synthesis query!")
+      }
+      val tmp = new StringBuilder()
+      tmp ++= s"${TAB * indent}(synth-fun ${u.name} (${u.params
+        .map { p =>
+          val fp = stmts(p.loc).asInstanceOf[FunctionParameter]
+          s"(${fp.name} ${programPointToQueryTerm(fp.sort, indent)})"
+        }
+        .mkString(" ")}) "
+
+      tmp ++= s"${programPointToQueryTerm(u.sort, indent)})\n"
 
       tmp.toString()
     }
@@ -287,14 +325,27 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
     stmts.zipWithIndex.map(p => dispatch(Ref(p._2))).flatten.mkString("\n")
   }
 
-  def programToQuery(): String =
-    if (assertionRefs.length > 0) {
+  def programToQuery(): String = {
+    val logic = s"(set-logic ${inferLogic()})\n"
+    val opts = options.map(o => s"(set-option :${o._1} ${o._2})").mkString("\n")
+
+    val body = if (assertionRefs.length > 0) {
       val assertionStrings = assertionRefs
         .map(r => s"${programPointToQueryTerm(r)}\n")
         .mkString("\n")
 
-      programToQueryCtx() + "\n" + "(assert (or\n" + assertionStrings + "))\n(check-sat)"
+      val spec = "\n(or\n" + assertionStrings + ")"
+
+      if (isSynthesisQuery) {
+        programToQueryCtx() + "\n(constraint (not " + spec + "))\n(check-synth)"
+      } else {
+        programToQueryCtx() + "\n(assert " + spec + ")\n(check-sat)"
+      }
+
     } else {
-      "; nothing to verify"
+      "\n; nothing to verify"
     }
+
+    logic + opts + body
+  }
 }

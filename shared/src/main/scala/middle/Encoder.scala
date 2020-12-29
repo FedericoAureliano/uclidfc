@@ -14,9 +14,10 @@ object Encoder {
     // 2. When we find the main module, execute it
     model.foreach { m =>
       m match {
-        case td: TypeDecl     => program.typeDeclToTerm(td)
-        case dd: DefineDecl   => program.defineDeclToTerm(dd)
-        case fd: FunctionDecl => program.functionDeclToTerm(fd)
+        case td: TypeDecl      => program.typeDeclToTerm(td)
+        case dd: DefineDecl    => program.defineDeclToTerm(dd)
+        case fd: FunctionDecl  => program.functionDeclToTerm(fd)
+        case sy: SynthesisDecl => program.synthesisDeclToTerm(sy)
         case mod: ModuleDecl => {
           val params = program.moduleToTerm(mod)
           if (Some(mod.id.name) == main) {

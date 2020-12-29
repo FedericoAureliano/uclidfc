@@ -229,6 +229,12 @@ case class FunctionDecl(
   retTyp: Type
 ) extends TopLevelDecl {}
 
+case class SynthesisDecl(
+  id: Identifier,
+  params: List[(Identifier, InlineType)],
+  retTyp: Type
+) extends TopLevelDecl {}
+
 case class InitDecl(body: BlockStmt) extends Decl {}
 
 case class NextDecl(body: BlockStmt) extends Decl {}
@@ -285,6 +291,10 @@ case class ModuleDecl(
   val functions: List[FunctionDecl] =
     decls
       .collect { case cnsts: FunctionDecl => cnsts }
+
+  val synthesis: List[SynthesisDecl] =
+    decls
+      .collect { case cnsts: SynthesisDecl => cnsts }
 
   // module properties.
   val properties: List[SpecDecl] = decls.collect {

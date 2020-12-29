@@ -84,6 +84,7 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
   val KwAssume = "assume"
   val KwAssert = "assert"
   val KwOption = "set_solver_option"
+  val KwSynthesis = "synthesis"
 
   lexical.delimiters ++= List(
     "(",
@@ -164,7 +165,8 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
     KwHavoc,
     KwAssume,
     KwAssert,
-    KwOption
+    KwOption,
+    KwSynthesis
   )
 
   lazy val ast_binary: Expr ~ String ~ Expr => Expr = {
@@ -605,6 +607,14 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
         }
     }
 
+  lazy val SynthesisDeclParserWithoutSemicolon: PackratParser[SynthesisDecl] =
+    positioned {
+      KwSynthesis ~> KwFunc ~> IdParser ~ IdTypeListParser ~ (":" ~> InlineTypeParser) ^^ {
+        case id ~ args ~ typ =>
+          SynthesisDecl(id, args, typ)
+      }
+    }
+
   lazy val InitDeclParser: PackratParser[InitDecl] = positioned {
     KwInit ~> BlkStmtParser ^^ { case b => InitDecl(b) }
   }
@@ -630,6 +640,7 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
     positioned {
       DefineDeclParserWithoutSemicolon | // define has to come before function because of const
         FunctionDeclParserWithoutSemicolon |
+        SynthesisDeclParserWithoutSemicolon |
         TypeDeclParserWithoutSemicolon |
         VarsDeclParserWithoutSemicolon |
         InputsDeclParserWithoutSemicolon |
@@ -706,7 +717,8 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
     positioned {
       TypeDeclParserWithoutSemicolon |
         DefineDeclParserWithoutSemicolon | // define has to come before function because of const
-        FunctionDeclParserWithoutSemicolon
+        FunctionDeclParserWithoutSemicolon |
+        SynthesisDeclParserWithoutSemicolon
     }
 
   lazy val TopLevelParser: PackratParser[TopLevelDecl] = positioned {

@@ -55,11 +55,6 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
       stmts(curr.loc) match {
         case Application(caller, args) => {
           stmts(caller.loc) match {
-            case TheoryMacro(_, _) | Constructor(_, _, _) | Selector(_, _) |
-                UserFunction(_, _, _) => {
-              // just continue search in children
-              args.foreach(p => searchInline(p, inlines, keepTrack, updates))
-            }
             case UserMacro(_, _, body, params) => {
               val newArgs = args.map(a => updateTerm(a, updates))
               if (inlines.contains(caller)) {
@@ -77,7 +72,8 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
                 searchInline(body, inlines, keepTrack, bindings)
               }
             }
-            case _ => // do nothing
+            case _ => // just continue search in children
+              args.foreach(p => searchInline(p, inlines, keepTrack, updates))
           }
         }
         case _ => // do nothing
@@ -1107,6 +1103,23 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
     saveObjectRef(dd.id, funcRef)
   }
 
+  def synthesisDeclToTerm(sy: SynthesisDecl): Unit = {
+    val params = sy.params.map { a =>
+      val typeRef = typeUseToSortRef(a._2)
+      val selRef = memoAddInstruction(FunctionParameter(a._1.name, typeRef))
+
+      saveObjectRef(a._1, selRef)
+
+      selRef
+    }
+    val typeRef = typeUseToSortRef(sy.retTyp)
+    val funcRef = memoAddInstruction(
+      Synthesis(sy.id.name, typeRef, params)
+    )
+    isSynthesisQuery = true
+    saveObjectRef(sy.id, funcRef)
+  }
+
   // encode the module and return a pointer to the start of the encoding
   def moduleToTerm(
     m: ModuleDecl
@@ -1151,6 +1164,9 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
 
     // defines and constant literals
     m.defines.foreach(p => defineDeclToTerm(p))
+
+    // defines and constant literals
+    m.synthesis.foreach(p => synthesisDeclToTerm(p))
 
     // add constructor and remember where it is
     val constructorRef = memoAddInstruction(

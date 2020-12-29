@@ -6,12 +6,8 @@ import sys.process._
 import java.io.{File, PrintWriter}
 
 class Solver(
-  cmnd: String,
-  val extraOpts: List[(String, String)]
+  cmnd: String
 ) {
-
-  val options =
-    extraOpts ++ List(("produce-models", "true"), ("dump-models", "true"))
 
   def runProcess(in: String): (List[String], List[String], Int) = {
     val qb = Process(in)
@@ -25,12 +21,13 @@ class Solver(
 
   def writeQueryToFile(
     query: String,
-    outFile: Option[String]
+    outFile: Option[String],
+    suffix: String
   ): File = {
     val f = outFile match {
       case Some(value) => new File(value)
       case None => {
-        val tempFi = File.createTempFile("tmp", ".smt2")
+        val tempFi = File.createTempFile("tmp", suffix)
         tempFi.deleteOnExit()
         tempFi
       }
@@ -51,16 +48,13 @@ class Solver(
     run: Boolean,
     outFile: Option[String]
   ): ProofResult = {
-    val logic = s"(set-logic ${program.inferLogic()})"
-    val queryOpts = options ++ program.options
+
     val query = program.programToQuery()
 
-    val processedQuery =
-      (List(logic) ++ queryOpts.map(o => s"(set-option :${o._1} ${o._2})") ++ List(
-        query
-      )).mkString("\n")
-
-    val qfile = writeQueryToFile(processedQuery, outFile).getAbsolutePath()
+    val suffix = if (program.isSynthesisQuery) { ".sl" }
+    else { ".smt2" }
+    val qfile =
+      writeQueryToFile(query, outFile, suffix).getAbsolutePath()
 
     if (!run) {
       return new ProofResult(
@@ -70,18 +64,18 @@ class Solver(
     }
 
     val result = runProcess(s"$cmnd ${qfile}")
-
+    val results = result._1 ++ result._2
     val answer = " " + (result._1 ++ result._2).mkString("\n")
 
     if (answer.contains("error") || answer.contains(
           "unknown"
         )) {
-      new ProofResult(None, result._1)
+      new ProofResult(None, results)
     } else {
       if ("(\\ssat)".r.findFirstIn(answer).isDefined) {
-        new ProofResult(Some(true), result._1)
+        new ProofResult(Some(true), results)
       } else {
-        new ProofResult(Some(false), result._1)
+        new ProofResult(Some(false), results)
       }
     }
   }
@@ -94,11 +88,11 @@ class ProofResult(
 
   override def toString(): String = {
     val answer = result match {
-      case Some(true)  => "Counterexample:"
-      case Some(false) => "Verification Passes:"
-      case None        => "Not Solved:"
+      case Some(true)  => "Counterexample!"
+      case Some(false) => "Verified!"
+      case None        => "Problem!"
     }
-    (List(answer) ++ messages)
+    (List("*********\n" + answer + "\n*********\n\nSolver Output:") ++ messages)
       .mkString("\n")
   }
 }

@@ -1,4 +1,4 @@
-# Uclid First-Class
+# Uclid5 with First-Class Modules through Algebraic Data Types
 
 ## Dependencies
 
