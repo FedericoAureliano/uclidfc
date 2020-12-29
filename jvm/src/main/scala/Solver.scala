@@ -71,9 +71,9 @@ class Solver(
 
     val result = runProcess(s"$cmnd ${qfile}")
 
-    val answer = " " + result._1.mkString("\n")
+    val answer = " " + (result._1 ++ result._2).mkString("\n")
 
-    if (!result._2.isEmpty || answer.contains("error") || answer.contains(
+    if (answer.contains("error") || answer.contains(
           "unknown"
         )) {
       new ProofResult(None, result._1)

@@ -1,0 +1,26 @@
+// UCLID TEST
+// Solver=cvc4
+// Result=Some(false)
+
+module main
+{
+    var a : integer;
+    var b : integer;
+
+    init
+    {
+        a = -100000;
+        b = 187;
+    }
+    next
+    {
+        a = a * b;
+    }
+
+    invariant nonlinear: a < 0;
+
+    control
+    {
+        unroll(4);
+    }
+}

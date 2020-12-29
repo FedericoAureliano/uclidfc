@@ -19,6 +19,11 @@ trait UclidTokens extends Tokens {
     override def toString = chars.toString + "_" + base.toString
   }
 
+  /** The class of string literal tokens. */
+  case class StringLit(chars: String) extends UclidToken {
+    override def toString = "\"" + chars + "\""
+  }
+
   /** The class of identifier tokens. */
   case class Identifier(chars: String) extends UclidToken {
     override def toString = "identifier " + chars
@@ -42,6 +47,11 @@ class UclidLexical extends Lexical with UclidTokens with Positional {
         digit ~ rep(digit) ^^ {
           case first ~ rest =>
             IntegerLit((first :: rest).mkString(""), 10)
+        }
+      }
+      | positioned {
+        '\"' ~> rep(chrExcept('\"', '\n', EofCh)) <~ '\"' ^^ {
+          case chars => StringLit(chars.mkString(""))
         }
       }
       | EofCh ^^^ EOF

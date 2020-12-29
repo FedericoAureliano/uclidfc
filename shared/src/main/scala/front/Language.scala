@@ -30,6 +30,8 @@ sealed trait ASTNode extends Positional with PositionedNode {
 // operators (interpreted symbols), statements, and expressions
 sealed trait TermNode extends ASTNode
 
+sealed trait Command extends ASTNode
+
 sealed trait Operator extends TermNode {
   val name: String
 }
@@ -236,12 +238,14 @@ case class SpecDecl(id: Identifier, expr: Expr) extends Decl {}
 case class ProofCommand(
   name: Identifier,
   k: Option[IntLit]
-) extends ASTNode
+) extends Command
+
+case class SolverOption(name: String, option: String) extends Command
 
 case class ModuleDecl(
   id: Identifier,
   decls: List[Decl],
-  cmds: List[ProofCommand]
+  cmds: List[Command]
 ) extends TopLevelDecl {
 
   // module types.

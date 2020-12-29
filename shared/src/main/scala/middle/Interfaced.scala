@@ -759,143 +759,156 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
     moduleId: Identifier,
     initParams: List[Ref],
     nextParams: List[Ref],
-    cmds: List[ProofCommand]
+    cmds: List[Command]
   ): Unit =
     cmds.foreach(p =>
-      p.name.name match {
-        case "induction" => {
-          // create all the variables you need
-          val initVariables = initParams.map { p =>
-            stmts(p.loc) match {
-              case FunctionParameter(name, sort) => {
-                val vRef =
-                  memoAddInstruction(UserFunction(s"$name!step!0", sort))
-                vRef
-              }
-            }
-          }
-
-          // get the module declaration
-          val mod = stmts(loadSortRef(NamedType(moduleId)).get.loc)
-            .asInstanceOf[middle.Module]
-          val initRef = mod.init
-          val nextRef = mod.next
-          val specRef = mod.spec
-
-          // base case
-          // apply init
-          val initAppRef =
-            memoAddInstruction(Application(initRef, initVariables))
-
-          // apply spec to result of init
-          val initSpecRef =
-            memoAddInstruction(Application(specRef, List(initAppRef)))
-
-          val negRef = memoAddInstruction(TheoryMacro("not"))
-
-          val baseRef =
-            memoAddInstruction(Application(negRef, List(initSpecRef)))
-
-          addAssertion(baseRef)
-
-          // induction step
-          // holds on entry
-          val entryRef =
-            memoAddInstruction(Application(specRef, List(initVariables.head)))
-          // we can borrow the nondet state from init since we pop between asserts (this lets us just generate the auxiliary arguments when applying next)
-
-          // Take k steps
-          val k = p.k.getOrElse(IntLit(1)).literal.toInt
-
-          var transRef = initVariables.head
-
-          (1 to k).foreach { i =>
-            val args = nextParams.tail.map { p =>
-              stmts(p.loc) match {
-                case FunctionParameter(name, sort) => {
-                  val vRef =
-                    memoAddInstruction(UserFunction(s"$name!step!$i", sort))
-                  vRef
-                }
-              }
-            }
-            transRef =
-              memoAddInstruction(Application(nextRef, List(transRef) ++ args))
-          }
-
-          // holds on exit
-          val exitRef = memoAddInstruction(Application(specRef, List(transRef)))
-
-          val negExitRef =
-            memoAddInstruction(Application(negRef, List(exitRef)))
-
-          val andRef = memoAddInstruction(TheoryMacro("and"))
-
-          val inductiveRef = memoAddInstruction(
-            Application(andRef, List(entryRef, negExitRef))
-          )
-
-          addAssertion(inductiveRef)
-
-        }
-        case "unroll" => {
-          // create all the variables you need
-          val initVariables = initParams.map { p =>
-            stmts(p.loc) match {
-              case FunctionParameter(name, sort) => {
-                val vRef =
-                  memoAddInstruction(UserFunction(s"$name!step!0", sort))
-                vRef
-              }
-            }
-          }
-
-          // get the module declaration
-          val mod = stmts(loadSortRef(NamedType(moduleId)).get.loc)
-            .asInstanceOf[middle.Module]
-          val initRef = mod.init
-          val nextRef = mod.next
-          val specRef = mod.spec
-
-          val initAppRef =
-            memoAddInstruction(Application(initRef, initVariables))
-
-          // apply spec to result of init
-          val initSpecRef =
-            memoAddInstruction(Application(specRef, List(initAppRef)))
-
-          val negRef = memoAddInstruction(TheoryMacro("not"))
-
-          val baseRef =
-            memoAddInstruction(Application(negRef, List(initSpecRef)))
-
-          addAssertion(baseRef)
-
-          // Take k steps
-          val k = p.k.getOrElse(IntLit(1)).literal.toInt
-
-          var transRef = initAppRef
-
-          (1 to k).foreach {
-            i =>
-              val args = nextParams.tail.map { p =>
+      p match {
+        case SolverOption(name, option) =>
+          options = options.appended((name, option))
+        case ProofCommand(name, unwind) => {
+          name.name match {
+            case "induction" => {
+              // create all the variables you need
+              val initVariables = initParams.map { p =>
                 stmts(p.loc) match {
                   case FunctionParameter(name, sort) => {
                     val vRef =
-                      memoAddInstruction(UserFunction(s"$name!step!$i", sort))
+                      memoAddInstruction(UserFunction(s"$name!step!0", sort))
                     vRef
                   }
                 }
               }
-              transRef =
-                memoAddInstruction(Application(nextRef, List(transRef) ++ args))
+
+              // get the module declaration
+              val mod = stmts(loadSortRef(NamedType(moduleId)).get.loc)
+                .asInstanceOf[middle.Module]
+              val initRef = mod.init
+              val nextRef = mod.next
+              val specRef = mod.spec
+
+              // base case
+              // apply init
+              val initAppRef =
+                memoAddInstruction(Application(initRef, initVariables))
+
+              // apply spec to result of init
+              val initSpecRef =
+                memoAddInstruction(Application(specRef, List(initAppRef)))
+
+              val negRef = memoAddInstruction(TheoryMacro("not"))
+
+              val baseRef =
+                memoAddInstruction(Application(negRef, List(initSpecRef)))
+
+              addAssertion(baseRef)
+
+              // induction step
+              // holds on entry
+              val entryRef =
+                memoAddInstruction(
+                  Application(specRef, List(initVariables.head))
+                )
+              // we can borrow the nondet state from init since we pop between asserts (this lets us just generate the auxiliary arguments when applying next)
+
+              // Take k steps
+              val k = unwind.getOrElse(IntLit(1)).literal.toInt
+
+              var transRef = initVariables.head
+
+              (1 to k).foreach { i =>
+                val args = nextParams.tail.map { p =>
+                  stmts(p.loc) match {
+                    case FunctionParameter(name, sort) => {
+                      val vRef =
+                        memoAddInstruction(UserFunction(s"$name!step!$i", sort))
+                      vRef
+                    }
+                  }
+                }
+                transRef = memoAddInstruction(
+                  Application(nextRef, List(transRef) ++ args)
+                )
+              }
+
               // holds on exit
               val exitRef =
                 memoAddInstruction(Application(specRef, List(transRef)))
+
               val negExitRef =
                 memoAddInstruction(Application(negRef, List(exitRef)))
 
-              addAssertion(negExitRef)
+              val andRef = memoAddInstruction(TheoryMacro("and"))
+
+              val inductiveRef = memoAddInstruction(
+                Application(andRef, List(entryRef, negExitRef))
+              )
+
+              addAssertion(inductiveRef)
+
+            }
+            case "unroll" => {
+              // create all the variables you need
+              val initVariables = initParams.map { p =>
+                stmts(p.loc) match {
+                  case FunctionParameter(name, sort) => {
+                    val vRef =
+                      memoAddInstruction(UserFunction(s"$name!step!0", sort))
+                    vRef
+                  }
+                }
+              }
+
+              // get the module declaration
+              val mod = stmts(loadSortRef(NamedType(moduleId)).get.loc)
+                .asInstanceOf[middle.Module]
+              val initRef = mod.init
+              val nextRef = mod.next
+              val specRef = mod.spec
+
+              val initAppRef =
+                memoAddInstruction(Application(initRef, initVariables))
+
+              // apply spec to result of init
+              val initSpecRef =
+                memoAddInstruction(Application(specRef, List(initAppRef)))
+
+              val negRef = memoAddInstruction(TheoryMacro("not"))
+
+              val baseRef =
+                memoAddInstruction(Application(negRef, List(initSpecRef)))
+
+              addAssertion(baseRef)
+
+              // Take k steps
+              val k = unwind.getOrElse(IntLit(1)).literal.toInt
+
+              var transRef = initAppRef
+
+              (1 to k).foreach {
+                i =>
+                  val args = nextParams.tail.map { p =>
+                    stmts(p.loc) match {
+                      case FunctionParameter(name, sort) => {
+                        val vRef =
+                          memoAddInstruction(
+                            UserFunction(s"$name!step!$i", sort)
+                          )
+                        vRef
+                      }
+                    }
+                  }
+                  transRef = memoAddInstruction(
+                    Application(nextRef, List(transRef) ++ args)
+                  )
+                  // holds on exit
+                  val exitRef =
+                    memoAddInstruction(Application(specRef, List(transRef)))
+                  val negExitRef =
+                    memoAddInstruction(Application(negRef, List(exitRef)))
+
+                  addAssertion(negExitRef)
+              }
+            }
           }
         }
       }

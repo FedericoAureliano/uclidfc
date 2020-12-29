@@ -9,7 +9,7 @@ import scala.collection.mutable
 /** This is a re-implementation of the Scala libraries StdTokenParsers with StdToken replaced by UclidToken. */
 trait UclidTokenParsers extends TokenParsers {
   type Tokens <: UclidTokens
-  import lexical.{Identifier, IntegerLit, Keyword}
+  import lexical.{Identifier, IntegerLit, Keyword, StringLit}
 
   protected val keywordCache = mutable.HashMap[String, Parser[String]]()
 
@@ -28,6 +28,10 @@ trait UclidTokenParsers extends TokenParsers {
   /** A parser which matches an identifier */
   def identParser: Parser[String] =
     elem("identifier", _.isInstanceOf[Identifier]) ^^ (_.chars)
+
+  /** A parser which matches a string literal */
+  def stringLit: Parser[String] =
+    elem("string literal", _.isInstanceOf[StringLit]) ^^ (_.chars)
 }
 
 object UclidParser extends UclidTokenParsers with PackratParsers {
@@ -79,6 +83,7 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
   val KwHavoc = "havoc"
   val KwAssume = "assume"
   val KwAssert = "assert"
+  val KwOption = "set_solver_option"
 
   lexical.delimiters ++= List(
     "(",
@@ -158,7 +163,8 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
     KwExists,
     KwHavoc,
     KwAssume,
-    KwAssert
+    KwAssert,
+    KwOption
   )
 
   lazy val ast_binary: Expr ~ String ~ Expr => Expr = {
@@ -646,14 +652,18 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
     }
 
   // control commands.
-  lazy val CmdParserWithoutSemicolon: PackratParser[ProofCommand] = positioned {
-    IdParser ~ ("(" ~> IntegerParser <~ ")").? ^^ {
-      case id ~ k =>
-        ProofCommand(id, k)
-    }
+  lazy val CmdParserWithoutSemicolon: PackratParser[Command] = positioned {
+    KwOption ~> ("(" ~> stringLit) ~ ("," ~> stringLit) <~ ")" ^^ {
+      case name ~ set =>
+        SolverOption(name, set)
+    } |
+      IdParser ~ ("(" ~> IntegerParser <~ ")").? ^^ {
+        case id ~ k =>
+          ProofCommand(id, k)
+      }
   }
 
-  lazy val CmdParser: PackratParser[ProofCommand] = positioned {
+  lazy val CmdParser: PackratParser[Command] = positioned {
     CmdParserWithoutSemicolon <~ ";" |
       CmdParserWithoutSemicolon ^^ {
         case c =>
@@ -663,12 +673,13 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
       }
   }
 
-  lazy val CmdBlockParser: PackratParser[List[ProofCommand]] =
+  lazy val CmdBlockParser: PackratParser[List[Command]] =
     KwControl ~ "{" ~> rep(CmdParser) <~ "}" |
       KwControl ~ "{" ~> rep(CmdParser) ^^ {
         case cmds =>
           throw new MissingCloseBracket(
-            cmds.last
+            // TODO: how to correctly handle "or else"
+            cmds.headOption.getOrElse(ProofCommand(Identifier("failed"), None))
           )
       }
 

@@ -7,9 +7,52 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
 
   val TAB = "  "
 
-  def inferLogic(): String = "ALL"
+  def inferLogic(): String = {
+    var uf = false
+    var a = false
+    var dt = false
+    var i = false
+    var linear = true
+    var qf = true
+    stmts.foreach(inst =>
+      inst match {
+        case _: AbstractDataType => dt = true
+        case Application(caller, args) => {
+          stmts(caller.loc) match {
+            case TheoryMacro("*", _) => {
+              if (args.filter { a =>
+                    stmts(a.loc) match {
+                      case TheoryMacro(name, _) => name.toIntOption.isDefined
+                      case _                    => false
+                    }
+                  }.length < args.length - 1) {
+                linear = false
+              }
+            }
+            case _ =>
+          }
+        }
+        case TheoryMacro("exists", _) => qf = false
+        case TheoryMacro("forall", _) => qf = false
+        case TheoryMacro(name, _) =>
+          if (name.toIntOption.isDefined) { i = true }
+        case UserFunction(_, _, params) => if (params.length > 0) { uf = true }
+        case TheorySort("Array", _)     => a = true
+        case TheorySort("Int", _)       => i = true
+        case _                          =>
+      }
+    )
 
-  var isSynthesisQuery = false
+    s"${if (qf) { "QF_" }
+    else { "" }}${if (uf) { "UF" }
+    else { "" }}${if (a) { "A" }
+    else { "" }}${if (dt) { "DT" }
+    else { "" }}${if (linear && i) { "L" }
+    else if (!linear && i) { "N" }
+    else { "" }}${if (i) { "IA" }
+    else { "" }}"
+  }
+
   var options: List[(String, String)] = List.empty
 
   val assertionRefs: ListBuffer[Ref] = new ListBuffer()
