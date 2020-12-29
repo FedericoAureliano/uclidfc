@@ -2,4 +2,11 @@
 
 SCRIPTPATH="$( cd "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
 
-java -jar $SCRIPTPATH/../jvm/target/scala-2.13/uclidfc-assembly-1.0.jar "$@"
+FILE=$SCRIPTPATH/../jvm/target/scala-2.13/uclidfc-assembly-1.0.jar
+if [ ! -f "$FILE" ]; then
+    pushd $SCRIPTPATH/../
+    sbt assembly
+    popd
+fi
+
+java -jar $FILE "$@"

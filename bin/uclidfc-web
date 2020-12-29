@@ -2,4 +2,12 @@
 
 SCRIPTPATH="$( cd "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
 
+FILE=$SCRIPTPATH/../docs/js/uclidfc-opt.js
+if [ ! -f "$FILE" ]; then
+    pushd $SCRIPTPATH/../
+    sbt fullOptJS; cp js/target/scala-2.13/uclidfc-opt.js docs/js/uclidfc-opt.js
+    popd
+fi
+
+
 open $SCRIPTPATH/../docs/index.html

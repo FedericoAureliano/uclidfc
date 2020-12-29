@@ -11,12 +11,11 @@
 
 ### Compile
 
-```
-sbt assembly
-```
-(and add the bin folder to your path)
+Just add the bin folder to your path: uclidfc will automatically compile the
+first time you run it. Note, uclidfc will not automatically recompile if you make
+changes to its source code.
 
-### Run
+### Run on JVM
 
 ```
 uclidfc [options] <file> ...
@@ -32,6 +31,12 @@ uclidfc [options] <file> ...
 
 ```
 uclidfc-live <uclid files to edit> <query file to watch>
+```
+
+### Web & Docs
+
+```
+uclidfc-web
 ```
 
 ## Developers
