@@ -60,7 +60,7 @@ class Solver(
     if (!run) {
       return new ProofResult(
         None,
-        List("User opted out of running the solver.")
+        List("Opted out of running the solver.")
       )
     }
 

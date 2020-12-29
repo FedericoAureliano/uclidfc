@@ -14,11 +14,12 @@
 ```
 sbt assembly
 ```
+(and add the bin folder to your path)
 
 ### Run
 
 ```
-./uclidfc [options] <file> ...
+uclidfc [options] <file> ...
 
   -m, --main <module>    Name of the main module.
   -s, --solver <solver>  Use <solver> (z3, cvc4)
@@ -27,10 +28,10 @@ sbt assembly
   <file> ...             List of files to analyze.
 ```
 
-## Live Edit
+### Live Edit
 
 ```
-./live <uclid file to watch> <query file to watch>
+uclidfc-live <uclid files to edit> <query file to watch>
 ```
 
 ## Developers
