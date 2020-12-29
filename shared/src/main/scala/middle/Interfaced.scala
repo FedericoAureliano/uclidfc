@@ -548,31 +548,35 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
     var mostRecentParams: List[Ref] = List.empty
 
     val bodyRef = if (block.stmts.length > 0) {
-      val firstFuncRef = {
-        val res =
-          stmtToMacro(stateParam, ctrRef, block.stmts.head)
-        newParams ++= res._2
-        mostRecentParams = res._2
-        res._1
-      }
 
-      val startRef = memoAddInstruction(
-        Application(firstFuncRef, List(stateParam) ++ mostRecentParams)
-      )
+      val firstRes = stmtToMacro(stateParam, ctrRef, block.stmts.head)
+      newParams ++= firstRes._2
+      mostRecentParams = firstRes._2
 
-      block.stmts.tail.foldLeft(startRef) { (acc, stmt) =>
-        val funcRef = {
-          val res = stmtToMacro(stateParam, ctrRef, stmt)
-          newParams ++= res._2
-          mostRecentParams = res._2
-          res._1
-        }
-        // add the nondet parameters at the end
-        val appRef = memoAddInstruction(
-          Application(funcRef, List(acc) ++ mostRecentParams)
+      val firstFuncRef = firstRes._1
+
+      if (block.stmts.length == 1) {
+        return firstRes
+      } else {
+        val startRef = memoAddInstruction(
+          Application(firstFuncRef, List(stateParam) ++ mostRecentParams)
         )
-        appRef
+
+        block.stmts.tail.foldLeft(startRef) { (acc, stmt) =>
+          val funcRef = {
+            val res = stmtToMacro(stateParam, ctrRef, stmt)
+            newParams ++= res._2
+            mostRecentParams = res._2
+            res._1
+          }
+          // add the nondet parameters at the end
+          val appRef = memoAddInstruction(
+            Application(funcRef, List(acc) ++ mostRecentParams)
+          )
+          appRef
+        }
       }
+
     } else {
       stateParam
     }
@@ -745,8 +749,10 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
 
     val um = stmts(res._1.loc).asInstanceOf[UserMacro]
 
-    stmts
-      .update(res._1.loc, UserMacro(funcName, um.sort, um.body, um.params))
+    memoUpdateInstruction(
+      res._1,
+      UserMacro(funcName, um.sort, um.body, um.params)
+    )
 
     res
   }
@@ -1116,7 +1122,7 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
     val funcRef = memoAddInstruction(
       Synthesis(sy.id.name, typeRef, params)
     )
-    isSynthesisQuery = true
+
     saveObjectRef(sy.id, funcRef)
   }
 

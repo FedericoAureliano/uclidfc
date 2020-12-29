@@ -49,6 +49,7 @@ class Solver(
     outFile: Option[String]
   ): ProofResult = {
 
+    // need to call this first before checking if it is a synthesis query
     val query = program.programToQuery()
 
     val suffix = if (program.isSynthesisQuery) { ".sl" }

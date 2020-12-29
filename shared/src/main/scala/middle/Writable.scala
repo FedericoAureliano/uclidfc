@@ -5,9 +5,9 @@ import scala.collection.mutable.ListBuffer
 
 class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
 
-  var isSynthesisQuery = false
-
   val TAB = "  "
+
+  var isSynthesisQuery = false
 
   def inferLogic(): String = {
     var uf = false
@@ -16,34 +16,44 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
     var i = false
     var linear = true
     var qf = true
-    stmts.foreach(inst =>
-      inst match {
-        case _: AbstractDataType => dt = true
-        case Application(caller, args) => {
-          stmts(caller.loc) match {
-            case TheoryMacro("*", _) => {
-              if (args.filter { a =>
-                    stmts(a.loc) match {
-                      case TheoryMacro(name, _) => name.toIntOption.isDefined
-                      case _                    => false
-                    }
-                  }.length < args.length - 1) {
-                linear = false
+
+    val marks = mark(assertionRefs)
+
+    stmts
+      .zip(marks)
+      .foreach(inst =>
+        if (inst._2) {
+          inst._1 match {
+            case _: AbstractDataType => dt = true
+            case Application(caller, args) => {
+              stmts(caller.loc) match {
+                case TheoryMacro("*", _) => {
+                  if (args.filter { a =>
+                        stmts(a.loc) match {
+                          case TheoryMacro(name, _) =>
+                            name.toIntOption.isDefined
+                          case _ => false
+                        }
+                      }.length < args.length - 1) {
+                    linear = false
+                  }
+                }
+                case _ =>
               }
             }
-            case _ =>
+            case TheoryMacro("exists", _) => qf = false
+            case TheoryMacro("forall", _) => qf = false
+            case TheoryMacro(name, _) =>
+              if (name.toIntOption.isDefined) { i = true }
+            case UserFunction(_, _, params) =>
+              if (params.length > 0) { uf = true }
+            case TheorySort("Array", _) => a = true
+            case TheorySort("Int", _)   => i = true
+            case Synthesis(_, _, _)     => isSynthesisQuery = true
+            case _                      =>
           }
         }
-        case TheoryMacro("exists", _) => qf = false
-        case TheoryMacro("forall", _) => qf = false
-        case TheoryMacro(name, _) =>
-          if (name.toIntOption.isDefined) { i = true }
-        case UserFunction(_, _, params) => if (params.length > 0) { uf = true }
-        case TheorySort("Array", _)     => a = true
-        case TheorySort("Int", _)       => i = true
-        case _                          =>
-      }
-    )
+      )
 
     s"${if (qf && !isSynthesisQuery) { "QF_" }
     else { "" }}${if (uf) { "UF" }
@@ -331,10 +341,10 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
 
     val body = if (assertionRefs.length > 0) {
       val assertionStrings = assertionRefs
-        .map(r => s"${programPointToQueryTerm(r)}")
+        .map(r => s"${TAB}${programPointToQueryTerm(r, 1)}")
         .mkString("\n")
 
-      val spec = "(or\n" + assertionStrings + ")"
+      val spec = s"(or\n" + assertionStrings + ")"
 
       if (isSynthesisQuery) {
         programToQueryCtx() + "\n(constraint (not " + spec + "))\n\n(check-synth)"
