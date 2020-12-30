@@ -5,7 +5,6 @@
 - [Install SBT](https://www.scala-lang.org/download/)
 - [Install Z3](https://github.com/Z3Prover/z3)
 - [Install CVC4](https://github.com/CVC4/CVC4)
-- (Optional) fswatch (`brew install fswatch`)
 
 ## Users
 
@@ -13,7 +12,7 @@
 
 Just add the bin folder to your path: uclidfc will automatically compile the
 first time you run it. Note, uclidfc will not automatically recompile if you make
-changes to its source code.
+changes to its source code. To recompile, run `sbt assembly`.
 
 ### Run on JVM
 
@@ -30,6 +29,7 @@ uclidfc [options] <file> ...
 ### Live Edit
 
 ```
+# depends on fswatch (`brew install fswatch`)
 uclidfc-live <uclid files to edit> <query file to watch>
 ```
 
@@ -66,3 +66,7 @@ sbt "uclidJVM/run [options] <file> ..."
 sbt fullOptJS; cp js/target/scala-2.13/uclidfc-opt.js docs/js/uclidfc-opt.js
 open docs/index.html
 ```
+
+### Before Committing
+
+To auto-format your code and run all the CI checks locally, run `./beforecommit.sh`.

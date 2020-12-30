@@ -39,7 +39,7 @@ class TestEndToEnd {
     UclidMain.main(UclidMain.parseOptions(Array(filename, "-s", solver)).get)
 
   @Test def testFeatures(): Unit = {
-    val tests = new File("models/features").listFiles
+    val tests = new File("models/tests/features").listFiles
       .filter(_.isFile)
       .map(f => readTestFile(f))
       .flatten
@@ -53,7 +53,7 @@ class TestEndToEnd {
   }
 
   @Test def testSyntaxErrors(): Unit = {
-    val tests = new File("models/errors/syntax").listFiles
+    val tests = new File("models/tests/errors/syntactic").listFiles
       .filter(_.isFile)
       .map(f => readTestFile(f))
       .flatten
@@ -67,7 +67,7 @@ class TestEndToEnd {
   }
 
   @Test def testSemanticErrors(): Unit = {
-    val tests = new File("models/errors/semantics").listFiles
+    val tests = new File("models/tests/errors/semantic").listFiles
       .filter(_.isFile)
       .map(f => readTestFile(f))
       .flatten
