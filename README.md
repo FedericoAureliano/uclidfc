@@ -33,8 +33,11 @@ paper](https://arxiv.org/abs/2007.06760).
 ## Dependencies
 
 - [Install SBT](https://www.scala-lang.org/download/)
-- [Install Z3](https://github.com/Z3Prover/z3)
-- [Install CVC4](https://github.com/CVC4/CVC4)
+- Install at least one of (CVC4 is used by default)
+  - [Alt-Ergo](https://alt-ergo.ocamlpro.com/)
+  - [CVC4](https://github.com/CVC4/CVC4) (DEFAULT)
+  - [Z3](https://github.com/Z3Prover/z3)
+  - [Vampire](https://github.com/vprover/vampire)
 
 ## Compile
 
@@ -48,7 +51,7 @@ make changes to its source code. To recompile, run `sbt assembly`.
 uclidfc [options] <file> ...
 
   -m, --main <module>    Name of the main module.
-  -s, --solver <solver>  Use <solver> (z3, cvc4)
+  -s, --solver <solver>  Use one of alt_ergo or cvc4 or vampire or z3. Solver must be in your path.
   -r, --run <boolean>    Run the solver?
   -o, --out <file>       Write query to <file>.
   <file> ...             List of files to analyze.

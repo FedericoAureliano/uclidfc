@@ -11,7 +11,7 @@ import middle.EncodingError
 
 object Solvers extends Enumeration {
   type Solvers = Value
-  val z3, cvc4 = Value
+  val alt_ergo, cvc4, vampire, z3 = Value
 }
 
 /** This is the main class for Uclid.
@@ -47,7 +47,7 @@ object UclidMain {
     */
   case class Config(
     mainModuleName: String = "main",
-    solver: Solvers.Value = Solvers.z3,
+    solver: Solvers.Value = Solvers.cvc4,
     run: Boolean = true,
     outFile: Option[String] = None,
     files: Seq[java.io.File] = Seq()
@@ -65,7 +65,9 @@ object UclidMain {
       opt[Solvers.Value]('s', "solver")
         .valueName("<solver>")
         .action((x, c) => c.copy(solver = x))
-        .text(s"Use <solver> (${Solvers.values.mkString(", ")})")
+        .text(
+          s"Use one of ${Solvers.values.mkString(" or ")}. Solver must be in your path."
+        )
 
       opt[String]('r', "run")
         .valueName("<boolean>")
@@ -96,13 +98,15 @@ object UclidMain {
       val modules = compile(config.files)
       val obs = Encoder.run(modules, Some(config.mainModuleName))
 
-      val solver = config.solver match {
-        case Solvers.z3   => new Solver("z3")
-        case Solvers.cvc4 => new Solver("cvc4 --dump-models")
-      }
-
       if (obs.isSynthesisQuery && config.solver != Solvers.cvc4) {
         throw new SolverMismatchError("Must use CVC4 for synthesis queries")
+      }
+
+      val solver = config.solver match {
+        case Solvers.alt_ergo => new Solver("alt-ergo -enable-adts-cs")
+        case Solvers.cvc4     => new Solver("cvc4 --dump-models")
+        case Solvers.vampire  => new Solver("vampire --input_syntax smtlib2")
+        case Solvers.z3       => new Solver("z3 -model")
       }
 
       solver.solve(obs, config.run, config.outFile)

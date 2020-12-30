@@ -65,8 +65,7 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
     else { "" }}"
   }
 
-  var options: List[(String, String)] =
-    List(("produce-models", "true"), ("dump-models", "true"))
+  var options: List[(String, String)] = List(("produce-models", "true"))
 
   val assertionRefs: ListBuffer[Ref] = new ListBuffer()
 
