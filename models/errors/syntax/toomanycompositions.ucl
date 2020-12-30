@@ -9,10 +9,11 @@ module main
 
     var a : frame;
 
+    invariant couldbe: a.k2 != a.k;
+    
     control {
         induction;
-
-    invariant couldbe: a.k2 != a.k;
+    }
 }
 
 type toomany = main || main || main || main || main || main || main || main || main || main;
