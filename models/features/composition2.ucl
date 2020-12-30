@@ -27,7 +27,7 @@ module main {
         next(double);
     }
 
-    invariant shouldnothold: double.left.a == double.right.b;
+    invariant shouldnothold: double.first.a == double.second.b;
 
     control {
         induction;

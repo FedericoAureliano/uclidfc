@@ -29,7 +29,7 @@ module main {
         next(double);
     }
 
-    invariant shouldhold: double.left.left.a == double.right.right.a && double.left.left.b == double.right.right.b;
+    invariant shouldhold: double.first.first.a == double.second.second.a && double.first.first.b == double.second.second.b;
 
     control {
         induction;

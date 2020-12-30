@@ -471,7 +471,7 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
         case expr =>
           ModuleNextCallStmt(expr)
       } |
-      KwHavoc ~> IdParser ^^ { case id                 => HavocStmt(id) } |
+      KwHavoc ~> ExprParser ^^ { case e                => HavocStmt(e) } |
       KwAssume ~> "(" ~> ExprParser <~ ")" ^^ { case e => AssumeStmt(e) } |
       KwAssert ~> "(" ~> ExprParser <~ ")" ^^ { case e => AssertStmt(e) }
   }
@@ -503,7 +503,7 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
       }
   }
 
-  lazy val RecordDeclParser: PackratParser[TypeDecl] =
+  lazy val RecordDeclParser: PackratParser[TypeDecl] = positioned {
     KwType ~> IdParser ~ ("=" ~> (KwRecord ~> ("{" ~> IdsTypeParser))) ~ (rep(
       "," ~> IdsTypeParser
     ) <~ "}") ^^ {
@@ -520,8 +520,9 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
           throw new MissingCloseBracket(elements.last._2)
         }
       }
+  }
 
-  lazy val EnumDeclParser: PackratParser[TypeDecl] =
+  lazy val EnumDeclParser: PackratParser[TypeDecl] = positioned {
     KwType ~> IdParser ~ ("=" ~> (KwEnum ~> ("{" ~> IdParser))) ~ (rep(
       "," ~> IdParser
     ) <~ "}") ^^ {
@@ -533,14 +534,23 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
         case _ ~ _ ~ vs =>
           throw new MissingCloseBracket(vs.last)
       }
+  }
 
   lazy val ComposedTypeDeclParser: PackratParser[TypeDecl] =
-    KwType ~> IdParser ~ ("=" ~> InlineTypeParser) ~ ("&&" ~> InlineTypeParser) ^^ {
-      case id ~ t1 ~ t2 => TypeDecl(id, Some(ConjunctionComposition(t1, t2)))
-    } |
-      KwType ~> IdParser ~ ("=" ~> InlineTypeParser) ~ ("||" ~> InlineTypeParser) ^^ {
-        case id ~ t1 ~ t2 => TypeDecl(id, Some(DisjunctionComposition(t1, t2)))
-      }
+    positioned {
+      KwType ~> IdParser ~ ("=" ~> (InlineTypeParser <~ "&&")) ~ InlineTypeParser ~ (rep(
+        "&&" ~> InlineTypeParser
+      )) ^^ {
+        case id ~ x ~ y ~ zs =>
+          TypeDecl(id, Some(ConjunctionComposition(x :: y :: zs)))
+      } |
+        KwType ~> IdParser ~ ("=" ~> (InlineTypeParser <~ "||")) ~ InlineTypeParser ~ (rep(
+          "||" ~> InlineTypeParser
+        )) ^^ {
+          case id ~ x ~ y ~ zs =>
+            TypeDecl(id, Some(DisjunctionComposition(x :: y :: zs)))
+        }
+    }
 
   lazy val TypeDeclParserWithoutSemicolon: PackratParser[TypeDecl] =
     positioned {

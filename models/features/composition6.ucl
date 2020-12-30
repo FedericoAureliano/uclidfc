@@ -1,0 +1,28 @@
+// UCLID TEST
+// Solver=z3
+// Result=Some(false)
+
+module sub
+{
+    var f : integer;
+
+    init {
+        f = -3;
+    }
+}
+
+module main {
+    type sub4 = sub || sub || sub || sub;
+
+    var composed : sub4;
+
+    next {
+        next(composed);
+    }
+
+    invariant tautology: composed.first.f == -3 && composed.fourth.f == -3;
+
+    control {
+        induction;
+    }
+}

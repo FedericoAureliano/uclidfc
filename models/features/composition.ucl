@@ -31,7 +31,7 @@ module main {
         next(double);
     }
 
-    invariant shouldhold: double.left.a == double.right.a && double.left.b == double.right.b;
+    invariant shouldhold: double.first.a == double.second.a && double.first.b == double.second.b;
 
     control {
         unroll(6);

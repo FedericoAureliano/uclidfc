@@ -180,8 +180,8 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
         throw new NotSupportedYet(t)
     }
 
-  def getTypeFromId(id: Identifier): Type = {
-    val termRef = exprToTerm(id)._1
+  def getTypeFromExpr(exp: Expr): Type = {
+    val termRef = exprToTerm(exp)._1
     val typeRef = inferTermType(termRef)
     sortToType(typeRef)
   }
@@ -656,7 +656,7 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
         assignToMacro(
           stateParam,
           ctrRef,
-          AssignStmt(h.toHavoc, FreshLit(getTypeFromId(h.toHavoc)))
+          AssignStmt(h.toHavoc, FreshLit(getTypeFromExpr(h.toHavoc)))
         )
       }
       case n: ModuleNextCallStmt => {
@@ -1075,13 +1075,13 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
           }
         }
       }
-      case Some(ConjunctionComposition(left, right)) => {
+      case Some(ConjunctionComposition(_)) => {
         // create a module decl and then process that instead
-        val fields = List(("left", left), ("right", right))
+        val conj = td.typ.get.asInstanceOf[ConjunctionComposition]
 
         val nextDecl = {
           // if either left or right is a module, then we need to call their nexts
-          NextDecl(BlockStmt(fields.map { f =>
+          NextDecl(BlockStmt(conj.fields.map { f =>
             val sortRef = typeUseToSortRef(f._2)
             stmts(sortRef.loc) match {
               case _: Module => Some(ModuleNextCallStmt(Identifier(f._1)))
@@ -1091,7 +1091,7 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
         }
 
         val decls =
-          fields.map(f => StateVarsDecl(List(Identifier(f._1)), f._2)) ++ List(
+          conj.fields.map(f => StateVarsDecl(List(Identifier(f._1)), f._2)) ++ List(
             nextDecl
           )
 
@@ -1099,10 +1099,12 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
 
         moduleToTerm(mod)
       }
-      case Some(DisjunctionComposition(left, right)) => {
+      case Some(DisjunctionComposition(_)) => {
         // create a module decl and then process that instead
+        val conj = td.typ.get.asInstanceOf[DisjunctionComposition]
+
         val fields = new ListBuffer[(String, InlineType)]()
-        fields.addAll(List(("left", left), ("right", right)))
+        fields.addAll(conj.fields)
 
         val nextDecl = {
           // if either left or right is a module, then we need to call their nexts

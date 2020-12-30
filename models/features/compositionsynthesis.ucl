@@ -31,10 +31,10 @@ module main {
 
     synthesis function h(lla: integer, llb: integer, rra: integer, rrb: integer) : boolean;
 
-    invariant shouldhold: double.left.left.a == double.right.right.a; 
+    invariant shouldhold: double.first.first.a == double.second.second.a; 
     
-    //Answer: double.left.left.b == double.right.right.b;
-    invariant hole: h(double.left.left.a, double.left.left.b, double.right.right.a, double.right.right.b); 
+    //Answer: double.first.first.b == double.second.second.b;
+    invariant hole: h(double.first.first.a, double.first.first.b, double.second.second.a, double.second.second.b); 
 
     control {
         induction;

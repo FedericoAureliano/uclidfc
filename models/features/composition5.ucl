@@ -31,8 +31,8 @@ module main {
         next(double);
     }
 
-    invariant notinductive: double.left.a <= double.left.b;
-    invariant makesitinductive: double.left.a >= 0;
+    invariant notinductive: double.first.a <= double.first.b;
+    invariant makesitinductive: double.first.a >= 0;
 
     control {
         induction;

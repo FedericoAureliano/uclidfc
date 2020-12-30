@@ -1,0 +1,22 @@
+// UCLID TEST
+// Solver=cvc4
+// Result=Some(true)
+
+module main {
+    var a : integer;
+
+    init {
+        a = 1167;
+    }
+
+    next {
+        a = 1167;
+        havoc a;
+    }
+
+    invariant cex: a == 1167;
+
+    control {
+        induction;
+    }
+}

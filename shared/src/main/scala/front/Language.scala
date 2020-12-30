@@ -177,13 +177,28 @@ case class EnumType(variants: List[Identifier]) extends Type {}
 
 case class RecordType(elements: List[(Identifier, InlineType)]) extends Type {}
 
-sealed abstract class ComposedType extends Type {}
+sealed abstract class ComposedType(types: List[InlineType]) extends Type {
+  if (types.length > 8) {
+    throw new TooManyCompositionsError(types.last)
+  }
 
-case class ConjunctionComposition(left: InlineType, right: InlineType)
-    extends ComposedType {}
+  val fields = List(
+    "first",
+    "second",
+    "third",
+    "fourth",
+    "fifth",
+    "sixth",
+    "seventh",
+    "eigth"
+  ).zip(types)
+}
 
-case class DisjunctionComposition(left: InlineType, right: InlineType)
-    extends ComposedType {}
+case class ConjunctionComposition(types: List[InlineType])
+    extends ComposedType(types) {}
+
+case class DisjunctionComposition(types: List[InlineType])
+    extends ComposedType(types) {}
 
 case class ArrayType(inTypes: List[InlineType], outType: InlineType)
     extends InlineType {}
@@ -193,7 +208,7 @@ case class NamedType(id: Identifier) extends InlineType {}
 /** Statements * */
 sealed abstract class Statement extends TermNode {}
 
-case class HavocStmt(toHavoc: Identifier) extends Statement {}
+case class HavocStmt(toHavoc: Expr) extends Statement {}
 
 case class AssumeStmt(pred: Expr) extends Statement {}
 

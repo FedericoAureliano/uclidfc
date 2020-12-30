@@ -1,0 +1,29 @@
+// UCLID TEST
+// Solver=z3
+// Result=Some(true)
+
+module sub
+{
+    var f : integer;
+
+    init {
+        f = -3;
+    }
+}
+
+module main {
+    type sub4 = sub || sub;
+
+    var composed : sub4;
+
+    next {
+        next(composed);
+        havoc(composed.second.f);
+    }
+
+    invariant tautology: composed.first.f == -3 && composed.second.f == -3;
+
+    control {
+        unroll(3);
+    }
+}

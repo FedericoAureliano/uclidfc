@@ -1,0 +1,18 @@
+// UCLID TEST
+// Solver=z3
+// Result=None
+
+module main
+{
+    type key;
+    type frame = record {k : key, i : integer, b : boolean, k2: key};
+
+    var a : frame;
+
+    control {
+        induction;
+
+    invariant couldbe: a.k2 != a.k;
+}
+
+type toomany = main || main || main || main || main || main || main || main || main || main;

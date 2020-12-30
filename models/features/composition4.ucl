@@ -31,7 +31,7 @@ module main {
         next(double);
     }
 
-    invariant shouldnothold: double.left.a == double.right.a && double.left.b == double.right.b; // because left and right can step at different rates
+    invariant shouldnothold: double.first.a == double.second.a && double.first.b == double.second.b; // because first and second can step at different rates
 
     control {
         induction;

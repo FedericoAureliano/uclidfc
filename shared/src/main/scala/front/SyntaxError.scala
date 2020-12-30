@@ -96,3 +96,9 @@ class MismatchingAssign(
   def info(): String =
     s"Number of expressions on left-hand-side (${lhsCount}) does not match number of expressions on right-hand-side (${rhsCount})!"
 }
+
+class TooManyCompositionsError(
+  val node: ASTNode
+) extends SyntaxError(node.pos, node.filename) {
+  def info(): String = "A maximum of eight (8) compositions allowed at once!"
+}
