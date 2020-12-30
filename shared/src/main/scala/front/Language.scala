@@ -182,6 +182,9 @@ sealed abstract class ComposedType extends Type {}
 case class ConjunctionComposition(left: InlineType, right: InlineType)
     extends ComposedType {}
 
+case class DisjunctionComposition(left: InlineType, right: InlineType)
+    extends ComposedType {}
+
 case class ArrayType(inTypes: List[InlineType], outType: InlineType)
     extends InlineType {}
 

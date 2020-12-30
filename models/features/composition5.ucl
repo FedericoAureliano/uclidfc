@@ -1,0 +1,40 @@
+// UCLID TEST
+// Solver=z3
+// Result=Some(false)
+
+module fib {
+  var a, b : integer;
+
+  init {
+    a = 0;
+    b = 1;
+  }
+
+  next {
+    a' = b;
+    b' = a + b;
+  }
+
+  invariant a_le_b: a <= b;
+
+  control {
+    induction;
+  }
+}
+
+type twofib = fib || fib;
+
+module main {
+    var double : twofib;
+
+    next {
+        next(double);
+    }
+
+    invariant notinductive: double.left.a <= double.left.b;
+    invariant makesitinductive: double.left.a >= 0;
+
+    control {
+        induction;
+    }
+}

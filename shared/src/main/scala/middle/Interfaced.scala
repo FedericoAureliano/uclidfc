@@ -1077,14 +1077,11 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
       }
       case Some(ConjunctionComposition(left, right)) => {
         // create a module decl and then process that instead
-        // val leftField = StateVarsDecl(List(Identifier("left")), left)
-        // val rightField = StateVarsDecl(List(Identifier("right")), right)
-        val leftField = ("left", left)
-        val rightField = ("right", right)
+        val fields = List(("left", left), ("right", right))
 
         val nextDecl = {
           // if either left or right is a module, then we need to call their nexts
-          NextDecl(BlockStmt(List(leftField, rightField).map { f =>
+          NextDecl(BlockStmt(fields.map { f =>
             val sortRef = typeUseToSortRef(f._2)
             stmts(sortRef.loc) match {
               case _: Module => Some(ModuleNextCallStmt(Identifier(f._1)))
@@ -1093,7 +1090,50 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
           }.flatten))
         }
 
-        val decls = List(leftField, rightField).map(f =>
+        val decls =
+          fields.map(f => StateVarsDecl(List(Identifier(f._1)), f._2)) ++ List(
+            nextDecl
+          )
+
+        val mod = ModuleDecl(td.id, decls, List.empty)
+
+        moduleToTerm(mod)
+      }
+      case Some(DisjunctionComposition(left, right)) => {
+        // create a module decl and then process that instead
+        val fields = new ListBuffer[(String, InlineType)]()
+        fields.addAll(List(("left", left), ("right", right)))
+
+        val nextDecl = {
+          // if either left or right is a module, then we need to call their nexts
+          // unlike conjunction composition, we nondeterministically choose when to step
+          NextDecl(BlockStmt(fields.toList.foldLeft(List.empty[Statement]) {
+            (acc, f) =>
+              val sortRef = typeUseToSortRef(f._2)
+              stmts(sortRef.loc) match {
+                case _: Module => {
+                  // create a fresh boolean variable
+                  val name = freshSymbolName()
+                  fields.addOne(name, BooleanType())
+
+                  // use this fresh variable to decide when to step
+                  val ifstmt = IfElseStmt(
+                    Identifier(name),
+                    ModuleNextCallStmt(Identifier(f._1)),
+                    BlockStmt(List.empty)
+                  )
+
+                  // havoc the variable for next time
+                  val havoc = HavocStmt(Identifier(name))
+
+                  acc ++ List(ifstmt, havoc)
+                }
+                case _ => acc
+              }
+          }))
+        }
+
+        val decls = fields.toList.map(f =>
           StateVarsDecl(List(Identifier(f._1)), f._2)
         ) ++ List(nextDecl)
 
