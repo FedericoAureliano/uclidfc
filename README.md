@@ -1,4 +1,34 @@
-# Uclid5 with First-Class Modules through Algebraic Data Types
+# First-Class Modules in Uclid5
+
+This is a fork of [Uclid5](https://github.com/uclid-org/uclid) that
+accommodates first-class modules and thus significantly changes the internal
+representation. This work is possible thanks to these
+[contributors](https://github.com/uclid-org/uclid/blob/master/CONTRIBUTORS.md),
+and all code is covered by [this
+license](https://github.com/uclid-org/uclid/blob/master/LICENSE). The goal is
+ultimately to combine this fork with the main repository. If you use either
+version of Uclid5 in your work, please cite [the original Uclid5 MEMOCODE'18
+paper](https://cse.iitk.ac.in/users/spramod/papers/memocode18.pdf).
+
+```
+@inproceedings{seshia18uclid5,
+  author    = {Sanjit A. Seshia and Pramod Subramanyan},
+  title     = {{UCLID5:} Integrating Modeling, Verification, Synthesis and Learning},
+  booktitle = {16th {ACM/IEEE} International Conference on Formal Methods and Models
+               for System Design ({MEMOCODE})},
+  pages     = {1--10},
+  publisher = {{IEEE}},
+  year      = {2018},
+  doi       = {10.1109/MEMCOD.2018.8556946},
+  location  = {Beijing, China}
+}
+```
+
+Beyond first-class modules, this fork also carefully realizes the synthesis
+encoding described in [this SYNT '20 workshop
+paper](https://arxiv.org/abs/2007.06760).
+
+# Usage
 
 ## Dependencies
 
@@ -6,15 +36,13 @@
 - [Install Z3](https://github.com/Z3Prover/z3)
 - [Install CVC4](https://github.com/CVC4/CVC4)
 
-## Users
-
-### Compile
+## Compile
 
 Just add the bin folder to your path: uclidfc will automatically compile the
-first time you run it. Note, uclidfc will not automatically recompile if you make
-changes to its source code. To recompile, run `sbt assembly`.
+first time you run it. Note, uclidfc will not automatically recompile if you
+make changes to its source code. To recompile, run `sbt assembly`.
 
-### Run on JVM
+## Run on JVM
 
 ```
 uclidfc [options] <file> ...
@@ -26,20 +54,20 @@ uclidfc [options] <file> ...
   <file> ...             List of files to analyze.
 ```
 
-### Live Edit
+## Live Edit
 
 ```
 # depends on fswatch (`brew install fswatch`)
 uclidfc-live <uclid files to edit> <query file to watch>
 ```
 
-### Web & Docs
+## Web & Docs
 
 ```
 uclidfc-web
 ```
 
-## Developers
+# Develop
 
 ### Check Format
 
@@ -69,4 +97,5 @@ open docs/index.html
 
 ### Before Committing
 
-To auto-format your code and run all the CI checks locally, run `./beforecommit.sh`.
+To auto-format your code and run all the CI checks locally, run
+`./beforecommit.sh`.
