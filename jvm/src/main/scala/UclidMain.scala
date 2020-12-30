@@ -5,9 +5,8 @@ import front._
 
 import middle.Encoder
 
-import back.Solver
-import back.ProofResult
 import middle.EncodingError
+import back._
 
 object Solvers extends Enumeration {
   type Solvers = Value
@@ -98,15 +97,11 @@ object UclidMain {
       val modules = compile(config.files)
       val obs = Encoder.run(modules, Some(config.mainModuleName))
 
-      if (obs.isSynthesisQuery && config.solver != Solvers.cvc4) {
-        throw new SolverMismatchError("Must use CVC4 for synthesis queries")
-      }
-
       val solver = config.solver match {
-        case Solvers.alt_ergo => new Solver("alt-ergo -enable-adts-cs")
-        case Solvers.cvc4     => new Solver("cvc4 --dump-models")
-        case Solvers.vampire  => new Solver("vampire --input_syntax smtlib2")
-        case Solvers.z3       => new Solver("z3 -model")
+        case Solvers.alt_ergo => new AltErgoSolver()
+        case Solvers.cvc4     => new CVC4Solver()
+        case Solvers.vampire  => new VampireSolver()
+        case Solvers.z3       => new Z3Solver()
       }
 
       solver.solve(obs, config.run, config.outFile)

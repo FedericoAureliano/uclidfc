@@ -33,7 +33,7 @@ paper](https://arxiv.org/abs/2007.06760).
 ## Dependencies
 
 - [Install SBT](https://www.scala-lang.org/download/)
-- Install at least one of (CVC4 is used by default)
+- Install at least one of
   - [Alt-Ergo](https://alt-ergo.ocamlpro.com/)
   - [CVC4](https://github.com/CVC4/CVC4) (DEFAULT)
   - [Z3](https://github.com/Z3Prover/z3)
