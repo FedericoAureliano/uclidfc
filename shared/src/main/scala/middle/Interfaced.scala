@@ -17,6 +17,7 @@ class CacheStack() {
 }
 
 class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
+  var inlineID = 0
 
   // after generating assertions, we will traverse to finds calls of ._1 and add assertions that call ._2 with the same arguments
   val inlineAssumes: HashMap[Ref, Ref] = new HashMap()
@@ -26,6 +27,7 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
   pushCache()
 
   def addAssertion(ass: Ref): Unit = {
+    val name = ass.named.get // all assertions must be named
     val assumes = new ListBuffer[Ref]()
     val asserts = new ListBuffer[Ref]()
 
@@ -59,10 +61,15 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
               val newArgs = args.map(a => updateTerm(a, updates))
               if (inlines.contains(caller)) {
                 // we found a an assume or assert!
+                val newName = Some(name + s"_Inline_Spec!${inlineID}")
                 val newAppRef = memoAddInstruction(
-                  Application(inlines(caller), newArgs)
+                  Application(inlines(caller), newArgs),
+                  newName
                 )
-                keepTrack.addOne(newAppRef)
+                if (newAppRef.named == newName) {
+                  inlineID += 1
+                  keepTrack.addOne(newAppRef)
+                }
               } else {
                 // keep searching in children
                 args.foreach(p => searchInline(p, inlines, keepTrack, updates))
@@ -799,7 +806,10 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
               // base case
               // apply init
               val initAppRef =
-                memoAddInstruction(Application(initRef, initVariables))
+                memoAddInstruction(
+                  Application(initRef, initVariables),
+                  Some("State_At_Step!0")
+                )
 
               // apply spec to result of init
               val initSpecRef =
@@ -808,7 +818,10 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
               val negRef = memoAddInstruction(TheoryMacro("not"))
 
               val baseRef =
-                memoAddInstruction(Application(negRef, List(initSpecRef)))
+                memoAddInstruction(
+                  Application(negRef, List(initSpecRef)),
+                  Some("Counterexample_In_BaseCase")
+                )
 
               addAssertion(baseRef)
 
@@ -825,19 +838,23 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
 
               var transRef = initVariables.head
 
-              (1 to k).foreach { i =>
-                val args = nextParams.tail.map { p =>
-                  stmts(p.loc) match {
-                    case FunctionParameter(name, sort) => {
-                      val vRef =
-                        memoAddInstruction(UserFunction(s"$name!step!$i", sort))
-                      vRef
+              (1 to k).foreach {
+                i =>
+                  val args = nextParams.tail.map { p =>
+                    stmts(p.loc) match {
+                      case FunctionParameter(name, sort) => {
+                        val vRef =
+                          memoAddInstruction(
+                            UserFunction(s"$name!step!$i", sort)
+                          )
+                        vRef
+                      }
                     }
                   }
-                }
-                transRef = memoAddInstruction(
-                  Application(nextRef, List(transRef) ++ args)
-                )
+                  transRef = memoAddInstruction(
+                    Application(nextRef, List(transRef) ++ args),
+                    Some(s"State_At_Step!$i")
+                  )
               }
 
               // holds on exit
@@ -850,7 +867,8 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
               val andRef = memoAddInstruction(TheoryMacro("and"))
 
               val inductiveRef = memoAddInstruction(
-                Application(andRef, List(entryRef, negExitRef))
+                Application(andRef, List(entryRef, negExitRef)),
+                Some("Counterexample_In_Induction_Step")
               )
 
               addAssertion(inductiveRef)
@@ -876,7 +894,10 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
               val specRef = mod.spec
 
               val initAppRef =
-                memoAddInstruction(Application(initRef, initVariables))
+                memoAddInstruction(
+                  Application(initRef, initVariables),
+                  Some("State_At_Step!0")
+                )
 
               // apply spec to result of init
               val initSpecRef =
@@ -885,7 +906,10 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
               val negRef = memoAddInstruction(TheoryMacro("not"))
 
               val baseRef =
-                memoAddInstruction(Application(negRef, List(initSpecRef)))
+                memoAddInstruction(
+                  Application(negRef, List(initSpecRef)),
+                  Some("Counterexample_In_Step!0")
+                )
 
               addAssertion(baseRef)
 
@@ -908,13 +932,17 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
                     }
                   }
                   transRef = memoAddInstruction(
-                    Application(nextRef, List(transRef) ++ args)
+                    Application(nextRef, List(transRef) ++ args),
+                    Some(s"State_At_Step!$i")
                   )
                   // holds on exit
                   val exitRef =
                     memoAddInstruction(Application(specRef, List(transRef)))
                   val negExitRef =
-                    memoAddInstruction(Application(negRef, List(exitRef)))
+                    memoAddInstruction(
+                      Application(negRef, List(exitRef)),
+                      Some(s"Counterexample_In_Step!${i}")
+                    )
 
                   addAssertion(negExitRef)
               }
@@ -1212,7 +1240,13 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
 
     // add placeholder for module and remember where it is
     val moduleRef = addInstruction(
-      middle.Module(m.id.name, Ref(-1), Ref(-1), Ref(-1), Ref(-1))
+      middle.Module(
+        m.id.name,
+        Ref(-1, None),
+        Ref(-1, None),
+        Ref(-1, None),
+        Ref(-1, None)
+      )
     )
 
     loadSortRef(NamedType(m.id)) match {
@@ -1262,7 +1296,13 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
     // update module with constructor; will need to update it fully at the end
     memoUpdateInstruction(
       moduleRef,
-      middle.Module(m.id.name, constructorRef, Ref(-1), Ref(-1), Ref(-1))
+      middle.Module(
+        m.id.name,
+        constructorRef,
+        Ref(-1, None),
+        Ref(-1, None),
+        Ref(-1, None)
+      )
     )
 
     val initInitCalls = createInitCalls(fields)

@@ -9,11 +9,15 @@ import java.io.{File, PrintWriter}
 abstract class Solver() {
 
   def runProcess(in: String): (List[String], List[String], Int) = {
+    print("Running solver ... ")
     val qb = Process(in)
     var out = List[String]()
     var err = List[String]()
 
+    val t1 = System.nanoTime
     val exit = qb ! ProcessLogger((s) => out ::= s, (s) => err ::= s)
+    val duration = (System.nanoTime - t1) / 1e9d
+    println(s"Solver terminated in ${duration} seconds.\n")
 
     (out.reverse, err.reverse, exit)
   }
@@ -44,6 +48,7 @@ abstract class Solver() {
 
   def generateQuery(program: Interfaced): String
   def getCommand(): String
+  def parseAnswer(answer: String): String
 
   def solve(
     program: Interfaced,
@@ -52,7 +57,11 @@ abstract class Solver() {
   ): ProofResult = {
 
     // need to call this first before checking if it is a synthesis query
+    print("\nGenerating query ... ")
+    val t1 = System.nanoTime
     val query = generateQuery(program)
+    val duration = (System.nanoTime - t1) / 1e9d
+    println(s"Query generated in ${duration} seconds.")
 
     val suffix = if (program.isSynthesisQuery) { ".sl" }
     else { ".smt2" }
@@ -62,55 +71,50 @@ abstract class Solver() {
     if (!run) {
       return new ProofResult(
         None,
-        List("Opted out of running the solver.")
+        "Opted out of running the solver."
       )
     }
 
     val result = runProcess(s"${getCommand()} ${qfile}")
-    val results = result._1 ++ result._2
-    val answer = " " + (result._1 ++ result._2).mkString("\n")
+    val answer = parseAnswer(" " + (result._1 ++ result._2).mkString("\n"))
 
     if (answer.contains("error") || answer.contains(
           "unknown"
         )) {
-      new ProofResult(None, results)
+      new ProofResult(None, answer)
     } else {
       if ("(\\ssat)".r.findFirstIn(answer).isDefined) {
-        new ProofResult(Some(true), results)
+        new ProofResult(Some(true), answer)
       } else {
-        new ProofResult(Some(false), results)
+        new ProofResult(Some(false), answer)
       }
     }
   }
 }
 
-class ProofResult(
-  var result: Option[Boolean] = None,
-  var messages: List[String] = List.empty
-) {
-
-  override def toString(): String = {
-    val answer = result match {
-      case Some(true)  => "Counterexample!"
-      case Some(false) => "Verified!"
-      case None        => "Problem!"
-    }
-    (List("*********\n" + answer + "\n*********\n\nSolver Output:") ++ messages)
-      .mkString("\n")
-  }
-}
-
 class CVC4Solver() extends Solver() {
-  def getCommand(): String = "cvc4 --dump-models"
+  def getCommand(): String = "cvc4"
 
   def generateQuery(program: Interfaced): String = {
     val query = program.programToQuery()
     query
   }
+
+  def parseAnswer(answer: String): String =
+    answer
+      .split("\n")
+      .filter(p =>
+        !p.startsWith(
+          "(error \"Cannot get the current model unless immediately preceded by SAT/INVALID or UNKNOWN response.\")"
+        ) && !p.startsWith(
+          "(error \"Cannot get the current assignment unless immediately preceded by SAT/INVALID or UNKNOWN response.\")"
+        )
+      )
+      .mkString("\n")
 }
 
 class Z3Solver() extends Solver() {
-  def getCommand(): String = "z3 dump_models=true"
+  def getCommand(): String = "z3"
 
   def generateQuery(program: Interfaced): String = {
     // get the query but remove the set logic command
@@ -124,6 +128,16 @@ class Z3Solver() extends Solver() {
     }
     query
   }
+
+  def parseAnswer(answer: String): String =
+    answer
+      .split("\n")
+      .filter(p =>
+        !p.contains(
+          "model is not available"
+        )
+      )
+      .mkString("\n")
 }
 
 class AltErgoSolver() extends Solver() {
@@ -134,14 +148,19 @@ class AltErgoSolver() extends Solver() {
     val query = program
       .programToQuery()
       .split("\n")
-      .filter(p => !(p.startsWith("(set-logic") || p.startsWith("(set-option")))
+      .filter(p =>
+        !(p.startsWith("(set-logic") || p.startsWith("(set-option") || p
+          .startsWith("(get-"))
+      )
       .mkString("\n")
     if (program.isSynthesisQuery) {
       throw new SolverMismatchError("Alt-Ergo does not support synthesis")
     }
-    println("Warning: Alt-Ergo does not generate models.")
     query
   }
+
+  def parseAnswer(answer: String): String =
+    answer
 }
 
 class VampireSolver() extends Solver() {
@@ -189,7 +208,26 @@ class VampireSolver() extends Solver() {
       throw new SolverMismatchError("Vampire does not support synthesis")
     }
 
-    println("Warning: Vampire does not generate models.")
     query
+  }
+
+  def parseAnswer(answer: String): String =
+    answer
+}
+
+class ProofResult(
+  var result: Option[Boolean] = None,
+  var messages: String = ""
+) {
+
+  override def toString(): String = {
+    val extra = "Solver Output:" + messages
+    val answer = result match {
+      case Some(true)  => "Counterexample!"
+      case Some(false) => "Verified!"
+      case None        => "Problem!"
+    }
+    List("*********\n" + answer + "\n*********\n", extra)
+      .mkString("\n")
   }
 }

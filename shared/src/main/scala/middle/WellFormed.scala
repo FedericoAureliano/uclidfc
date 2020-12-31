@@ -15,8 +15,8 @@ class WellFormed(stmts: ArrayBuffer[Instruction]) extends TermGraph(stmts) {
       case (s, i) => {
         val err = s"${i}: ${s} >>> REFERENCE OUT OF BOUNDS!"
         s match {
-          case Ref(j) =>
-            if (!checkRef(Ref(j))) throw new RefOutOfBoundsError(err)
+          case r: Ref =>
+            if (!checkRef(r)) throw new RefOutOfBoundsError(err)
           case Numeral(_) =>
           case TheorySort(_, p) =>
             p.foreach(a => if (!checkRef(a)) throw new RefOutOfBoundsError(err))

@@ -2,6 +2,7 @@ package middle
 
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.ListBuffer
+import scala.collection.mutable.HashSet
 
 class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
 
@@ -65,9 +66,12 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
     else { "" }}"
   }
 
-  var options: List[(String, String)] = List(("produce-models", "true"))
+  var options: List[(String, String)] =
+    List(("produce-models", "true"), ("produce-assignments", "true"))
 
   val assertionRefs: ListBuffer[Ref] = new ListBuffer()
+
+  val alreadyDeclared = new HashSet[Ref]()
 
   def programPointToQueryTerm(
     point: Ref,
@@ -75,15 +79,15 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
   ): String = {
     var indent = indentInput
 
-    def dispatch(position: Ref): String =
-      stmts(position.loc) match {
+    def dispatch(position: Ref): String = {
+      val res = stmts(position.loc) match {
         case a: Application       => applicationToQueryTerm(a)
         case c: Constructor       => constructorToQueryTerm(c)
         case d: DataType          => datatypeToQueryTerm(d)
         case f: FunctionParameter => functionparameterToQueryTerm(f)
         case s: Selector          => selectorToQueryTerm(s)
         case n: Numeral           => numeralToQueryTerm(n)
-        case r: Ref               => refToQueryTerm(r)
+        case r: Ref               => dispatch(r)
         case t: TheoryMacro       => theorymacroToQueryTerm(t)
         case t: TheorySort        => theorysortToQueryTerm(t)
         case u: UserFunction      => userfunctionToQueryTerm(u)
@@ -92,6 +96,18 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
         case u: UserSort          => usersortToQueryTerm(u)
         case m: middle.Module     => moduleToQueryTerm(m)
       }
+      position.named match {
+        case Some(name) if !isSynthesisQuery => {
+          if (alreadyDeclared.contains(position)) {
+            name
+          } else {
+            alreadyDeclared.add(position)
+            s"(! ${res} :named ${name})"
+          }
+        }
+        case _ => res
+      }
+    }
 
     // Helper functions that deal with each case
 
@@ -141,9 +157,6 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
 
     def numeralToQueryTerm(n: Numeral): String =
       n.value.toString()
-
-    def refToQueryTerm(r: Ref): String =
-      dispatch(r)
 
     def theorymacroToQueryTerm(t: TheoryMacro): String =
       if (t.params.length > 0) {
@@ -229,6 +242,7 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
       val tmp = new StringBuilder()
       // for each constructor
       tmp ++= s"${TAB * indent}(declare-datatypes ((${d.name} 0)) (("
+      indent += 1
       d.constructors.foreach { ct =>
         val ctr = stmts(ct.loc).asInstanceOf[Constructor]
         tmp ++= s"(${ctr.name}"
@@ -238,6 +252,7 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
           val sel = stmts(s.loc).asInstanceOf[Selector]
           tmp ++= s"${TAB * indent}(${sel.name} ${programPointToQueryTerm(sel.sort, indent)})"
         }
+        indent -= 1
         tmp ++= ")"
       }
       tmp ++= ")))\n"
@@ -331,7 +346,10 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
       tmp.toString()
     }
 
-    stmts.zipWithIndex.map(p => dispatch(Ref(p._2))).flatten.mkString("\n")
+    stmts.zipWithIndex
+      .map(p => dispatch(Ref(p._2, None)))
+      .flatten
+      .mkString("\n")
   }
 
   def programToQuery(): String = {
@@ -355,6 +373,6 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
       "\n; nothing to verify"
     }
 
-    s"$logic\n$opts\n\n$body"
+    s"$logic\n$opts\n\n$body\n(get-model)\n(get-assignment)"
   }
 }

@@ -107,19 +107,19 @@ object UclidMain {
       solver.solve(obs, config.run, config.outFile)
     } catch {
       case (e: java.io.FileNotFoundException) =>
-        errorResult.messages = List(e.toString())
+        errorResult.messages = "\n" + e.toString()
         errorResult
       case e: SyntaxError =>
-        errorResult.messages = List(e.toString())
+        errorResult.messages = "\n" + e.toString()
         errorResult
       case e: SemanticError =>
-        errorResult.messages = List(e.toString())
+        errorResult.messages = "\n" + e.toString()
         errorResult
       case e: EncodingError =>
-        errorResult.messages = List(e.toString())
+        errorResult.messages = "\n" + e.toString()
         errorResult
       case e: UclidJvmError =>
-        errorResult.messages = List(e.toString())
+        errorResult.messages = "\n" + e.toString()
         errorResult
     }
   }

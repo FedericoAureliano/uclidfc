@@ -24,6 +24,6 @@ module main {
         next(arr);
     }
     control {
-        unroll(2);
+        unroll(3);
     }
 }

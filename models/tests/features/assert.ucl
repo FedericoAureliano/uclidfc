@@ -19,6 +19,6 @@ module main
 
     control
     {
-        unroll(1);
+        unroll(4);
     }
 }

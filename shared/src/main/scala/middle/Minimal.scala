@@ -6,19 +6,35 @@ import scala.collection.mutable.HashMap
 class Minimal(stmts: ArrayBuffer[Instruction]) extends WellFormed(stmts) {
 
   val memo: HashMap[Instruction, Ref] =
-    new HashMap().addAll(stmts.zipWithIndex.map(p => (p._1, Ref(p._2))))
+    new HashMap().addAll(stmts.zipWithIndex.map(p => (p._1, Ref(p._2, None))))
 
-  def memoAddInstruction(inst: Instruction): Ref =
-    memo.getOrElse(inst, {
-      val newLoc = Ref(stmts.length)
+  def memoAddInstruction(
+    inst: Instruction,
+    toName: Option[String] = None
+  ): Ref = {
+    // we want to name what ever reference we get back, unless it already has a name
+    val res: Ref = memo.getOrElse(inst, {
+      // it is not already saved, so name it
+      val newLoc = Ref(stmts.length, toName)
       stmts.addOne(inst)
       memo(inst) = newLoc
       newLoc
     })
+    // if res is named then return that, otherwise give it the name
+    res.named match {
+      case Some(_) => res
+      case None => {
+        val newLoc = Ref(res.loc, toName)
+        stmts.addOne(inst)
+        memo(inst) = newLoc
+        newLoc
+      }
+    }
+  }
 
   def addInstruction(inst: Instruction): Ref = {
     stmts.addOne(inst)
-    Ref(stmts.length - 1)
+    Ref(stmts.length - 1, None)
   }
 
   def memoUpdateInstruction(r: Ref, newInstruction: Instruction): Unit = {
@@ -45,7 +61,7 @@ class Minimal(stmts: ArrayBuffer[Instruction]) extends WellFormed(stmts) {
 
     def markInstruction(instruction: Instruction): Unit =
       instruction match {
-        case Ref(i) => {
+        case Ref(i, _) => {
           if (!marks(i)) {
             marks(i) = true
             markInstruction(stmts(i))
