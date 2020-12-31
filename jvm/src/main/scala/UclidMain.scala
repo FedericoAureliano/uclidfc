@@ -29,7 +29,7 @@ object UclidMain {
         if (config.run) {
           println(pResults)
         } else {
-          println(pResults.messages.mkString("\n"))
+          println(pResults.messages)
         }
         sys.exit(pResults.result match {
           case Some(false) => 0

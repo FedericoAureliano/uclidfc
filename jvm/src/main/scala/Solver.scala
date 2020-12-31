@@ -111,6 +111,7 @@ class CVC4Solver() extends Solver() {
         )
       )
       .mkString("\n")
+      .replaceAll("\\) \\(", ")\n\t(")
 }
 
 class Z3Solver() extends Solver() {
@@ -227,7 +228,7 @@ class ProofResult(
       case Some(false) => "Verified!"
       case None        => "Problem!"
     }
-    List("*********\n" + answer + "\n*********\n", extra)
+    List("\n*********\n" + answer + "\n*********\n", extra)
       .mkString("\n")
   }
 }

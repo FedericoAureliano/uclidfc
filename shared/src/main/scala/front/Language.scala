@@ -165,17 +165,28 @@ case class OperatorApplication(op: Operator, operands: List[Expr])
 //for uninterpreted function symbols
 case class FunctionApplication(e: Expr, args: List[Expr]) extends Expr {}
 
-sealed abstract class Type extends ASTNode {}
+sealed abstract class Type extends ASTNode {
+  def defaultVal(): Option[Expr];
+}
 
-sealed abstract class InlineType extends Type {} // types that can be used in line without first declaring
+// types that can be used in line without first declaring
+sealed abstract class InlineType extends Type {}
 
-case class BooleanType() extends InlineType {}
+case class BooleanType() extends InlineType {
+  def defaultVal(): Option[Expr] = Some(BoolLit(false))
+}
 
-case class IntegerType() extends InlineType {}
+case class IntegerType() extends InlineType {
+  def defaultVal(): Option[Expr] = Some(IntLit(0))
+}
 
-case class EnumType(variants: List[Identifier]) extends Type {}
+case class EnumType(variants: List[Identifier]) extends Type {
+  def defaultVal(): Option[Expr] = Some(variants.head)
+}
 
-case class RecordType(elements: List[(Identifier, InlineType)]) extends Type {}
+case class RecordType(elements: List[(Identifier, InlineType)]) extends Type {
+  def defaultVal(): Option[Expr] = Some(elements.head._1)
+}
 
 sealed abstract class ComposedType(types: List[InlineType]) extends Type {
   if (types.length > 8) {
@@ -195,15 +206,35 @@ sealed abstract class ComposedType(types: List[InlineType]) extends Type {
 }
 
 case class ConjunctionComposition(types: List[InlineType])
-    extends ComposedType(types) {}
+    extends ComposedType(types) {
+  def defaultVal(): Option[Expr] = None
+}
 
 case class DisjunctionComposition(types: List[InlineType])
-    extends ComposedType(types) {}
+    extends ComposedType(types) {
+  def defaultVal(): Option[Expr] = None
+}
 
-case class ArrayType(inTypes: List[InlineType], outType: InlineType)
-    extends InlineType {}
+case class ArrayType(inType: InlineType, outType: InlineType)
+    extends InlineType {
 
-case class NamedType(id: Identifier) extends InlineType {}
+  def defaultVal(): Option[Expr] =
+    outType.defaultVal() match {
+      case Some(value) =>
+        Some(
+          OperatorApplication(
+            ConstArray(ArrayType(inType, outType)),
+            List(value)
+          )
+        )
+      case None => None
+    }
+
+}
+
+case class NamedType(id: Identifier) extends InlineType {
+  def defaultVal(): Option[Expr] = None
+}
 
 /** Statements * */
 sealed abstract class Statement extends TermNode {}

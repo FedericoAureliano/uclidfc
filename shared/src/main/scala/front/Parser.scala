@@ -376,9 +376,9 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
   }
 
   lazy val ArrayTypeParser: PackratParser[ArrayType] = positioned {
-    ("[") ~> InlineTypeParser ~ (rep("," ~> InlineTypeParser) <~ "]") ~ InlineTypeParser ^^ {
-      case t ~ ts ~ rt =>
-        ArrayType(t :: ts, rt)
+    ("[" ~> InlineTypeParser <~ "]") ~ InlineTypeParser ^^ {
+      case t ~ rt =>
+        ArrayType(t, rt)
     }
   }
 
@@ -496,11 +496,7 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
     "{" ~> rep(StatementParser) <~ "}" ^^ {
       case stmts =>
         BlockStmt(stmts)
-    } |
-      "{" ~> rep(StatementParser) ^^ {
-        case stmts =>
-          throw new MissingCloseBracket(stmts.last)
-      }
+    }
   }
 
   lazy val RecordDeclParser: PackratParser[TypeDecl] = positioned {
@@ -515,9 +511,8 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
       KwType ~> IdParser ~ ("=" ~> (KwRecord ~> ("{" ~> IdsTypeParser))) ~ (rep(
         "," ~> IdsTypeParser
       )) ^^ {
-        case _ ~ v1 ~ vs => {
-          val elements: List[(Identifier, InlineType)] = v1 ++ vs.flatten
-          throw new MissingCloseBracket(elements.last._2)
+        case id ~ _ ~ _ => {
+          throw new MissingCloseBracket(id)
         }
       }
   }
@@ -531,8 +526,8 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
       KwType ~> IdParser ~ ("=" ~> (KwEnum ~> ("{" ~> IdParser))) ~ (rep(
         "," ~> IdParser
       )) ^^ {
-        case _ ~ _ ~ vs =>
-          throw new MissingCloseBracket(vs.last)
+        case id ~ _ ~ _ =>
+          throw new MissingCloseBracket(id)
       }
   }
 
@@ -732,13 +727,13 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
         ModuleDecl(id, decls, List.empty)
     } |
       KwModule ~> IdParser ~ ("{" ~> rep(DeclParser) ~ (CmdBlockParser.?)) ^^ {
-        case _ ~ (_ ~ Some(cs)) =>
+        case id ~ (_ ~ Some(_)) =>
           throw new MissingCloseBracket(
-            cs.last
+            id
           )
-        case _ ~ (decls ~ None) =>
+        case id ~ (_ ~ None) =>
           throw new MissingCloseBracket(
-            decls.last
+            id
           )
       }
   }

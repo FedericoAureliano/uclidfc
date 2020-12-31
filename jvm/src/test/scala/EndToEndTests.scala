@@ -47,7 +47,7 @@ class TestEndToEnd {
       val answer = endToEnd(t._1, t._2)
       assert(
         t._3 == answer.result,
-        s"Failed: ${t._1}\nExpected: ${t._3}\nGot: ${answer.result}\nOutput: ${answer.messages.mkString("\n")}"
+        s"Failed: ${t._1}\nExpected: ${t._3}\nGot: ${answer.result}\nOutput: ${answer.messages}"
       )
     }
   }
@@ -61,7 +61,7 @@ class TestEndToEnd {
       val answer = endToEnd(t._1, t._2)
       assert(
         t._3 == answer.result,
-        s"Failed: ${t._1}\nExpected: ${t._3}\nGot: ${answer.result}\nOutput: ${answer.messages.mkString("\n")}"
+        s"Failed: ${t._1}\nExpected: ${t._3}\nGot: ${answer.result}\nOutput: ${answer.messages}"
       )
     }
   }
@@ -75,7 +75,7 @@ class TestEndToEnd {
       val answer = endToEnd(t._1, t._2)
       assert(
         t._3 == answer.result,
-        s"Failed: ${t._1}\nExpected: ${t._3}\nGot: ${answer.result}\nOutput: ${answer.messages.mkString("\n")}"
+        s"Failed: ${t._1}\nExpected: ${t._3}\nGot: ${answer.result}\nOutput: ${answer.messages}"
       )
     }
   }

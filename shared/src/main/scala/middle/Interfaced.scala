@@ -173,9 +173,9 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
     t match {
       case BooleanType() => memoAddInstruction(TheorySort("Bool"))
       case IntegerType() => memoAddInstruction(TheorySort("Int"))
-      case ArrayType(inTypes, outType) => {
+      case ArrayType(inType, outType) => {
         val args =
-          (inTypes ++ List(outType)).map(arg => typeUseToSortRef(arg))
+          (List(inType, outType)).map(arg => typeUseToSortRef(arg))
         memoAddInstruction(TheorySort("Array", args))
       }
       case NamedType(_) =>
@@ -203,7 +203,7 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
           case "Bool" => BooleanType()
           case "Array" => {
             val paramTypes = params.map(p => sortToType(p))
-            ArrayType(List(paramTypes(0)), paramTypes(1))
+            ArrayType(paramTypes(0), paramTypes(1))
           }
         }
       case UserSort(name, _) => NamedType(Identifier(name))
@@ -996,17 +996,22 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
     ] // variable we want to init and its type
   ): List[AssignStmt] =
     fields.foldLeft(List.empty: List[AssignStmt])((acc, f) =>
-      createInitCallRhs(f._2) match {
+      createInitCallRhs(f._2, f._1) match {
         case Some(value) =>
           acc ++ List(AssignStmt(f._1, value))
         case None => acc
       }
     )
 
-  def createInitCallRhs(typ: InlineType): Option[Expr] =
+  def createInitCallRhs(typ: InlineType, starter: Expr): Option[Expr] =
     typ match {
-      case ArrayType(_, outType) => {
-        createInitCallRhs(outType) match {
+      case ArrayType(inType, outType) => {
+        val idx = inType.defaultVal() match {
+          case Some(default) => default
+          case None          => FreshLit(inType)
+        }
+        val newStarter = OperatorApplication(ArraySelect(), List(starter, idx))
+        createInitCallRhs(outType, newStarter) match {
           case Some(value) =>
             Some(OperatorApplication(ConstArray(typ), List(value)))
           case None => None
@@ -1016,22 +1021,34 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
       case NamedType(_) => {
         val sortRef = loadSortRef(typ).get
         stmts(sortRef.loc) match {
-          case _: middle.Module => Some(ModuleInitCallExpr(FreshLit(typ)))
+          case _: middle.Module => Some(ModuleInitCallExpr(starter))
           case adt: AbstractDataType => {
             val ctr =
               stmts(adt.defaultCtr().loc).asInstanceOf[Constructor]
-            val selTypes = ctr.selectors.map(s =>
-              sortToType(stmts(s.loc).asInstanceOf[Selector].sort)
-            )
-            val components = selTypes.map(p => createInitCallRhs(p))
-            if (components.exists(p => p.isDefined)) {
+            // val selTypes = ctr.selectors.map(s =>
+            //   sortToType(stmts(s.loc).asInstanceOf[Selector].sort)
+            // )
+            // val components = selTypes.map(p => createInitCallRhs(p))
+
+            val components = ctr.selectors.map { s =>
+              val sel = stmts(s.loc).asInstanceOf[Selector]
+              val newStarter =
+                OperatorApplication(
+                  PolymorphicSelect(Identifier(sel.name)),
+                  List(starter)
+                )
+              val typ = sortToType(sel.sort)
+              (newStarter, createInitCallRhs(typ, newStarter))
+            }
+
+            if (components.exists(p => p._2.isDefined)) {
               Some(
                 FunctionApplication(
                   Identifier(ctr.name),
-                  components.zipWithIndex.map(p =>
-                    p._1 match {
+                  components.map(p =>
+                    p._2 match {
                       case Some(value) => value
-                      case None        => FreshLit(selTypes(p._2))
+                      case None        => p._1
                     }
                   )
                 )
