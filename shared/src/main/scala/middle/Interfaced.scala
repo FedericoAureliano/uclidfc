@@ -54,36 +54,40 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
       keepTrack: ListBuffer[Ref],
       updates: Map[Ref, Ref]
     ): Unit =
-      stmts(curr.loc) match {
-        case Application(caller, args) => {
-          stmts(caller.loc) match {
-            case UserMacro(_, _, body, params) => {
-              val newArgs = args.map(a => updateTerm(a, updates))
-              if (inlines.contains(caller)) {
-                // we found a an assume or assert!
-                val newName = Some(name + s"_Inline_Spec!${inlineID}")
-                val newAppRef = memoAddInstruction(
-                  Application(inlines(caller), newArgs),
-                  newName
-                )
-                if (newAppRef.named == newName) {
-                  inlineID += 1
-                  keepTrack.addOne(newAppRef)
+      if (!inlines.isEmpty) {
+        stmts(curr.loc) match {
+          case Application(caller, args) => {
+            stmts(caller.loc) match {
+              case UserMacro(_, _, body, params) => {
+                val newArgs = args.map(a => updateTerm(a, updates))
+                if (inlines.contains(caller)) {
+                  // we found an assume or assert!
+                  val newName = Some(name + s"_Inline_Spec!${inlineID}")
+                  val newAppRef = memoAddInstruction(
+                    Application(inlines(caller), newArgs),
+                    newName
+                  )
+                  if (newAppRef.named == newName) {
+                    inlineID += 1
+                    keepTrack.addOne(newAppRef)
+                  }
+                } else {
+                  // keep searching in children
+                  args.foreach(p =>
+                    searchInline(p, inlines, keepTrack, updates)
+                  )
+                  // update bindings
+                  val bindings = params.zip(newArgs).toMap
+                  // recurse search into body
+                  searchInline(body, inlines, keepTrack, bindings)
                 }
-              } else {
-                // keep searching in children
-                args.foreach(p => searchInline(p, inlines, keepTrack, updates))
-                // update bindings
-                val bindings = params.zip(newArgs).toMap
-                // recurse search into body
-                searchInline(body, inlines, keepTrack, bindings)
               }
+              case _ => // just continue search in children
+                args.foreach(p => searchInline(p, inlines, keepTrack, updates))
             }
-            case _ => // just continue search in children
-              args.foreach(p => searchInline(p, inlines, keepTrack, updates))
           }
+          case _ => // do nothing
         }
-        case _ => // do nothing
       }
     searchInline(ass, inlineAssumes, assumes, Map.empty)
     searchInline(ass, inlineAsserts, asserts, Map.empty)

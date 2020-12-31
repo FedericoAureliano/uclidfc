@@ -94,8 +94,18 @@ object UclidMain {
     val errorResult =
       new ProofResult()
     try {
+
+      print("\nParsing input ... ")
+      var t1 = System.nanoTime
       val modules = compile(config.files)
+      var duration = (System.nanoTime - t1) / 1e9d
+      println(s"Parsing completed in ${duration} seconds.")
+
+      print("Processing model ... ")
+      t1 = System.nanoTime
       val obs = Encoder.run(modules, Some(config.mainModuleName))
+      duration = (System.nanoTime - t1) / 1e9d
+      println(s"Processing completed in ${duration} seconds.")
 
       val solver = config.solver match {
         case Solvers.alt_ergo => new AltErgoSolver()

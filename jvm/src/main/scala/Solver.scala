@@ -57,7 +57,7 @@ abstract class Solver() {
   ): ProofResult = {
 
     // need to call this first before checking if it is a synthesis query
-    print("\nGenerating query ... ")
+    print("Generating query ... ")
     val t1 = System.nanoTime
     val query = generateQuery(program)
     val duration = (System.nanoTime - t1) / 1e9d

@@ -19,3 +19,5 @@ js/target
 node_modules
 
 package*.json
+
+TODO.md
