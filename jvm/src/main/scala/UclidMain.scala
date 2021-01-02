@@ -18,20 +18,20 @@ object Solvers extends Enumeration {
   */
 object UclidMain {
 
-  implicit val weekDaysRead: scopt.Read[Solvers.Value] =
+  implicit val solverRead: scopt.Read[Solvers.Value] =
     scopt.Read.reads(Solvers.withName(_))
 
   def main(args: Array[String]): Unit =
     parseOptions(args) match {
       case None => sys.exit(2)
       case Some(config) => {
-        val pResults = main(config)
+        val answer = main(config)
         if (config.run) {
-          println(pResults)
+          println(answer.presult)
         } else {
-          println(pResults.messages)
+          println(answer.presult.messages)
         }
-        sys.exit(pResults.result match {
+        sys.exit(answer.presult.result match {
           case Some(false) => 0
           case Some(true)  => 1
           case None        => 2
@@ -90,22 +90,22 @@ object UclidMain {
 
   /** This version of 'main' does all the real work.
     */
-  def main(config: Config): ProofResult = {
+  def main(config: Config): UclidResult = {
     val errorResult =
       new ProofResult()
     try {
 
       print("\nParsing input ... ")
-      var t1 = System.nanoTime
+      val startParse = System.nanoTime
       val modules = compile(config.files)
-      var duration = (System.nanoTime - t1) / 1e9d
-      println(s"Parsing completed in ${duration} seconds.")
+      val parseDuration = (System.nanoTime - startParse) / 1e9d
+      println(s"Parsing completed in ${parseDuration} seconds.")
 
       print("Processing model ... ")
-      t1 = System.nanoTime
+      val startProcess = System.nanoTime
       val obs = Encoder.run(modules, Some(config.mainModuleName))
-      duration = (System.nanoTime - t1) / 1e9d
-      println(s"Processing completed in ${duration} seconds.")
+      val processDuration = (System.nanoTime - startProcess) / 1e9d
+      println(s"Processing completed in ${processDuration} seconds.")
 
       val solver = config.solver match {
         case Solvers.alt_ergo => new AltErgoSolver()
@@ -114,23 +114,24 @@ object UclidMain {
         case Solvers.z3       => new Z3Solver()
       }
 
-      solver.solve(obs, config.run, config.outFile)
+      val res = solver.solve(obs, config.run, config.outFile)
+      UclidResult(res._1, parseDuration, processDuration, res._2, res._3)
     } catch {
       case (e: java.io.FileNotFoundException) =>
         errorResult.messages = "\n" + e.toString()
-        errorResult
+        UclidResult(errorResult)
       case e: SyntaxError =>
         errorResult.messages = "\n" + e.toString()
-        errorResult
+        UclidResult(errorResult)
       case e: SemanticError =>
         errorResult.messages = "\n" + e.toString()
-        errorResult
+        UclidResult(errorResult)
       case e: EncodingError =>
         errorResult.messages = "\n" + e.toString()
-        errorResult
+        UclidResult(errorResult)
       case e: UclidJvmError =>
         errorResult.messages = "\n" + e.toString()
-        errorResult
+        UclidResult(errorResult)
     }
   }
 
@@ -151,3 +152,11 @@ object UclidMain {
     parsedModules
   }
 }
+
+case class UclidResult(
+  presult: ProofResult,
+  parseTime: Double = 0,
+  processTime: Double = 0,
+  generationTime: Double = 0,
+  solveTime: Double = 0
+)

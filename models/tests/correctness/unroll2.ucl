@@ -1,0 +1,23 @@
+// UCLID TEST
+// Solver=z3
+// Result=Some(true)
+
+module main {
+    var x : integer;
+
+    init {
+        x = 0;
+    }
+
+    next {
+        assert(x > 0);
+        x = x + 1;
+        assert(x >= 0);
+    }
+
+    invariant failat10: x < 10;
+
+    control {
+        unroll(9);
+    }
+}
