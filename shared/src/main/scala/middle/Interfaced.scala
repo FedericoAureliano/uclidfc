@@ -25,7 +25,7 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
   val cache = new CacheStack()
   pushCache()
 
-  def addAssertion(ass: Ref, prefix: String): Unit = {
+  def addAssertion(ass: Ref, suffix: String): Unit = {
     val alreadyVisitedForAssertions = new HashSet[Ref]()
     var inlineID = 0
     val assumes = new ListBuffer[Ref]()
@@ -50,7 +50,7 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
 
     def searchInline(
       curr: Ref,
-      suffix: String,
+      pref: String,
       inlines: HashMap[Ref, Ref],
       keepTrack: ListBuffer[Ref],
       updates: Map[Ref, Ref]
@@ -64,7 +64,7 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
                 val newArgs = args.map(a => updateTerm(a, updates))
                 if (inlines.contains(caller)) {
                   // we found an assume or assert!
-                  val newName = Some(s"${prefix}_${suffix}!${inlineID}")
+                  val newName = Some(s"${pref}!${inlineID}_${suffix}")
                   val newAppRef = memoAddInstruction(
                     Application(inlines(caller), newArgs),
                     newName
@@ -78,28 +78,29 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
                 // update bindings
                 val bindings = params.zip(newArgs).toMap
                 // recurse search into body
-                searchInline(body, suffix, inlines, keepTrack, bindings)
+                searchInline(body, pref, inlines, keepTrack, bindings)
               }
               case _ => // do nothing
             }
             // keep searching in children
             args.foreach(p =>
-              searchInline(p, suffix, inlines, keepTrack, updates)
+              searchInline(p, pref, inlines, keepTrack, updates)
             )
           }
           case _ => // do nothing
         }
       }
     searchInline(ass, "Assumption_Holds", inlineAssumes, assumes, Map.empty)
+    alreadyVisitedForAssertions.clear()
     searchInline(
       ass,
-      "Assertion_Counterexample",
+      "Counterexample_In_Assertion",
       inlineAsserts,
       asserts,
       Map.empty
     )
 
-    val inner = if (asserts.length > 0) {
+    val combined = if (asserts.length > 0) {
       val orRef = memoAddInstruction(TheoryMacro("or"))
 
       val appRef = memoAddInstruction(
@@ -111,19 +112,8 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
       ass
     }
 
-    val outer = if (assumes.length > 0) {
-      val andRef = memoAddInstruction(TheoryMacro("and"))
-
-      val appRef = memoAddInstruction(
-        Application(andRef, List(inner) ++ assumes.toList)
-      )
-
-      appRef
-    } else {
-      inner
-    }
-
-    assertionRefs.addOne(outer)
+    assertionRefs.addOne(combined)
+    assumptionRefs.addAll(assumes)
   }
 
   def pushCache(): Unit = {
@@ -831,7 +821,7 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
               val baseRef =
                 memoAddInstruction(
                   Application(negRef, List(initSpecRef)),
-                  Some("Counterexample_In_BaseCase")
+                  Some("Counterexample_In_Invariants_BaseCase")
                 )
 
               addAssertion(baseRef, "Step!0")
@@ -879,7 +869,7 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
 
               val inductiveRef = memoAddInstruction(
                 Application(andRef, List(entryRef, negExitRef)),
-                Some("Counterexample_In_Induction_Step")
+                Some("Counterexample_In_Invariants_Induction_Step")
               )
 
               addAssertion(inductiveRef, "Induction_Step")
@@ -919,7 +909,7 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
               val baseRef =
                 memoAddInstruction(
                   Application(negRef, List(initSpecRef)),
-                  Some("Counterexample_In_Step!0")
+                  Some("Counterexample_In_Invariants_Step!0")
                 )
 
               addAssertion(baseRef, "Step!0")
@@ -952,7 +942,7 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
                   val negExitRef =
                     memoAddInstruction(
                       Application(negRef, List(exitRef)),
-                      Some(s"Counterexample_In_Step!${i}")
+                      Some(s"Counterexample_In_Invariants_Step!${i}")
                     )
 
                   addAssertion(negExitRef, s"Step!${i}")

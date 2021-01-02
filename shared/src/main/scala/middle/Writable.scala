@@ -18,7 +18,7 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
     var linear = true
     var qf = true
 
-    val marks = mark(assertionRefs)
+    val marks = mark(assertionRefs ++ assumptionRefs)
 
     stmts
       .zip(marks)
@@ -70,6 +70,7 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
     List(("produce-models", "true"), ("produce-assignments", "true"))
 
   val assertionRefs: ListBuffer[Ref] = new ListBuffer()
+  val assumptionRefs: ListBuffer[Ref] = new ListBuffer()
 
   val alreadyDeclared = new HashSet[Ref]()
 
@@ -200,7 +201,7 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
 
   def programToQueryCtx(): String = {
     var indent = 0
-    val toDeclare = mark(assertionRefs)
+    val toDeclare = mark(assertionRefs ++ assumptionRefs)
 
     def dispatch(position: Ref): Option[String] =
       if (toDeclare(position.loc)) {
@@ -357,11 +358,16 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
     val opts = options.map(o => s"(set-option :${o._1} ${o._2})").mkString("\n")
 
     val body = if (assertionRefs.length > 0) {
-      val assertionStrings = assertionRefs
+
+      val assumptionStrings = assumptionRefs
         .map(r => s"${TAB}${programPointToQueryTerm(r, 1)}")
         .mkString("\n")
 
-      val spec = s"(or\n" + assertionStrings + ")"
+      val assertionStrings = assertionRefs
+        .map(r => s"${TAB * 2}${programPointToQueryTerm(r, 1)}")
+        .mkString("\n")
+
+      val spec = s"(and\n$assumptionStrings\n${TAB}(or\n$assertionStrings))"
 
       if (isSynthesisQuery) {
         programToQueryCtx() + "\n(constraint (not " + spec + "))\n\n(check-synth)"

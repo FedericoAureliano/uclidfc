@@ -1,7 +1,7 @@
 // UCLID TEST
-// MaxParseTime=0.5
-// MaxProcessTime=3
-// MaxGenerationTime=0.5
+// Solver=cvc4
+// Result=Some(false)
+
 
 module main {
     var x : integer;
@@ -11,14 +11,14 @@ module main {
     }
 
     next {
-        assume(x >= 0);
+        assume(x > 0); // essentially an assume false when unrolling so anything should work
         x = x + 1;
-        assert(x > 0);
+        assert(x < 2);
     }
 
     invariant failat10: x < 10;
 
     control {
-        unroll(500);
+        unroll(10);
     }
 }
