@@ -18,7 +18,9 @@ module main {
   invariant a_le_b: a <= b && h(a, b);
 
   // Part 3: Proof script.
-  control {
-    induction;
-  }
+    control
+    {
+        induction;
+        check;
+    }
 }

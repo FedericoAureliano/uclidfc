@@ -9,6 +9,8 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
   val TAB = "  "
 
   var isSynthesisQuery = false
+  var checkQuery = false
+  var getValues: Option[List[Ref]] = None
 
   def inferLogic(): String = {
     var uf = false
@@ -67,7 +69,7 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
   }
 
   var options: List[(String, String)] =
-    List(("produce-models", "true"), ("produce-assignments", "true"))
+    List(("produce-assignments", "true"))
 
   val assertionRefs: ListBuffer[Ref] = new ListBuffer()
   val assumptionRefs: ListBuffer[Ref] = new ListBuffer()
@@ -370,15 +372,34 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
       val spec = s"(and\n$assumptionStrings\n${TAB}(or\n$assertionStrings))"
 
       if (isSynthesisQuery) {
-        programToQueryCtx() + "\n(constraint (not " + spec + "))\n\n(check-synth)"
+        programToQueryCtx() + "\n(constraint (not " + spec + "))"
       } else {
-        programToQueryCtx() + "\n(assert " + spec + ")\n\n(check-sat)"
+        programToQueryCtx() + "\n(assert " + spec + ")"
       }
 
     } else {
       "\n; nothing to verify"
     }
 
-    s"$logic\n$opts\n\n$body\n(get-model)\n(get-assignment)"
+    val postQuery = if (checkQuery) {
+      val model = if (getValues.isDefined) {
+        if (getValues.get.length == 0) {
+          "(get-model)"
+        } else {
+          s"(get-value (${getValues.get.map(v => programPointToQueryTerm(v)).mkString(" ")}))"
+        }
+      } else {
+        ""
+      }
+      if (isSynthesisQuery) {
+        "\n\n(check-synth)"
+      } else {
+        "\n\n(check-sat)\n(echo \"\")\n(echo \"Proof Status\")\n(get-assignment)\n(echo \"\")\n(echo \"Model\")\n" + model
+      }
+    } else {
+      ""
+    }
+
+    s"$logic\n$opts\n\n$body\n$postQuery"
   }
 }

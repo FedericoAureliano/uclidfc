@@ -13,5 +13,7 @@ module main {
 
     control {
         unroll;
+        check;
+        print_cex(a || b, a, b, c, d, e, a && c && d);
     }
 }

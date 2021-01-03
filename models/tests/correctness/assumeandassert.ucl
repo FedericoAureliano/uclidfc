@@ -18,7 +18,9 @@ module main {
 
     invariant failat10: x < 10;
 
-    control {
+    control
+    {
         unroll(10);
+        check;
     }
 }

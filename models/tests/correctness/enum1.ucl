@@ -15,7 +15,9 @@ module main {
   
   invariant tautology: systemcall == noop;
 
-  control {
-    unroll(2);
-  }
+    control
+    {
+        unroll(2);
+        check;
+    }
 }

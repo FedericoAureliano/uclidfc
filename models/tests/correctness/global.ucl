@@ -20,7 +20,9 @@ module main {
 
   invariant tautology: !f(a, b);
 
-  control {
-      unroll(1);
-  }
+    control
+    {
+        unroll(1);
+        check;
+    }
 }

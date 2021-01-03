@@ -29,7 +29,9 @@ module main
 
     invariant tautology: x == y ==> f(c) == f(y) && f(c) == f(x);
 
-    control {
+    control
+    {
         unroll(5);
+        check;
     }
 }

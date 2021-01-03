@@ -23,7 +23,9 @@ module main {
 
     invariant tautology: composed.first.f == -3 && composed.second.f == -3;
 
-    control {
+    control
+    {
         unroll(3);
+        check;
     }
 }

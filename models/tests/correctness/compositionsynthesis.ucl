@@ -38,5 +38,6 @@ module main {
 
     control {
         induction;
+        check;
     }
 }

@@ -18,7 +18,9 @@ module main {
 
   invariant a_le_b: a <= b;
 
-  control {
-    induction(3);
-  }
+    control
+    {
+        induction(3);
+        check;
+    }
 }

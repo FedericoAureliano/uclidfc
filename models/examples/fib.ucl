@@ -15,5 +15,7 @@ module main {
 
   control {
     induction;
+    check;
+    print_cex(a, b);
   }
 }

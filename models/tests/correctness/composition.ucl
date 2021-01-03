@@ -17,9 +17,11 @@ module fib {
 
   invariant a_le_b: a <= b;
 
-  control {
-    induction;
-  }
+    control
+    {
+        induction;
+        check;
+    }
 }
 
 type twofib = fib && fib;
@@ -33,7 +35,9 @@ module main {
 
     invariant shouldhold: double.first.a == double.second.a && double.first.b == double.second.b;
 
-    control {
+    control
+    {
         unroll(6);
+        check;
     }
 }

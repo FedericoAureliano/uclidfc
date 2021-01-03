@@ -66,9 +66,11 @@
 
   invariant a_le_b: a &lt;= b && h(a, b);
 
-  control {
-    induction;
-  }
+    control
+    {
+        induction;
+        check;
+    }
 }</textarea>
 
       <p>

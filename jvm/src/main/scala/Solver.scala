@@ -68,11 +68,11 @@ abstract class Solver() {
     val qfile =
       writeQueryToFile(query, outFile, suffix).getAbsolutePath()
 
-    if (!run) {
+    if (!run || !program.checkQuery) {
       return (
         new ProofResult(
           None,
-          "Opted out of running the solver."
+          " Opted out of running the solver."
         ),
         generationDuration,
         0
@@ -90,7 +90,15 @@ abstract class Solver() {
       if ("(\\ssat)".r.findFirstIn(answer).isDefined) {
         (new ProofResult(Some(true), answer), generationDuration, result._4)
       } else {
-        (new ProofResult(Some(false), answer), generationDuration, result._4)
+        if (program.isSynthesisQuery) {
+          (new ProofResult(Some(false), answer), generationDuration, result._4)
+        } else {
+          (
+            new ProofResult(Some(false), " unsat"),
+            generationDuration,
+            result._4
+          )
+        }
       }
     }
   }
@@ -115,7 +123,6 @@ class CVC4Solver() extends Solver() {
         )
       )
       .mkString("\n")
-      .replaceAll("\\) \\(", ")\n\t(")
 }
 
 class Z3Solver() extends Solver() {

@@ -11,7 +11,9 @@ module main {
 
     invariant cex: a * 5 - 1 == 0;
 
-    control {
+    control
+    {
         unroll(5);
+        check;
     }
 }

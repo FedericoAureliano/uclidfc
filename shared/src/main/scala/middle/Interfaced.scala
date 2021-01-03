@@ -50,55 +50,58 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
 
     def searchInline(
       curr: Ref,
-      pref: String,
-      inlines: HashMap[Ref, Ref],
-      keepTrack: ListBuffer[Ref],
       updates: Map[Ref, Ref]
     ): Unit =
-      if (!inlines.isEmpty && !alreadyVisitedForAssertions.contains(curr)) {
+      if (!alreadyVisitedForAssertions.contains(curr)) {
         alreadyVisitedForAssertions.add(curr)
         stmts(curr.loc) match {
           case Application(caller, args) => {
             stmts(caller.loc) match {
               case UserMacro(_, _, body, params) => {
                 val newArgs = args.map(a => updateTerm(a, updates))
-                if (inlines.contains(caller)) {
-                  // we found an assume or assert!
-                  val newName = Some(s"${pref}!${inlineID}_${suffix}")
+                if (inlineAsserts.contains(caller)) {
+                  // we found an assert!
+                  val newName = Some(
+                    s"Counterexample_In_Assertion!${inlineID}_${suffix}"
+                  )
                   val newAppRef = memoAddInstruction(
-                    Application(inlines(caller), newArgs),
+                    Application(inlineAsserts(caller), newArgs),
                     newName
                   )
                   if (newAppRef.named == newName) {
                     inlineID += 1
-                    keepTrack.addOne(newAppRef)
+                    asserts.addOne(newAppRef)
                   }
                 }
-
+                if (inlineAssumes.contains(caller)) {
+                  // we found an assume!
+                  val newName = Some(s"Assumption_Holds!${inlineID}_${suffix}")
+                  val newAppRef = memoAddInstruction(
+                    Application(inlineAssumes(caller), newArgs),
+                    newName
+                  )
+                  if (newAppRef.named == newName) {
+                    inlineID += 1
+                    assumes.addOne(newAppRef)
+                  }
+                }
                 // update bindings
                 val bindings = params.zip(newArgs).toMap
                 // recurse search into body
-                searchInline(body, pref, inlines, keepTrack, bindings)
+                searchInline(body, bindings)
               }
               case _ => // do nothing
             }
             // keep searching in children
-            args.foreach(p =>
-              searchInline(p, pref, inlines, keepTrack, updates)
-            )
+            args.foreach(p => searchInline(p, updates))
           }
           case _ => // do nothing
         }
       }
-    searchInline(ass, "Assumption_Holds", inlineAssumes, assumes, Map.empty)
-    alreadyVisitedForAssertions.clear()
-    searchInline(
-      ass,
-      "Counterexample_In_Assertion",
-      inlineAsserts,
-      asserts,
-      Map.empty
-    )
+
+    if (!inlineAsserts.isEmpty || !inlineAssumes.isEmpty) {
+      searchInline(ass, Map.empty)
+    }
 
     val combined = if (asserts.length > 0) {
       val orRef = memoAddInstruction(TheoryMacro("or"))
@@ -473,6 +476,7 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
                   }
               }
             }
+            // TODO how to check for bad names? If components all stayed the same?
 
             val bodyRef = memoAddInstruction(Application(ctrRef, components))
 
@@ -781,6 +785,14 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
   ): Unit =
     cmds.foreach(p =>
       p match {
+        case c: SolverCommand =>
+          c match {
+            case Check() => checkQuery = true
+            case GetValue(vars) => {
+              options = options.appended(("produce-models", "true"))
+              getValues = Some(vars.map(p => exprToTerm(p)._1))
+            }
+          }
         case SolverOption(name, option) =>
           options = options.appended((name, option))
         case ProofCommand(name, unwind) => {
@@ -791,7 +803,7 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
                 stmts(p.loc) match {
                   case FunctionParameter(name, sort) => {
                     val vRef =
-                      memoAddInstruction(UserFunction(s"$name!step!0", sort))
+                      memoAddInstruction(UserFunction(name, sort))
                     vRef
                   }
                 }
@@ -881,7 +893,7 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
                 stmts(p.loc) match {
                   case FunctionParameter(name, sort) => {
                     val vRef =
-                      memoAddInstruction(UserFunction(s"$name!step!0", sort))
+                      memoAddInstruction(UserFunction(name, sort))
                     vRef
                   }
                 }
@@ -1143,7 +1155,7 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
 
         val mod = ModuleDecl(td.id, decls, List.empty)
 
-        moduleToTerm(mod)
+        moduleToTerm(mod, false)
       }
       case Some(DisjunctionComposition(_)) => {
         // create a module decl and then process that instead
@@ -1187,7 +1199,7 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
 
         val mod = ModuleDecl(td.id, decls, List.empty)
 
-        moduleToTerm(mod)
+        moduleToTerm(mod, false)
       }
       case Some(_) => {
         // assign td.id (lhs) to whatever id is pointing to
@@ -1250,8 +1262,9 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
 
   // encode the module and return a pointer to the start of the encoding
   def moduleToTerm(
-    m: ModuleDecl
-  ): (List[Ref], List[Ref]) = { // returns init params and next params
+    m: ModuleDecl,
+    execute: Boolean
+  ): Unit = {
 
     // deal with type declarations
     m.typeDecls.foreach(t => typeDeclToTerm(t))
@@ -1369,8 +1382,10 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
       middle.Module(m.id.name, constructorRef, initRef, nextRef, specRef)
     )
 
-    popCache()
+    if (execute) {
+      executeControl(m.id, initParams, nextParams, m.cmds)
+    }
 
-    (initParams, nextParams)
+    popCache()
   } // End Module to Term
 }

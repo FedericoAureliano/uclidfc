@@ -17,9 +17,11 @@ module fib {
 
   invariant a_le_b: a <= b;
 
-  control {
-    induction;
-  }
+    control
+    {
+        induction;
+        check;
+    }
 }
 
 type twofib = fib || fib;
@@ -35,5 +37,6 @@ module main {
 
     control {
         induction;
+        check;
     }
 }

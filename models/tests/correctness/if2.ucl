@@ -22,7 +22,9 @@ module main {
 
     invariant cex: i == 0;
 
-    control {
+    control
+    {
         unroll(2);
+        check;
     }
 }

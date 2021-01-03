@@ -20,5 +20,6 @@ module main
     control
     {
         unroll(4);
+        check;
     }
 }

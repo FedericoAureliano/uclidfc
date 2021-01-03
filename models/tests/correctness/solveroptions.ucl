@@ -26,5 +26,6 @@ module main {
     control {
         set_solver_option("timeout", "1");
         unroll(2);
+        check;
     }
 }

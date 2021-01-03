@@ -38,4 +38,9 @@ module main
     invariant b_gt_0  : fib1.b > 0 && fib2.b > 0;
     invariant a_ge_0  : fib1.a >= 0 && fib2.a >= 0;
     invariant a_le_b  : fib1.a <= fib1.b && fib2.a <= fib2.b;
+
+    control {
+        induction;
+        check;
+    }
 }

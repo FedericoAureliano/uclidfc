@@ -46,7 +46,7 @@ object UclidMain {
     */
   case class Config(
     mainModuleName: String = "main",
-    solver: Solvers.Value = Solvers.cvc4,
+    solver: Solvers.Value = Solvers.z3,
     run: Boolean = true,
     outFile: Option[String] = None,
     files: Seq[java.io.File] = Seq()

@@ -36,7 +36,9 @@ module main
     invariant a_ge_0  : fibs[1].a >= 0 && fibs[2].a >= 0;
     invariant a_le_b  : fibs[1].a <= fibs[1].b && fibs[2].a <= fibs[2].b;
 
-    control {
+    control
+    {
         unroll(3);
+        check;
     }
 }

@@ -85,6 +85,8 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
   val KwAssert = "assert"
   val KwOption = "set_solver_option"
   val KwSynthesis = "synthesis"
+  val KwGetValue = "print_cex"
+  val KwCheck = "check"
 
   lexical.delimiters ++= List(
     "(",
@@ -166,7 +168,9 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
     KwAssume,
     KwAssert,
     KwOption,
-    KwSynthesis
+    KwSynthesis,
+    KwGetValue,
+    KwCheck
   )
 
   lazy val ast_binary: Expr ~ String ~ Expr => Expr = {
@@ -696,6 +700,12 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
       IdParser ~ ("(" ~> IntegerParser <~ ")").? ^^ {
         case id ~ k =>
           ProofCommand(id, k)
+      } |
+      KwGetValue ~> ExprListParser.? ^^ {
+        case ts => GetValue(ts.getOrElse(List.empty))
+      } |
+      KwCheck ^^ {
+        case _ => Check()
       }
   }
 

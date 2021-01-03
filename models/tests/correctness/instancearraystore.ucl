@@ -41,7 +41,9 @@ module main
 
     invariant musthold: fibs[0] == fib1;
 
-    control {
+    control
+    {
         induction(2);
+        check;
     }
 }
