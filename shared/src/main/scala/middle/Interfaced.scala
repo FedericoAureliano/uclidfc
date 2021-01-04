@@ -453,30 +453,30 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
             newParams ++= res._2
             res._1
           }
-          case Identifier(_) => {
+          case id: Identifier => {
             // get the constructor
             val ctr = stmts(ctrRef.loc)
               .asInstanceOf[Constructor]
 
+            var found = false
             val components: List[Ref] = ctr.selectors.map { s =>
               val sel = stmts(s.loc).asInstanceOf[Selector]
-              lhs match {
-                // if we are looking at the current selector, then process it, otherwise just return the identity
-                case Identifier(name) if name == sel.name =>
-                  val res = exprToTerm(rhs)
-                  newParams ++= res._2
-                  res._1
-                case _ =>
-                  loadObjectRef(Identifier(sel.name)) match {
-                    case Some(value) => value
-                    case None =>
-                      throw new IdentifierOutOfScope(
-                        Identifier(sel.name)
-                      ) // todo: how to preserve position?
-                  }
+              if (id.name == sel.name) {
+                found = true
+                val res = exprToTerm(rhs)
+                newParams ++= res._2
+                res._1
+              } else {
+                loadObjectRef(Identifier(sel.name)) match {
+                  case Some(value) => value
+                  case None =>
+                    throw new IdentifierOutOfScope(id)
+                }
               }
             }
-            // TODO how to check for bad names? If components all stayed the same?
+            if (!found) {
+              throw new IdentifierOutOfScope(id)
+            }
 
             val bodyRef = memoAddInstruction(Application(ctrRef, components))
 
