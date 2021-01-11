@@ -593,10 +593,80 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
             case Check() => checkQuery = true
             case GetValue(vars) => {
               options = options.appended(("produce-models", "true"))
-              val vs = proofStates.foldLeft(List.empty: List[Ref]) { (acc, s) =>
-                acc ++ vars.map(p => exprToTerm(Some(s), Map.empty, p)._1)
+              val vs = proofStates.foldLeft(List.empty: List[Ref]) {
+                (acc, s) =>
+                  if (vars.length > 0) {
+                    val processed =
+                      vars.map(p => exprToTerm(Some(s), Map.empty, p)._1)
+
+                    // get the module declaration
+                    val mod = stmts(typeMap(moduleId).loc)
+                      .asInstanceOf[middle.Module]
+                    val specRef = mod.spec
+                    val stateSpecRef =
+                      memoAddInstruction(Application(specRef, List(s)))
+
+                    acc ++ (stateSpecRef :: processed)
+                  } else {
+                    acc
+                  }
               }
               getValues = Some(vs)
+            }
+            case Trace(start, unwind, init) => {
+              val startTerm = exprToTerm(None, Map.empty, start)._1
+              val initVariables = startTerm :: initParams.tail.map { p =>
+                stmts(p.loc) match {
+                  case FunctionParameter(name, sort) => {
+                    val vRef =
+                      memoAddInstruction(UserFunction(name, sort))
+                    vRef
+                  }
+                }
+              }
+
+              // get the module declaration
+              val mod = stmts(typeMap(moduleId).loc)
+                .asInstanceOf[middle.Module]
+              val initRef = mod.init
+              val nextRef = mod.next
+
+              var transRef = if (init.literal) {
+                // apply init
+                val initAppRef =
+                  memoAddInstruction(
+                    Application(initRef, initVariables),
+                    Some("State_At_Step!0")
+                  )
+                proofStates.addOne(initAppRef)
+                initAppRef
+              } else {
+                startTerm
+              }
+
+              // Take k steps
+              val k = unwind.literal.toInt
+
+              (1 to k).foreach {
+                i =>
+                  val args = nextParams.tail.map { p =>
+                    stmts(p.loc) match {
+                      case FunctionParameter(name, sort) => {
+                        val vRef =
+                          memoAddInstruction(
+                            UserFunction(s"$name!step!$i", sort)
+                          )
+                        vRef
+                      }
+                    }
+                  }
+                  transRef = memoAddInstruction(
+                    Application(nextRef, List(transRef) ++ args),
+                    Some(s"State_At_Step!$i")
+                  )
+                  proofStates.addOne(transRef)
+              }
+              checkQuery = true
             }
           }
         case SolverOption(name, option) =>
@@ -674,7 +744,8 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
                   }
                   transRef = memoAddInstruction(
                     Application(nextRef, List(transRef) ++ args),
-                    Some(s"State_At_Step!$i")
+                    Some(if (i == k) { "State_After" }
+                    else { s"State_At_Step!$i" })
                   )
                   proofStates.addOne(transRef)
               }
@@ -1020,10 +1091,14 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
     }
 
     // input state
-    val inputStateRef = memoAddInstruction(FunctionParameter("in", moduleRef))
+    val inputStateRef = memoAddInstruction(
+      FunctionParameter("State_Before", moduleRef)
+    )
 
     val fields =
-      (m.vars ++ m.consts ++ m.sharedVars ++ m.inputs ++ m.outputs)
+      (m.vars ++ m.consts ++ m.sharedVars ++ m.inputs ++ m.outputs).sortWith(
+        (a, b) => a._1.pos < b._1.pos
+      )
 
     // create selectors and remember where they are
     val selectorTerms = new HashMap[String, Ref]()

@@ -202,7 +202,7 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
 
   def programToQueryCtx(): String = {
     var indent = 0
-    val toDeclare = mark(assertionRefs)
+    val toDeclare = mark(assertionRefs ++ getValues.getOrElse(List.empty))
 
     def dispatch(position: Ref): Option[String] =
       if (toDeclare(position.loc)) {
@@ -373,23 +373,26 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
       }
 
     } else {
-      "\n; nothing to verify"
+      if (getValues.isDefined) {
+        programToQueryCtx()
+      } + "\n; nothing to verify"
     }
 
     val postQuery = if (checkQuery) {
       val model = if (getValues.isDefined) {
-        if (getValues.get.length == 0) {
+        val cmd = if (getValues.get.length == 0) {
           "(get-model)"
         } else {
           s"(get-value (${getValues.get.map(v => programPointToQueryTerm(v)).mkString(" ")}))"
         }
+        "(echo \"Model\")\n" + cmd
       } else {
         ""
       }
       if (isSynthesisQuery) {
         "\n\n(check-synth)"
       } else {
-        "\n\n(check-sat)\n(echo \"\")\n(echo \"Proof Status\")\n(get-assignment)\n(echo \"\")\n(echo \"Model\")\n" + model
+        "\n\n(check-sat)\n(echo \"\")\n(echo \"Proof Status\")\n(get-assignment)\n(echo \"\")\n" + model
       }
     } else {
       ""

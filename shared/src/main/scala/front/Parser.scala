@@ -87,6 +87,7 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
   val KwSynthesis = "synthesis"
   val KwGetValue = "print_cex"
   val KwCheck = "check"
+  val KwTrace = "trace"
 
   lexical.delimiters ++= List(
     "(",
@@ -170,7 +171,8 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
     KwOption,
     KwSynthesis,
     KwGetValue,
-    KwCheck
+    KwCheck,
+    KwTrace
   )
 
   lazy val ast_binary: Expr ~ String ~ Expr => Expr = {
@@ -698,6 +700,9 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
       } |
       KwCheck ^^ {
         case _ => Check()
+      } |
+      KwTrace ~> "(" ~> ExprParser ~ ("," ~> IntegerParser) ~ ("," ~> BoolParser).? <~ ")" ^^ {
+        case e ~ k ~ b => Trace(e, k, b.getOrElse(BoolLit(true)))
       }
   }
 

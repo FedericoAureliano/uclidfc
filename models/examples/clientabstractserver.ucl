@@ -174,15 +174,15 @@ module main {
         sinstances[s1].eResponse_to_ClientMachine == const(const(0, [eResponse_t]integer), [ClientMachine_ref_t][eResponse_t]integer) ||
         sinstances[s1].eRequest_from_ClientMachine == const(const(0, [eRequest_t]integer), [ClientMachine_ref_t][eRequest_t]integer);
 
-    // invariant next_id_always_ahead_of_last: cinstances[c1].last_id < cinstances[c1].next_id;
+    invariant next_id_always_ahead_of_last: cinstances[c1].last_id < cinstances[c1].next_id;
 
-    // // any message id being received is equal to next_id
-    // invariant incomming_id_is_next_id: forall (rs : eResponse_t) :: 
-    //     cinstances[c1].eResponse_from_AbstractServerMachine[rs] > 0 ==> rs.id + 1 == cinstances[c1].next_id;
+    // any message id being received is equal to next_id
+    invariant incomming_id_is_next_id: forall (rs : eResponse_t) :: 
+        cinstances[c1].eResponse_from_AbstractServerMachine[rs] > 0 ==> rs.id + 1 == cinstances[c1].next_id;
 
-    // // any message id being sent out is equal to next_id
-    // invariant incomming_id_is_next_id: forall (rq: eRequest_t) :: 
-    //     cinstances[c1].eRequest_to_AbstractServerMachine[s1][rq] > 0 ==> rq.id + 1 == cinstances[c1].next_id;
+    // any message id being sent out is equal to next_id
+    invariant incomming_id_is_next_id: forall (rq: eRequest_t) :: 
+        cinstances[c1].eRequest_to_AbstractServerMachine[s1][rq] > 0 ==> rq.id + 1 == cinstances[c1].next_id;
 
     invariant some_message_means_one_message: forall (rs : eResponse_t, rq: eRequest_t) :: 
         sinstances[s1].eResponse_to_ClientMachine[c1][rs] > 0 ==> sinstances[s1].eResponse_to_ClientMachine[c1] == const(0, [eResponse_t]integer)[rs -> 1] &&
@@ -190,29 +190,29 @@ module main {
         cinstances[c1].eResponse_from_AbstractServerMachine[rs] > 0 ==> cinstances[c1].eResponse_from_AbstractServerMachine == const(0, [eResponse_t]integer)[rs -> 1] &&
         cinstances[c1].eRequest_to_AbstractServerMachine[s1][rq] > 0 ==> cinstances[c1].eRequest_to_AbstractServerMachine[s1] ==  const(0, [eRequest_t]integer)[rq -> 1];
 
-    invariant client_sending_request_means_no_server_events: forall (rq: eRequest_t) :: 
-        cinstances[c1].eRequest_to_AbstractServerMachine[s1][rq] > 0 ==>
+    invariant client_sending_request_means_no_server_events: (exists (rq: eRequest_t) :: 
+        cinstances[c1].eRequest_to_AbstractServerMachine[s1][rq] > 0) ==>
             (sinstances[s1].eResponse_to_ClientMachine == const(const(0, [eResponse_t]integer), [ClientMachine_ref_t][eResponse_t]integer) &&
             sinstances[s1].eRequest_from_ClientMachine == const(const(0, [eRequest_t]integer), [ClientMachine_ref_t][eRequest_t]integer));
 
-    invariant client_receiving_response_means_no_server_events: forall (rs : eResponse_t) :: 
-        cinstances[c1].eResponse_from_AbstractServerMachine[rs] > 0 ==>
+    invariant client_receiving_response_means_no_server_events: (exists (rs : eResponse_t) :: 
+        cinstances[c1].eResponse_from_AbstractServerMachine[rs] > 0) ==>
             (sinstances[s1].eResponse_to_ClientMachine == const(const(0, [eResponse_t]integer), [ClientMachine_ref_t][eResponse_t]integer) &&
             sinstances[s1].eRequest_from_ClientMachine == const(const(0, [eRequest_t]integer), [ClientMachine_ref_t][eRequest_t]integer));
 
-    invariant server_receiving_request_means_no_client_events:  forall (rq: eRequest_t) :: 
-        sinstances[s1].eRequest_from_ClientMachine[c1][rq] > 0 ==>
+    invariant server_receiving_request_means_no_client_events: (exists (rq: eRequest_t) :: 
+        sinstances[s1].eRequest_from_ClientMachine[c1][rq] > 0) ==>
             (cinstances[c1].eResponse_from_AbstractServerMachine == const(0, [eResponse_t]integer) &&
             cinstances[c1].eRequest_to_AbstractServerMachine == const(const(0, [eRequest_t]integer), [AbstractServerMachine_ref_t][eRequest_t]integer));
 
-    invariant server_sending_request_means_no_client_events: forall (rs : eResponse_t) :: 
-        sinstances[s1].eResponse_to_ClientMachine[c1][rs] > 0 ==>
+    invariant server_sending_request_means_no_client_events: (exists (rs : eResponse_t) :: 
+        sinstances[s1].eResponse_to_ClientMachine[c1][rs] > 0) ==>
             (cinstances[c1].eResponse_from_AbstractServerMachine == const(0, [eResponse_t]integer) &&
             cinstances[c1].eRequest_to_AbstractServerMachine == const(const(0, [eRequest_t]integer), [AbstractServerMachine_ref_t][eRequest_t]integer));
         
     control {
         induction;
-        set_solver_option("timeout", "10000");
+        set_solver_option("timeout", "60000");
         check;
         print_cex(cinstances[c1].eResponse_from_AbstractServerMachine,
             cinstances[c1].eRequest_to_AbstractServerMachine,
