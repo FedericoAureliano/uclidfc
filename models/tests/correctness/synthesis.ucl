@@ -2,8 +2,9 @@
 // Solver=cvc4
 // Result=Some(false)
 
+synthesis function h(x : integer, y : integer) : boolean;
+
 module main {
-  synthesis function h(x : integer, y : integer) : boolean;
   var a, b : integer;
 
   init {

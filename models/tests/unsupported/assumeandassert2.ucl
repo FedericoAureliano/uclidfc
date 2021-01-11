@@ -1,6 +1,6 @@
 // UCLID TEST
 // Solver=cvc4
-// Result=Some(true)
+// Result=None
 
 
 module main {

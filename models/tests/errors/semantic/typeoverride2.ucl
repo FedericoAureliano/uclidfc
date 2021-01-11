@@ -5,8 +5,9 @@
 type fib;
 const x: fib;
 
+type fib;
+
 module main {
-    type fib;
 
     var y : fib;
 

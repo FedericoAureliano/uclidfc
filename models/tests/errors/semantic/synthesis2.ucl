@@ -2,11 +2,12 @@
 // Solver=cvc4
 // Result=None
 
+synthesis function h(x : integer, y : integer) : boolean;
+function f(integer) : integer;
+
 module main {
-  synthesis function h(x : integer, y : integer) : boolean;
   var a, b : integer;
 
-  function f(integer) : integer;
 
   init {
     a = f(0);

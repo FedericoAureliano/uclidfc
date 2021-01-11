@@ -1,0 +1,222 @@
+// Declare machine reference types
+type AbstractServerMachine_ref_t = enum {s1};
+type ClientMachine_ref_t = enum {c1};
+
+// Declare event types
+type eRequest_t = record {id : integer};
+type eResponse_t = record {id : integer};
+
+module AbstractServerMachine {
+    
+    sharedvar eRequest_from_ClientMachine : [ClientMachine_ref_t][eRequest_t]integer;
+    sharedvar eResponse_to_ClientMachine : [ClientMachine_ref_t][eResponse_t]integer;
+
+    var payload_request : eRequest_t;
+    var source: ClientMachine_ref_t;
+    
+    init
+    {
+        eRequest_from_ClientMachine = const(const(0, [eRequest_t]integer), [ClientMachine_ref_t][eRequest_t]integer);
+        eResponse_to_ClientMachine = const(const(0, [eResponse_t]integer), [ClientMachine_ref_t][eResponse_t]integer);
+    }// End of init block
+
+    next
+    {
+        havoc payload_request;
+        havoc source;
+        if (eRequest_from_ClientMachine[source][payload_request] > 0) {
+            eResponse_to_ClientMachine[source][eResponse_t(payload_request.id)] = eResponse_to_ClientMachine[source][eResponse_t(payload_request.id)] + 1;
+            eRequest_from_ClientMachine[source][payload_request] = eRequest_from_ClientMachine[source][payload_request] - 1;
+        }
+    }// End of next block
+
+} // End of AbstractServerMachine module
+
+module ClientMachine {
+    sharedvar eResponse_from_AbstractServerMachine : [eResponse_t]integer;
+    sharedvar eRequest_to_AbstractServerMachine : [AbstractServerMachine_ref_t][eRequest_t]integer;
+    
+    var entry : boolean;
+    
+    // Declare local variables
+    var server : AbstractServerMachine_ref_t;
+    var next_id : integer;
+    var last_id : integer;
+    
+    var payload_request : eRequest_t;
+    var payload_response : eResponse_t;
+
+    init
+    {
+        next_id = 1;
+        last_id = 0;
+        entry = true;
+
+        eResponse_from_AbstractServerMachine = const(0, [eResponse_t]integer);
+        eRequest_to_AbstractServerMachine = const(const(0, [eRequest_t]integer), [AbstractServerMachine_ref_t][eRequest_t]integer);
+    }// End of init block
+
+    next
+    {
+        if (entry) {
+            havoc payload_request;
+            payload_request.id = next_id;
+            eRequest_to_AbstractServerMachine[server][payload_request] = eRequest_to_AbstractServerMachine[server][payload_request] + 1;
+            next_id = (next_id + 1);
+            entry = false;
+        } else {
+            havoc payload_response;
+            if (eResponse_from_AbstractServerMachine[payload_response] > 0) {
+                last_id = payload_response.id;
+                eResponse_from_AbstractServerMachine[payload_response] = eResponse_from_AbstractServerMachine[payload_response] - 1;
+            }
+        }
+    }// End of next block
+
+} // End of ClientMachine module
+
+type cases = enum {client_to_server, server_to_client};
+
+module main {
+    var sinstances : [AbstractServerMachine_ref_t]AbstractServerMachine;
+    var cinstances : [ClientMachine_ref_t]ClientMachine;
+    var schoice: AbstractServerMachine_ref_t;
+    var cchoice: ClientMachine_ref_t;
+    var sstep: boolean;
+    var cstep: boolean;
+
+    var mediate: boolean;
+
+    var AbstractServerMachine_tmp : AbstractServerMachine_ref_t;
+    var ClientMachine_tmp : ClientMachine_ref_t;
+    var eResponse_payload : eResponse_t;
+    var eRequest_payload: eRequest_t;
+
+    var case_switch : cases;
+
+    next {
+        havoc mediate;
+        if (mediate) {
+            havoc case_switch;
+            havoc AbstractServerMachine_tmp;
+            havoc ClientMachine_tmp;
+            case 
+            (case_switch == server_to_client) : {
+                havoc eResponse_payload;
+                if (sinstances[AbstractServerMachine_tmp].eResponse_to_ClientMachine[ClientMachine_tmp][eResponse_payload] > 0) {
+                    sinstances[AbstractServerMachine_tmp].eResponse_to_ClientMachine[ClientMachine_tmp][eResponse_payload] = sinstances[AbstractServerMachine_tmp].eResponse_to_ClientMachine[ClientMachine_tmp][eResponse_payload] - 1;
+                    cinstances[ClientMachine_tmp].eResponse_from_AbstractServerMachine[eResponse_payload] = cinstances[ClientMachine_tmp].eResponse_from_AbstractServerMachine[eResponse_payload] + 1;
+                }
+            }
+            (case_switch == client_to_server) : {
+                havoc eRequest_payload;
+                if (cinstances[ClientMachine_tmp].eRequest_to_AbstractServerMachine[AbstractServerMachine_tmp][eRequest_payload] > 0) {
+                    cinstances[ClientMachine_tmp].eRequest_to_AbstractServerMachine[AbstractServerMachine_tmp][eRequest_payload] = cinstances[ClientMachine_tmp].eRequest_to_AbstractServerMachine[AbstractServerMachine_tmp][eRequest_payload] - 1;
+                    sinstances[AbstractServerMachine_tmp].eRequest_from_ClientMachine[ClientMachine_tmp][eRequest_payload] = sinstances[AbstractServerMachine_tmp].eRequest_from_ClientMachine[ClientMachine_tmp][eRequest_payload] + 1;
+                }
+            }
+            esac
+        } else {
+            if (cstep) {
+                havoc cstep;
+                havoc cchoice;
+                next(cinstances[cchoice]);
+            }
+            if (sstep) {
+                havoc sstep;
+                havoc schoice;
+                next(sinstances[schoice]);
+            }
+        }
+    }
+
+    // the assertion we are trying to prove
+    invariant assertion: exists (r : eResponse_t) ::
+        cinstances[c1].eResponse_from_AbstractServerMachine[r] > 0 ==> r.id > cinstances[c1].last_id;
+
+    // // all queues nonnegative
+    invariant nonnegative: forall (rs : eResponse_t, rq: eRequest_t) :: 
+        sinstances[s1].eResponse_to_ClientMachine[c1][rs] >= 0 &&
+        sinstances[s1].eRequest_from_ClientMachine[c1][rq] >= 0 &&
+        cinstances[c1].eResponse_from_AbstractServerMachine[rs] >= 0 &&
+        cinstances[c1].eRequest_to_AbstractServerMachine[s1][rq] >= 0;
+
+    // // if server sending to client, then client must be pointing to that server
+    // invariant clients_match: forall (rs : eResponse_t, rq: eRequest_t) :: 
+    //     sinstances[s1].eResponse_to_ClientMachine[c1][rs] > 0 ==> cinstances[c1].server == s1 &&
+    //     cinstances[c1].eRequest_to_AbstractServerMachine[s1][rq] > 0 ==> cinstances[c1].server == s1;
+
+    // client only has one response coming in at a time
+    invariant one_response:forall (rs : eResponse_t) :: 
+        cinstances[c1].eResponse_from_AbstractServerMachine[rs] > 0 ==> 
+            cinstances[c1].eResponse_from_AbstractServerMachine == const(0, [eResponse_t]integer)[rs -> 1];
+
+    // client only sends one request at a time
+    invariant one_request: forall (rq: eRequest_t) :: 
+        cinstances[c1].eRequest_to_AbstractServerMachine[s1][rq] > 0 ==> 
+            cinstances[c1].eRequest_to_AbstractServerMachine == const(const(0, [eRequest_t]integer), [AbstractServerMachine_ref_t][eRequest_t]integer)[s1 -> const(0, [eRequest_t]integer)[rq -> 1]];
+
+    invariant server_only_one_response: forall (rs : eResponse_t) :: 
+        sinstances[s1].eResponse_to_ClientMachine[c1][rs] > 0 ==> 
+            sinstances[s1].eResponse_to_ClientMachine == const(const(0, [eResponse_t]integer), [ClientMachine_ref_t][eResponse_t]integer)[c1 -> const(0, [eResponse_t]integer)[rs -> 1]];
+
+    invariant server_only_one_request: forall (rq: eRequest_t) :: 
+        sinstances[s1].eRequest_from_ClientMachine[c1][rq] > 0 ==> 
+            sinstances[s1].eRequest_from_ClientMachine == const(const(0, [eRequest_t]integer), [ClientMachine_ref_t][eRequest_t]integer)[c1 -> const(0, [eRequest_t]integer)[rq -> 1]];
+
+    // // client never has a response and a request
+    invariant no_double_client:
+        cinstances[c1].eResponse_from_AbstractServerMachine == const(0, [eResponse_t]integer)  ||
+        cinstances[c1].eRequest_to_AbstractServerMachine == const(const(0, [eRequest_t]integer), [AbstractServerMachine_ref_t][eRequest_t]integer);
+
+    // // server never has a response and a request
+    invariant no_double_server:
+        sinstances[s1].eResponse_to_ClientMachine == const(const(0, [eResponse_t]integer), [ClientMachine_ref_t][eResponse_t]integer) ||
+        sinstances[s1].eRequest_from_ClientMachine == const(const(0, [eRequest_t]integer), [ClientMachine_ref_t][eRequest_t]integer);
+
+    // invariant next_id_always_ahead_of_last: cinstances[c1].last_id < cinstances[c1].next_id;
+
+    // // any message id being received is equal to next_id
+    // invariant incomming_id_is_next_id: forall (rs : eResponse_t) :: 
+    //     cinstances[c1].eResponse_from_AbstractServerMachine[rs] > 0 ==> rs.id + 1 == cinstances[c1].next_id;
+
+    // // any message id being sent out is equal to next_id
+    // invariant incomming_id_is_next_id: forall (rq: eRequest_t) :: 
+    //     cinstances[c1].eRequest_to_AbstractServerMachine[s1][rq] > 0 ==> rq.id + 1 == cinstances[c1].next_id;
+
+    invariant some_message_means_one_message: forall (rs : eResponse_t, rq: eRequest_t) :: 
+        sinstances[s1].eResponse_to_ClientMachine[c1][rs] > 0 ==> sinstances[s1].eResponse_to_ClientMachine[c1] == const(0, [eResponse_t]integer)[rs -> 1] &&
+        sinstances[s1].eRequest_from_ClientMachine[c1][rq] > 0 ==> sinstances[s1].eRequest_from_ClientMachine[c1] == const(0, [eRequest_t]integer)[rq -> 1] &&
+        cinstances[c1].eResponse_from_AbstractServerMachine[rs] > 0 ==> cinstances[c1].eResponse_from_AbstractServerMachine == const(0, [eResponse_t]integer)[rs -> 1] &&
+        cinstances[c1].eRequest_to_AbstractServerMachine[s1][rq] > 0 ==> cinstances[c1].eRequest_to_AbstractServerMachine[s1] ==  const(0, [eRequest_t]integer)[rq -> 1];
+
+    invariant client_sending_request_means_no_server_events: forall (rq: eRequest_t) :: 
+        cinstances[c1].eRequest_to_AbstractServerMachine[s1][rq] > 0 ==>
+            (sinstances[s1].eResponse_to_ClientMachine == const(const(0, [eResponse_t]integer), [ClientMachine_ref_t][eResponse_t]integer) &&
+            sinstances[s1].eRequest_from_ClientMachine == const(const(0, [eRequest_t]integer), [ClientMachine_ref_t][eRequest_t]integer));
+
+    invariant client_receiving_response_means_no_server_events: forall (rs : eResponse_t) :: 
+        cinstances[c1].eResponse_from_AbstractServerMachine[rs] > 0 ==>
+            (sinstances[s1].eResponse_to_ClientMachine == const(const(0, [eResponse_t]integer), [ClientMachine_ref_t][eResponse_t]integer) &&
+            sinstances[s1].eRequest_from_ClientMachine == const(const(0, [eRequest_t]integer), [ClientMachine_ref_t][eRequest_t]integer));
+
+    invariant server_receiving_request_means_no_client_events:  forall (rq: eRequest_t) :: 
+        sinstances[s1].eRequest_from_ClientMachine[c1][rq] > 0 ==>
+            (cinstances[c1].eResponse_from_AbstractServerMachine == const(0, [eResponse_t]integer) &&
+            cinstances[c1].eRequest_to_AbstractServerMachine == const(const(0, [eRequest_t]integer), [AbstractServerMachine_ref_t][eRequest_t]integer));
+
+    invariant server_sending_request_means_no_client_events: forall (rs : eResponse_t) :: 
+        sinstances[s1].eResponse_to_ClientMachine[c1][rs] > 0 ==>
+            (cinstances[c1].eResponse_from_AbstractServerMachine == const(0, [eResponse_t]integer) &&
+            cinstances[c1].eRequest_to_AbstractServerMachine == const(const(0, [eRequest_t]integer), [AbstractServerMachine_ref_t][eRequest_t]integer));
+        
+    control {
+        induction;
+        set_solver_option("timeout", "10000");
+        check;
+        print_cex(cinstances[c1].eResponse_from_AbstractServerMachine,
+            cinstances[c1].eRequest_to_AbstractServerMachine,
+            sinstances[s1].eResponse_to_ClientMachine,
+            sinstances[s1].eRequest_from_ClientMachine);
+    }
+}

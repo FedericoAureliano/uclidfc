@@ -1,6 +1,6 @@
 // UCLID TEST
 // Solver=cvc4
-// Result=Some(true)
+// Result=None
 
 module main {
     var i : integer;
@@ -12,21 +12,20 @@ module main {
 
     next {
         assume(d > 0);
+        havoc i;
+
         if (d > 0) {
-            havoc i;
-            assume(i > 0);
-        } else {
-            havoc i;
+            assume(i == 0);
         }
 
         havoc d;
     }
 
-    invariant cex: i == 0;
+    invariant musthold: i == 0;
 
-    control {
-        induction;
+    control
+    {
+        unroll(4);
         check;
-        print_cex;
     }
 }

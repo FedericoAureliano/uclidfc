@@ -10,10 +10,10 @@ module simple {
     }
 }
 
+type test = record {b : boolean, s : simple};
+
 module main
 {
-    type test = record {b : boolean, s : simple};
-
     var t: test;
 
     invariant willholdifinitworks: t.s.a == 135;

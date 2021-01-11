@@ -105,6 +105,19 @@ class TestEndToEnd {
     }
   }
 
+  @Test def testNotSupportedYetErrors(): Unit = {
+    val tests = new File("models/tests/unsupported").listFiles
+      .filter(_.isFile)
+      .map(f => readTestFile(f))
+    tests.foreach { t =>
+      val answer = endToEnd(t._1, t._2)
+      assert(
+        t._3 == answer.presult.result,
+        s"Failed: ${t._1}\nExpected: ${t._3}\nGot: ${answer.presult.result}\nOutput: ${answer.presult.messages}"
+      )
+    }
+  }
+
   @Test def testPerformance(): Unit = {
     val tests = new File("models/tests/performance").listFiles
       .filter(_.isFile)

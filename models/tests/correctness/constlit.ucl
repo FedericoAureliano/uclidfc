@@ -2,10 +2,10 @@
 // Solver=z3
 // Result=Some(false)
 
+const x : integer = -3;
+
 module main
 {
-    const x : integer = -3;
-
     invariant tautology: x == -3;
 
     control {

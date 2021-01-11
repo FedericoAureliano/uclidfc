@@ -2,7 +2,8 @@
 // Solver=z3
 // Result=None
 
+type a = [integer]boolean;
+type a = [integer]boolean;
+
 module main {
-    type a = [integer]boolean;
-    type a = [integer]boolean;
 }

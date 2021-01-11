@@ -1,6 +1,6 @@
 // UCLID TEST
 // Solver=z3
-// Result=Some(false)
+// Result=None
 
 module main {
     var d : integer;

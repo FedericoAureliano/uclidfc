@@ -188,33 +188,6 @@ case class RecordType(elements: List[(Identifier, InlineType)]) extends Type {
   def defaultVal(): Option[Expr] = Some(elements.head._1)
 }
 
-sealed abstract class ComposedType(types: List[InlineType]) extends Type {
-  if (types.length > 8) {
-    throw new TooManyCompositionsError(types.last)
-  }
-
-  val fields = List(
-    "first",
-    "second",
-    "third",
-    "fourth",
-    "fifth",
-    "sixth",
-    "seventh",
-    "eigth"
-  ).zip(types)
-}
-
-case class ConjunctionComposition(types: List[InlineType])
-    extends ComposedType(types) {
-  def defaultVal(): Option[Expr] = None
-}
-
-case class DisjunctionComposition(types: List[InlineType])
-    extends ComposedType(types) {
-  def defaultVal(): Option[Expr] = None
-}
-
 case class ArrayType(inType: InlineType, outType: InlineType)
     extends InlineType {
 
@@ -241,10 +214,6 @@ sealed abstract class Statement extends TermNode {}
 
 case class HavocStmt(toHavoc: Expr) extends Statement {}
 
-case class AssumeStmt(pred: Expr) extends Statement {}
-
-case class AssertStmt(pred: Expr) extends Statement {}
-
 case class AssignStmt(lhs: Expr, rhs: Expr) extends Statement {}
 
 case class BlockStmt(stmts: List[Statement]) extends Statement {}
@@ -262,7 +231,9 @@ sealed abstract class TopLevelDecl extends Decl
 
 case class TypeDecl(id: Identifier, typ: Option[Type]) extends TopLevelDecl {}
 
-case class StateVarsDecl(ids: List[Identifier], typ: InlineType) extends Decl {}
+case class StateVarDecl(ids: List[Identifier], typ: InlineType) extends Decl {}
+
+case class StateConstDecl(ids: List[Identifier], typ: InlineType) extends Decl {}
 
 case class InputVarsDecl(ids: List[Identifier], typ: InlineType) extends Decl {}
 
@@ -312,11 +283,6 @@ case class ModuleDecl(
   cmds: List[Command]
 ) extends TopLevelDecl {
 
-  // module types.
-  val typeDecls: List[TypeDecl] =
-    decls
-      .collect { case typs: TypeDecl => typs }
-
   // module inputs.
   val inputs: List[(Identifier, InlineType)] =
     decls
@@ -332,27 +298,18 @@ case class ModuleDecl(
   // module state variables.
   val vars: List[(Identifier, InlineType)] =
     decls
-      .collect { case vars: StateVarsDecl => vars }
+      .collect { case vars: StateVarDecl => vars }
+      .flatMap(v => v.ids.map(id => (id, v.typ)))
+
+  val consts: List[(Identifier, InlineType)] =
+    decls
+      .collect { case consts: StateConstDecl => consts }
       .flatMap(v => v.ids.map(id => (id, v.typ)))
 
   val sharedVars: List[(Identifier, InlineType)] =
     decls
       .collect { case sVars: SharedVarsDecl => sVars }
       .flatMap(sVar => sVar.ids.map(id => (id, sVar.typ)))
-
-  val defines: List[DefineDecl] =
-    decls
-      .collect {
-        case defi: DefineDecl => defi
-      }
-
-  val functions: List[FunctionDecl] =
-    decls
-      .collect { case cnsts: FunctionDecl => cnsts }
-
-  val synthesis: List[SynthesisDecl] =
-    decls
-      .collect { case cnsts: SynthesisDecl => cnsts }
 
   // module properties.
   val properties: List[SpecDecl] = decls.collect {

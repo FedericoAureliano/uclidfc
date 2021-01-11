@@ -1,6 +1,6 @@
 // UCLID TEST
 // MaxParseTime=0.5
-// MaxProcessTime=3
+// MaxProcessTime=0.5
 // MaxGenerationTime=0.5
 
 module main {
@@ -11,9 +11,7 @@ module main {
     }
 
     next {
-        assume(x >= 0);
         x = x + 1;
-        assert(x > 0);
     }
 
     invariant failat10: x < 10;

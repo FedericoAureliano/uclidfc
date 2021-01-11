@@ -2,12 +2,12 @@
 // Solver=z3
 // Result=Some(false)
 
+type intholder = record {x : integer, y : integer, z : integer};
+type intholderholder = record {first: intholder, second: intholder};
+type intholderholderholder = record {only: intholderholder};
+
 module main
 {
-    type intholder = record {x : integer, y : integer, z : integer};
-    type intholderholder = record {first: intholder, second: intholder};
-    type intholderholderholder = record {only: intholderholder};
-
     var t: intholderholderholder;
 
     init {

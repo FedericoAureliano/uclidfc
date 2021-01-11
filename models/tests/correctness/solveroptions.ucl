@@ -11,11 +11,6 @@ module intarray
     {
         arr = const(0, [integer]integer);
     }
-
-    next
-    {
-        assert(forall (x: integer, y:integer) :: arr[x] != arr[y]);
-    }
 }
 
 module main {
@@ -23,6 +18,9 @@ module main {
     next {
         next(arr);
     }
+
+    invariant quant: forall (x: integer, y:integer) :: arr.arr[x] != arr.arr[y];
+
     control {
         set_solver_option("timeout", "1");
         unroll(2);

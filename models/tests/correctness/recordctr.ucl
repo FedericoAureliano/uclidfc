@@ -2,10 +2,10 @@
 // Solver=cvc4
 // Result=Some(false)
 
+type frame = record {i : integer, b : boolean};
+
 module main
 {
-    type frame = record {i : integer, b : boolean};
-
     var a : frame;
 
     init {

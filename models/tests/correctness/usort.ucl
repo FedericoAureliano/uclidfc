@@ -2,9 +2,10 @@
 // Solver=cvc4
 // Result=Some(false)
 
+type key;
+
 module main
 {
-    type key;
 
     var a : key;
 

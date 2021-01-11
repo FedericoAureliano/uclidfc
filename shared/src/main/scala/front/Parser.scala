@@ -475,9 +475,13 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
         case expr =>
           ModuleNextCallStmt(expr)
       } |
-      KwHavoc ~> ExprParser ^^ { case e                => HavocStmt(e) } |
-      KwAssume ~> "(" ~> ExprParser <~ ")" ^^ { case e => AssumeStmt(e) } |
-      KwAssert ~> "(" ~> ExprParser <~ ")" ^^ { case e => AssertStmt(e) }
+      KwHavoc ~> ExprParser ^^ { case e => HavocStmt(e) } |
+      KwAssume ~> "(" ~> ExprParser <~ ")" ^^ {
+        case e => throw new NotSupportedYet(e)
+      } |
+      KwAssert ~> "(" ~> ExprParser <~ ")" ^^ {
+        case e => throw new NotSupportedYet(e)
+      }
   }
 
   lazy val StatementEndInBracket: PackratParser[Statement] = positioned {
@@ -535,27 +539,10 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
       }
   }
 
-  lazy val ComposedTypeDeclParser: PackratParser[TypeDecl] =
-    positioned {
-      KwType ~> IdParser ~ ("=" ~> (InlineTypeParser <~ "&&")) ~ InlineTypeParser ~ (rep(
-        "&&" ~> InlineTypeParser
-      )) ^^ {
-        case id ~ x ~ y ~ zs =>
-          TypeDecl(id, Some(ConjunctionComposition(x :: y :: zs)))
-      } |
-        KwType ~> IdParser ~ ("=" ~> (InlineTypeParser <~ "||")) ~ InlineTypeParser ~ (rep(
-          "||" ~> InlineTypeParser
-        )) ^^ {
-          case id ~ x ~ y ~ zs =>
-            TypeDecl(id, Some(DisjunctionComposition(x :: y :: zs)))
-        }
-    }
-
   lazy val TypeDeclParserWithoutSemicolon: PackratParser[TypeDecl] =
     positioned {
       EnumDeclParser |
         RecordDeclParser |
-        ComposedTypeDeclParser |
         KwType ~> IdParser ~ ("=" ~> InlineTypeParser) ^^ {
           case id ~ t =>
             TypeDecl(id, Some(t))
@@ -566,11 +553,19 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
         }
     }
 
-  lazy val VarsDeclParserWithoutSemicolon: PackratParser[StateVarsDecl] =
+  lazy val VarDeclParserWithoutSemicolon: PackratParser[StateVarDecl] =
     positioned {
       KwVar ~> IdListParser ~ ":" ~ InlineTypeParser ^^ {
         case ids ~ ":" ~ typ =>
-          StateVarsDecl(ids, typ)
+          StateVarDecl(ids, typ)
+      }
+    }
+
+  lazy val ConstDeclParserWithoutSemicolon: PackratParser[StateConstDecl] =
+    positioned {
+      KwConst ~> IdListParser ~ ":" ~ InlineTypeParser ^^ {
+        case ids ~ ":" ~ typ =>
+          StateConstDecl(ids, typ)
       }
     }
 
@@ -590,7 +585,7 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
       }
     }
 
-  lazy val SharedVarsDeclParserWithoutSemicolon: PackratParser[SharedVarsDecl] =
+  lazy val SharedVarDeclParserWithoutSemicolon: PackratParser[SharedVarsDecl] =
     positioned {
       KwSharedVar ~> IdListParser ~ ":" ~ InlineTypeParser ^^ {
         case ids ~ ":" ~ typ =>
@@ -667,14 +662,11 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
 
   lazy val DeclParserWithoutSemicolon: PackratParser[Decl] =
     positioned {
-      DefineDeclParserWithoutSemicolon | // define has to come before function because of const
-        FunctionDeclParserWithoutSemicolon |
-        SynthesisDeclParserWithoutSemicolon |
-        TypeDeclParserWithoutSemicolon |
-        VarsDeclParserWithoutSemicolon |
+      VarDeclParserWithoutSemicolon |
+        ConstDeclParserWithoutSemicolon |
         InputsDeclParserWithoutSemicolon |
         OutputsDeclParserWithoutSemicolon |
-        SharedVarsDeclParserWithoutSemicolon |
+        SharedVarDeclParserWithoutSemicolon |
         SpecDeclParserWithoutSemicolon
     }
 

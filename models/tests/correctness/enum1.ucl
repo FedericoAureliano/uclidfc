@@ -2,8 +2,9 @@
 // Solver=z3
 // Result=Some(false)
 
+type syscall_t = enum { setresuid, setfsuid, noop };
+
 module main {
-  type syscall_t = enum { setresuid, setfsuid, noop };
   
   input invocation : syscall_t;
   

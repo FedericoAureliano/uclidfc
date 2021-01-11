@@ -84,6 +84,8 @@ class WellFormed(stmts: ArrayBuffer[Instruction]) extends TermGraph(stmts) {
       case Constructor(_, sort, _)    => sort
       case FunctionParameter(_, sort) => sort
       case Selector(_, sort)          => sort
+      case UserMacro(_, sort, _, _)   => sort
+      case UserFunction(_, sort, _)   => sort
       case _ =>
         throw new IllegalArgumentException(
           s"type inference not yet supported: ${stmts(app.loc)}"

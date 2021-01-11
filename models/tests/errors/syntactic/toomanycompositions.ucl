@@ -2,10 +2,11 @@
 // Solver=z3
 // Result=None
 
+type key;
+type frame = record {k : key, i : integer, b : boolean, k2: key};
+
 module main
 {
-    type key;
-    type frame = record {k : key, i : integer, b : boolean, k2: key};
 
     var a : frame;
 

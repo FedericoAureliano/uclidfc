@@ -17,12 +17,12 @@ module fib
     }
 }
 
+type othertype;
+
 module main
 {
     var fibs : [integer]fib;
     var fib1 : fib;
-
-    type othertype;
 
     var a : integer;
     var b : boolean;
