@@ -666,7 +666,7 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
                   )
                   proofStates.addOne(transRef)
               }
-              checkQuery = true
+              traceQuery = true
             }
           }
         case SolverOption(name, option) =>

@@ -68,7 +68,7 @@ abstract class Solver() {
     val qfile =
       writeQueryToFile(query, outFile, suffix).getAbsolutePath()
 
-    if (!run || !program.checkQuery) {
+    if (!run || (!program.checkQuery && !program.traceQuery)) {
       return (
         new ProofResult(
           None,
@@ -87,17 +87,25 @@ abstract class Solver() {
         )) {
       (new ProofResult(None, answer), generationDuration, result._4)
     } else {
-      if ("(\\ssat)".r.findFirstIn(answer).isDefined) {
-        (new ProofResult(Some(true), answer), generationDuration, result._4)
+      if (program.traceQuery) {
+        (new ProofResult(None, answer), generationDuration, result._4)
       } else {
-        if (program.isSynthesisQuery) {
-          (new ProofResult(Some(false), answer), generationDuration, result._4)
+        if ("(\\ssat)".r.findFirstIn(answer).isDefined) {
+          (new ProofResult(Some(true), answer), generationDuration, result._4)
         } else {
-          (
-            new ProofResult(Some(false), " unsat"),
-            generationDuration,
-            result._4
-          )
+          if (program.isSynthesisQuery) {
+            (
+              new ProofResult(Some(false), answer),
+              generationDuration,
+              result._4
+            )
+          } else {
+            (
+              new ProofResult(Some(false), " unsat"),
+              generationDuration,
+              result._4
+            )
+          }
         }
       }
     }
@@ -235,11 +243,13 @@ class ProofResult(
   override def toString(): String = {
     val extra = "Solver Output:" + messages
     val answer = result match {
-      case Some(true)  => "Counterexample!"
+      case Some(true)  => "Rejected!"
       case Some(false) => "Verified!"
-      case None        => "Problem!"
+      case None        => "Neither Verified Nor Rejected."
     }
-    List("\n*********\n" + answer + "\n*********\n", extra)
-      .mkString("\n")
+    List(
+      s"\n${"*" * answer.length()}\n" + answer + s"\n${"*" * answer.length()}\n",
+      extra
+    ).mkString("\n")
   }
 }

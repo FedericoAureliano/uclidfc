@@ -10,6 +10,7 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
 
   var isSynthesisQuery = false
   var checkQuery = false
+  var traceQuery = false
   var getValues: Option[List[Ref]] = None
 
   def inferLogic(): String = {
@@ -378,7 +379,7 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
       } + "\n; nothing to verify"
     }
 
-    val postQuery = if (checkQuery) {
+    val postQuery = if (checkQuery || traceQuery) {
       val model = if (getValues.isDefined) {
         val cmd = if (getValues.get.length == 0) {
           "(get-model)"
@@ -389,10 +390,17 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
       } else {
         ""
       }
+
+      val proofStatus = if (assertionRefs.length > 0) {
+        "(echo \"Proof Status\")\n(get-assignment)"
+      } else {
+        ""
+      }
+
       if (isSynthesisQuery) {
         "\n\n(check-synth)"
       } else {
-        "\n\n(check-sat)\n(echo \"\")\n(echo \"Proof Status\")\n(get-assignment)\n(echo \"\")\n" + model
+        "\n\n(check-sat)\n(echo \"\")\n" + proofStatus + "\n(echo \"\")\n" + model
       }
     } else {
       ""

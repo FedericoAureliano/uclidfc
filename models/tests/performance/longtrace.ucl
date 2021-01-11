@@ -1,0 +1,50 @@
+// UCLID TEST
+// MaxParseTime=1
+// MaxProcessTime=1
+// MaxGenerationTime=1
+// MaxSolveTime=1
+// Solver=z3
+// Result=None
+
+module fib
+{
+    var a, b : integer;
+
+    init {
+        a = 0;
+        b = 1;
+    }
+
+    next {
+        a' = b;
+        b' = a + b;
+    }
+}
+
+module main
+{
+    var fib1 : fib;
+    var fib2 : fib;
+    var a : integer;
+    var b : boolean;
+    var c : [boolean]integer;
+
+    next {
+        fib1.a = fib1.b;
+        fib2.a = fib2.b;
+
+        fib1.b = fib1.a + fib1.b;
+        fib2.b = fib2.a + fib2.b;
+    }
+
+    invariant b_are_eq : fib1.b == fib2.b;
+    invariant a_are_eq : fib1.a == fib2.a;
+    invariant b_gt_0  : fib1.b > 0 && fib2.b > 0;
+    invariant a_ge_0  : fib1.a >= 0 && fib2.a >= 0;
+    invariant a_le_b  : fib1.a <= fib1.b && fib2.a <= fib2.b;
+
+    control {
+        trace(main(fib(0, 0), fib(0, 0), 0, false, const(0, [boolean]integer)), 100);
+        print_cex(fib1.a);
+    }
+}
