@@ -53,6 +53,7 @@
       </p>
 
       <textarea id="demofull">synthesis function h(x : integer, y : integer) : boolean;
+
 module main {
   var a, b : integer;
 
@@ -60,17 +61,18 @@ module main {
     a = 0;
     b = 1;
   }
+
   next {
     a', b' = b, a + b;
   }
 
   invariant a_le_b: a &lt;= b && h(a, b);
 
-    control
-    {
-        induction;
-        check;
-    }
+  control
+  {
+      induction;
+      check;
+  }
 }</textarea>
 
       <p>
