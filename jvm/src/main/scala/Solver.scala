@@ -46,12 +46,12 @@ abstract class Solver() {
     f
   }
 
-  def generateQuery(program: Interfaced): String
+  def generateQuery(program: Interfaceable): String
   def getCommand(): String
   def parseAnswer(answer: String): String
 
   def solve(
-    program: Interfaced,
+    program: Interfaceable,
     run: Boolean,
     outFile: Option[String]
   ): (ProofResult, Double, Double) = {
@@ -115,7 +115,7 @@ abstract class Solver() {
 class CVC4Solver() extends Solver() {
   def getCommand(): String = "cvc4"
 
-  def generateQuery(program: Interfaced): String = {
+  def generateQuery(program: Interfaceable): String = {
     val query = program.programToQuery()
     query
   }
@@ -136,7 +136,7 @@ class CVC4Solver() extends Solver() {
 class Z3Solver() extends Solver() {
   def getCommand(): String = "z3"
 
-  def generateQuery(program: Interfaced): String = {
+  def generateQuery(program: Interfaceable): String = {
     // get the query but remove the set logic command
     val query = program
       .programToQuery()
@@ -163,7 +163,7 @@ class Z3Solver() extends Solver() {
 class AltErgoSolver() extends Solver() {
   def getCommand(): String = "alt-ergo -enable-adts-cs"
 
-  def generateQuery(program: Interfaced): String = {
+  def generateQuery(program: Interfaceable): String = {
     // get the query but remove the set logic and set-option commands
     val query = program
       .programToQuery()
@@ -213,7 +213,7 @@ class VampireSolver() extends Solver() {
   def getCommand(): String =
     "vampire --mode smtcomp --input_syntax smtlib2 --term_algebra_acyclicity light --term_algebra_rules on --fmb_enumeration_strategy smt"
 
-  def generateQuery(program: Interfaced): String = {
+  def generateQuery(program: Interfaceable): String = {
     val query = program.programToQuery()
 
     // find the set logic command

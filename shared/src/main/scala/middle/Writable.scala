@@ -4,7 +4,7 @@ import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.ListBuffer
 import scala.collection.mutable.HashSet
 
-class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
+class Writable(stmts: ArrayBuffer[Instruction]) extends Fuzzable(stmts) {
 
   val TAB = "  "
 

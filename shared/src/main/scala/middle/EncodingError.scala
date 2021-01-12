@@ -6,3 +6,7 @@ abstract class EncodingError(msg: String)
 class RefOutOfBoundsError(msg: String) extends EncodingError(msg) {}
 
 class NotSupportedSynthesis(msg: String) extends EncodingError(msg) {}
+
+class NotSupportedYet(msg: String) extends EncodingError(msg) {}
+
+class FuzzingError(msg: String) extends EncodingError(msg) {}

@@ -8,8 +8,8 @@ object Encoder {
   def run(
     model: List[TopLevelDecl],
     main: Option[String]
-  ): Interfaced = {
-    val program = new Interfaced(ArrayBuffer[Instruction]())
+  ): Interfaceable = {
+    val program = new Interfaceable(ArrayBuffer[Instruction]())
     // 1. Add every module to the
     // 2. When we find the main module, execute it
     model.foreach { m =>

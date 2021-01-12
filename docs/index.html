@@ -52,8 +52,8 @@
 
       </p>
 
-      <textarea id="demofull">module main {
-  synthesis function h(x : integer, y : integer) : boolean;
+      <textarea id="demofull">synthesis function h(x : integer, y : integer) : boolean;
+module main {
   var a, b : integer;
 
   init {
@@ -87,69 +87,67 @@
       </p>
 
       <pre><code id="demofullanswer">(set-logic DTLIA)
-(set-option :produce-models true)
-(set-option :dump-models true)
+
+(synth-fun h ((x Int) (y Int)) Bool)
 
 ; declaring module main 
   (declare-datatypes ((main 0)) (((main
     (a Int)
     (b Int)))))
 
-  (define-fun line11col5!18 ((in main)) main
+  (define-fun line8col5!18 ((State_Before main)) main
     (main
       ; assigning to a
-      (a in)
+      (a State_Before)
       ; assigning to b
       1))
 
-  (define-fun line10col5!14 ((in main)) main
+  (define-fun line7col5!14 ((State_Before main)) main
     (main
       ; assigning to a
       0
       ; assigning to b
-      (b in)))
+      (b State_Before)))
 
-  (define-fun main!init ((in main)) main
-    (line11col5!18 (line10col5!14 in)))
+  (define-fun main!init ((State_Before main)) main
+    (line8col5!18 (line7col5!14 State_Before)))
 
-  (define-fun line14col9!63 ((in main)) main
+  (define-fun line11col9!60 ((State_Before main)) main
     (main
       ; assigning to a
-      (a in)
+      (a State_Before)
       ; assigning to b
       (+
-        (a in)
-        (b in))))
+        (a State_Before)
+        (b State_Before))))
 
-  (define-fun line14col5!61 ((in main)) main
+  (define-fun line11col5!58 ((State_Before main)) main
     (main
       ; assigning to a
-      (b in)
+      (b State_Before)
       ; assigning to b
-      (b in)))
+      (b State_Before)))
 
-  (define-fun main!next ((in main)) main
-    (line14col9!63 (line14col5!61 in)))
+  (define-fun main!next ((State_Before main)) main
+    (line11col9!60 (line11col5!58 State_Before)))
 
-  (synth-fun h ((x Int) (y Int)) Bool)
-
-  (define-fun main!spec ((in main)) Bool
+  (define-fun main!spec ((State_Before main)) Bool
     (and
       (&lt;=
-        (a in)
-        (b in))
+        (a State_Before)
+        (b State_Before))
       (h
-        (a in)
-        (b in))))
+        (a State_Before)
+        (b State_Before))))
 ; done declaring module main
 
-(declare-var in!step!0 main)
+(declare-var State_Before main)
 
 (constraint (not (or
-  (not (main!spec (main!init in!step!0)))
-  (and
-    (main!spec in!step!0)
-    (not (main!spec (main!next in!step!0)))))))
+    (not (main!spec (main!init State_Before)))
+    (and
+    (main!spec State_Before)
+    (not (main!spec (main!next State_Before)))))))
 
 (check-synth)</code></pre>
 

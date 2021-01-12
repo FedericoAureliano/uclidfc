@@ -701,8 +701,8 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
       KwCheck ^^ {
         case _ => Check()
       } |
-      KwTrace ~> "(" ~> ExprParser ~ ("," ~> IntegerParser) ~ ("," ~> BoolParser).? <~ ")" ^^ {
-        case e ~ k ~ b => Trace(e, k, b.getOrElse(BoolLit(true)))
+      KwTrace ~> "(" ~> IntegerParser ~ ("," ~> BoolParser).? ~ ("," ~> ExprParser).? <~ ")" ^^ {
+        case k ~ b ~ e => Trace(k, b.getOrElse(BoolLit(true)), e)
       }
   }
 

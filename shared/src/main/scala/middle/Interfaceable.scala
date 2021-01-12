@@ -6,7 +6,7 @@ import scala.collection.mutable.HashMap
 
 import front._
 
-class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
+class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
   val proofStates: ListBuffer[Ref] = new ListBuffer()
 
   // all types are global
@@ -16,13 +16,6 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
 
   def addAssertion(ass: Ref): Unit =
     assertionRefs.addOne(ass)
-
-  var uniqueId = 0
-
-  def freshSymbolName(): String = {
-    uniqueId += 1
-    s"nondet!${uniqueId}"
-  }
 
   // encode a type use (adds to program if type not yet used)
   // and return a pointer to the type
@@ -593,34 +586,20 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
             case Check() => checkQuery = true
             case GetValue(vars) => {
               options = options.appended(("produce-models", "true"))
-              val vs = proofStates.foldLeft(List.empty: List[Ref]) {
-                (acc, s) =>
-                  if (vars.length > 0) {
-                    val processed =
-                      vars.map(p => exprToTerm(Some(s), Map.empty, p)._1)
-
-                    // get the module declaration
-                    val mod = stmts(typeMap(moduleId).loc)
-                      .asInstanceOf[middle.Module]
-                    val specRef = mod.spec
-                    val stateSpecRef =
-                      memoAddInstruction(Application(specRef, List(s)))
-
-                    acc ++ (stateSpecRef :: processed)
-                  } else {
-                    acc
-                  }
+              val vs = proofStates.foldLeft(List.empty: List[Ref]) { (acc, s) =>
+                acc ++ vars.map(p => exprToTerm(Some(s), Map.empty, p)._1)
               }
               getValues = Some(vs)
             }
-            case Trace(start, unwind, init) => {
-              val startTerm = exprToTerm(None, Map.empty, start)._1
+            case Trace(unwind, init, start) => {
+              val startTerm = start match {
+                case Some(t) => exprToTerm(None, Map.empty, t)._1
+                case None    => fuzz(typeMap(moduleId))
+              }
               val initVariables = startTerm :: initParams.tail.map { p =>
                 stmts(p.loc) match {
-                  case FunctionParameter(name, sort) => {
-                    val vRef =
-                      memoAddInstruction(UserFunction(name, sort))
-                    vRef
+                  case FunctionParameter(_, sort) => {
+                    fuzz(sort)
                   }
                 }
               }
@@ -647,24 +626,19 @@ class Interfaced(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
               // Take k steps
               val k = unwind.literal.toInt
 
-              (1 to k).foreach {
-                i =>
-                  val args = nextParams.tail.map { p =>
-                    stmts(p.loc) match {
-                      case FunctionParameter(name, sort) => {
-                        val vRef =
-                          memoAddInstruction(
-                            UserFunction(s"$name!step!$i", sort)
-                          )
-                        vRef
-                      }
+              (1 to k).foreach { i =>
+                val args = nextParams.tail.map { p =>
+                  stmts(p.loc) match {
+                    case FunctionParameter(_, sort) => {
+                      fuzz(sort)
                     }
                   }
-                  transRef = memoAddInstruction(
-                    Application(nextRef, List(transRef) ++ args),
-                    Some(s"State_At_Step!$i")
-                  )
-                  proofStates.addOne(transRef)
+                }
+                transRef = memoAddInstruction(
+                  Application(nextRef, List(transRef) ++ args),
+                  Some(s"State_At_Step!$i")
+                )
+                proofStates.addOne(transRef)
               }
               traceQuery = true
             }

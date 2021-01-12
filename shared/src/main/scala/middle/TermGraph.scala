@@ -119,4 +119,11 @@ case class Module(name: String, ct: Ref, init: Ref, next: Ref, spec: Ref)
 
 case class Application(caller: Ref, args: List[Ref]) extends Instruction {}
 
-class TermGraph(val stmts: ArrayBuffer[Instruction]) {}
+class TermGraph(val stmts: ArrayBuffer[Instruction]) {
+  var uniqueId = 0
+
+  def freshSymbolName(): String = {
+    uniqueId += 1
+    s"fresh!${uniqueId}"
+  }
+}
