@@ -1,0 +1,30 @@
+// UCLID TEST
+// Solver=z3
+// Result=None
+
+module main
+{
+    input x: integer;
+
+    init
+    {
+        let x = 7; // can't override state var
+        x = x;
+    }
+    next
+    {
+        if (x == 8) {
+            x = 9;
+            let z = 276;
+            x = z + x;
+        }
+    }
+
+    invariant test: x > 0;
+
+    control
+    {
+        induction;
+        check;
+    }
+}

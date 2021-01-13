@@ -138,14 +138,14 @@ object UclidMain {
   /** Parse modules, typecheck them, inline procedures, create LTL monitors, etc. */
   def compile(
     srcFiles: Seq[java.io.File]
-  ): List[TopLevelDecl] = {
+  ): List[TopLevelOnlyDecl] = {
     // Helper function to parse a single file.
-    def parseFile(srcFile: String): List[TopLevelDecl] = {
+    def parseFile(srcFile: String): List[TopLevelOnlyDecl] = {
       val text = scala.io.Source.fromFile(srcFile).mkString
       UclidParser.parseModel(srcFile, text)
     }
 
-    val parsedModules = srcFiles.foldLeft(List.empty[TopLevelDecl]) {
+    val parsedModules = srcFiles.foldLeft(List.empty[TopLevelOnlyDecl]) {
       (acc, srcFile) => acc ++ parseFile(srcFile.getPath())
     }
 

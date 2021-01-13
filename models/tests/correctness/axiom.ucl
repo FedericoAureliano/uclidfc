@@ -1,0 +1,31 @@
+// UCLID TEST
+// Solver=z3
+// Result=Some(false)
+
+type U;
+const zero: U;
+function gt(a: U, b : U) : boolean;
+axiom forall (x: U) :: gt(x, zero) || x == zero;
+
+function plus_one(a: U) : U;
+axiom forall (x: U) :: plus_one(x) != zero;
+
+module main {
+    var x: U;
+
+    init {
+        x = plus_one(zero);
+    }
+
+    next {
+        x = plus_one(x);
+    }
+
+    invariant shouldhold: gt(x, zero);
+
+    control {
+        induction;
+        check;
+        print_cex;
+    }
+}

@@ -21,7 +21,7 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Fuzzable(stmts) {
     var linear = true
     var qf = true
 
-    val marks = mark(assertionRefs)
+    val marks = mark(assertionRefs ++ axiomRefs)
 
     stmts
       .zip(marks)
@@ -73,6 +73,7 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Fuzzable(stmts) {
     List(("produce-assignments", "true"))
 
   val assertionRefs: ListBuffer[Ref] = new ListBuffer()
+  val axiomRefs: ListBuffer[Ref] = new ListBuffer()
 
   val alreadyDeclared = new HashSet[Ref]()
 
@@ -203,7 +204,9 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Fuzzable(stmts) {
 
   def programToQueryCtx(): String = {
     var indent = 0
-    val toDeclare = mark(assertionRefs ++ getValues.getOrElse(List.empty))
+    val toDeclare = mark(
+      assertionRefs ++ getValues.getOrElse(List.empty) ++ axiomRefs
+    )
 
     def dispatch(position: Ref): Option[String] =
       if (toDeclare(position.loc)) {
@@ -272,9 +275,9 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Fuzzable(stmts) {
             "Uninterpreted functions are not supported for synthesis"
           )
         }
-        tmp ++= s"${TAB * indent}(declare-fun ${u.name} ${u.params
-          .map(p => s"(${programPointToQueryTerm(p, indent)})")
-          .mkString(" ")} "
+        tmp ++= s"${TAB * indent}(declare-fun ${u.name} (${u.params
+          .map(p => s"${programPointToQueryTerm(p, indent)}")
+          .mkString(" ")}) "
       } else {
         if (isSynthesisQuery) {
           tmp ++= s"${TAB * indent}(declare-var ${u.name} "
@@ -359,20 +362,28 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Fuzzable(stmts) {
     val logic = s"(set-logic ${inferLogic()})"
     val opts = options.map(o => s"(set-option :${o._1} ${o._2})").mkString("\n")
 
-    val body = if (assertionRefs.length > 0) {
+    val axiomStrings = axiomRefs
+      .map(r => s"${TAB * 1}${programPointToQueryTerm(r, 1)}")
+      .mkString("\n")
 
-      val assertionStrings = assertionRefs
-        .map(r => s"${TAB * 2}${programPointToQueryTerm(r, 1)}")
-        .mkString("\n")
+    val assertionStrings = assertionRefs
+      .map(r => s"${TAB * 2}${programPointToQueryTerm(r, 2)}")
+      .mkString("\n")
 
-      val spec = s"(or\n$assertionStrings)"
+    val spec = (assertionRefs.length > 0, axiomRefs.length > 0) match {
+      case (true, true) =>
+        s"(and\n$axiomStrings\n${TAB * 1}(or\n$assertionStrings))"
+      case (true, false) => s"(or\n$assertionStrings)"
+      case (false, true) => s"(and\n$axiomStrings)"
+      case _             => ""
+    }
 
+    val body = if (spec != "") {
       if (isSynthesisQuery) {
         programToQueryCtx() + "\n(constraint (not " + spec + "))"
       } else {
         programToQueryCtx() + "\n(assert " + spec + ")"
       }
-
     } else {
       if (getValues.isDefined) {
         programToQueryCtx()
@@ -391,7 +402,7 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Fuzzable(stmts) {
         ""
       }
 
-      val proofStatus = if (assertionRefs.length > 0) {
+      val proofStatus = if (assertionRefs.length + axiomRefs.length > 0) {
         "(echo \"Proof Status\")\n(get-assignment)"
       } else {
         ""

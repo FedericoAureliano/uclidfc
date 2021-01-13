@@ -5,6 +5,7 @@ import scala.collection.mutable.ListBuffer
 import scala.collection.mutable.HashMap
 
 import front._
+import scala.collection.mutable.Stack
 
 class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
   val proofStates: ListBuffer[Ref] = new ListBuffer()
@@ -13,9 +14,14 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
   val typeMap: HashMap[Identifier, Ref] = new HashMap()
   // all functions, synthesis functions, and macros are global
   val globalsMap: HashMap[Identifier, Ref] = new HashMap()
+  // let statements stack
+  val letsMapStack: Stack[HashMap[Identifier, Ref]] = new Stack()
 
   def addAssertion(ass: Ref): Unit =
     assertionRefs.addOne(ass)
+
+  def addAxiom(ax: Ref): Unit =
+    axiomRefs.addOne(ax)
 
   // encode a type use (adds to program if type not yet used)
   // and return a pointer to the type
@@ -88,23 +94,27 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
                 val selRef =
                   selectorsZip.find(p => p._2.name == id.name) match {
                     case Some(value) => value._1
-                    // if not in state, then check in globals
+                    // if not in state, then check lets and then in globals
                     case None => {
-                      // if not in globals, then throw error
-                      return (
-                        globalsMap
-                          .getOrElse(id, throw new IdentifierOutOfScope(id)),
-                        newNondets
-                      )
+                      val ret = letsMapStack.find(m => m.contains(id)) match {
+                        case Some(foundMap) => foundMap(id)
+                        case None =>
+                          globalsMap
+                            .getOrElse(id, throw new IdentifierOutOfScope(id))
+                      }
+                      return (ret, newNondets)
                     }
                   }
                 // return application of selector to state
                 memoAddInstruction(Application(selRef, List(state)))
               }
-              // if state doesn't exist, then check globals
+              // if state doesn't exist, then check lets and then globals
               case None => {
-                // if not in globals, then throw error
-                globalsMap.getOrElse(id, throw new IdentifierOutOfScope(id))
+                letsMapStack.find(m => m.contains(id)) match {
+                  case Some(foundMap) => foundMap(id)
+                  case None =>
+                    globalsMap.getOrElse(id, throw new IdentifierOutOfScope(id))
+                }
               }
             }
           ),
@@ -431,6 +441,7 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
     ctrRef: Ref, // current module constructor
     block: BlockStmt
   ): (Ref, List[Ref]) = {
+    letsMapStack.push(new HashMap())
     var newParams: List[Ref] = List.empty
     var mostRecentParams: List[Ref] = List.empty
 
@@ -477,6 +488,7 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
       )
     )
 
+    letsMapStack.pop()
     (blockRef, newParams)
   }
 
@@ -547,6 +559,34 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
           ctrRef,
           AssignStmt(n.expr, ModuleNextCallExpr(n.expr))
         )
+      }
+      case l: LetStatement => {
+
+        val modRef = stmts(stateParam.loc).asInstanceOf[FunctionParameter].sort
+        val selRefs = stmts(stmts(modRef.loc).asInstanceOf[Module].ct.loc)
+          .asInstanceOf[Constructor]
+          .selectors
+        if (selRefs.exists { s =>
+              stmts(s.loc).asInstanceOf[Selector].name == l.id.name
+            }) {
+          throw new VariableOverride(
+            s"Let statements cannot override state variables!\n\n${l.id.pos.longString}"
+          )
+        }
+
+        val r = exprToTerm(Some(stateParam), Map.empty, l.expr)
+        letsMapStack.top.addOne((l.id, r._1))
+        // identity function
+        val macroRef = memoAddInstruction(
+          UserMacro(
+            // line number, column number, ast id
+            s"line${l.pos.line}col${l.pos.column}!${stmt.astNodeId}",
+            modRef,
+            stateParam,
+            List(stateParam)
+          )
+        )
+        (macroRef, List.empty)
       }
     }
 
@@ -1009,6 +1049,11 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
         UserFunction(fd.id.name, typeRefs.head, typeRefs.tail)
       )
     )
+  }
+
+  def axiomToAssertion(ax: Axiom): Unit = {
+    val bodyRef = exprToTerm(None, Map.empty, ax.expr)._1
+    addAxiom(bodyRef)
   }
 
   def defineDeclToTerm(dd: DefineDecl): Unit = {

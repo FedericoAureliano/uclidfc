@@ -88,6 +88,8 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
   val KwGetValue = "print_cex"
   val KwCheck = "check"
   val KwTrace = "trace"
+  val KwAxiom = "axiom"
+  val KwLet = "let"
 
   lexical.delimiters ++= List(
     "(",
@@ -172,7 +174,9 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
     KwSynthesis,
     KwGetValue,
     KwCheck,
-    KwTrace
+    KwTrace,
+    KwAxiom,
+    KwLet
   )
 
   lazy val ast_binary: Expr ~ String ~ Expr => Expr = {
@@ -483,6 +487,9 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
       } |
       KwAssert ~> "(" ~> ExprParser <~ ")" ^^ {
         case e => throw new NotSupportedYet(e)
+      } |
+      KwLet ~> IdParser ~ ("=" ~> ExprParser) ^^ {
+        case id ~ e => LetStatement(id, e)
       }
   }
 
@@ -595,6 +602,12 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
       }
     }
 
+  lazy val AxiomParserWithoutSemicolon: PackratParser[Axiom] = positioned {
+    KwAxiom ~> ExprParser ^^ {
+      case e => Axiom(e)
+    }
+  }
+
   lazy val DefineDeclParserWithoutSemicolon: PackratParser[DefineDecl] =
     positioned {
       KwConst ~> IdParser ~ (":" ~> InlineTypeParser) ~ ("=" ~> OpNeg) ~ ExprParser ^^ {
@@ -662,7 +675,7 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
         }
     }
 
-  lazy val DeclParserWithoutSemicolon: PackratParser[Decl] =
+  lazy val InnerDeclParserWithoutSemicolon: PackratParser[InnerOnlyDecl] =
     positioned {
       VarDeclParserWithoutSemicolon |
         ConstDeclParserWithoutSemicolon |
@@ -672,12 +685,12 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
         SpecDeclParserWithoutSemicolon
     }
 
-  lazy val DeclParser: PackratParser[Decl] =
+  lazy val InnerDeclParser: PackratParser[InnerOnlyDecl] =
     positioned {
       InitDeclParser |
         NextDeclParser |
-        DeclParserWithoutSemicolon <~ ";" |
-        DeclParserWithoutSemicolon ^^ {
+        InnerDeclParserWithoutSemicolon <~ ";" |
+        InnerDeclParserWithoutSemicolon ^^ {
           case d =>
             throw new MissingSemicolon(
               d
@@ -727,13 +740,13 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
       }
 
   lazy val ModuleParser: PackratParser[ModuleDecl] = positioned {
-    KwModule ~> IdParser ~ ("{" ~> rep(DeclParser) ~ (CmdBlockParser.?) <~ "}") ^^ {
+    KwModule ~> IdParser ~ ("{" ~> rep(InnerDeclParser) ~ (CmdBlockParser.?) <~ "}") ^^ {
       case id ~ (decls ~ Some(cs)) =>
         ModuleDecl(id, decls, cs)
       case id ~ (decls ~ None) =>
         ModuleDecl(id, decls, List.empty)
     } |
-      KwModule ~> IdParser ~ ("{" ~> rep(DeclParser) ~ (CmdBlockParser.?)) ^^ {
+      KwModule ~> IdParser ~ ("{" ~> rep(InnerDeclParser) ~ (CmdBlockParser.?)) ^^ {
         case id ~ (_ ~ Some(_)) =>
           throw new MissingCloseBracket(
             id
@@ -745,15 +758,16 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
       }
   }
 
-  lazy val TopLevelParserWithoutSemicolon: PackratParser[TopLevelDecl] =
+  lazy val TopLevelParserWithoutSemicolon: PackratParser[TopLevelOnlyDecl] =
     positioned {
       TypeDeclParserWithoutSemicolon |
         DefineDeclParserWithoutSemicolon | // define has to come before function because of const
         FunctionDeclParserWithoutSemicolon |
-        SynthesisDeclParserWithoutSemicolon
+        SynthesisDeclParserWithoutSemicolon |
+        AxiomParserWithoutSemicolon
     }
 
-  lazy val TopLevelParser: PackratParser[TopLevelDecl] = positioned {
+  lazy val TopLevelParser: PackratParser[TopLevelOnlyDecl] = positioned {
     ModuleParser |
       TopLevelParserWithoutSemicolon <~ ";" |
       TopLevelParserWithoutSemicolon ^^ {
@@ -762,7 +776,7 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
             d
           )
       } |
-      DeclParser ^^ {
+      InnerDeclParser ^^ {
         case d =>
           throw new WrongTopeLevelDeclError(
             d
@@ -770,9 +784,11 @@ object UclidParser extends UclidTokenParsers with PackratParsers {
       }
   }
 
-  lazy val ModelParser: PackratParser[List[TopLevelDecl]] = rep(TopLevelParser)
+  lazy val ModelParser: PackratParser[List[TopLevelOnlyDecl]] = rep(
+    TopLevelParser
+  )
 
-  def parseModel(fname: String, text: String): List[TopLevelDecl] = {
+  def parseModel(fname: String, text: String): List[TopLevelOnlyDecl] = {
     filename = fname
     val tokens = new PackratReader(new lexical.Scanner(text))
     phrase(ModelParser)(tokens) match {

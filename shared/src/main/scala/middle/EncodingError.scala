@@ -10,3 +10,5 @@ class NotSupportedSynthesis(msg: String) extends EncodingError(msg) {}
 class NotSupportedYet(msg: String) extends EncodingError(msg) {}
 
 class FuzzingError(msg: String) extends EncodingError(msg) {}
+
+class VariableOverride(msg: String) extends EncodingError(msg) {}

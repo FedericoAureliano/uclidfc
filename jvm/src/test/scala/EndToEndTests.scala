@@ -66,8 +66,10 @@ class TestEndToEnd {
         )
     }
 
-  @Test def testFeatures(): Unit = {
-    val tests = new File("models/tests/correctness").listFiles
+  @Test def testCorrectness(): Unit = {
+    val tests = (new File("models/tests/correctness").listFiles ++ new File(
+      "models/examples"
+    ).listFiles)
       .filter(_.isFile)
       .map(f => readTestFile(f))
     tests.foreach { t =>
