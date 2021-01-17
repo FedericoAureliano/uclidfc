@@ -44,7 +44,13 @@ module main
     invariant a_le_b  : fib1.a <= fib1.b && fib2.a <= fib2.b;
 
     control {
-        trace(main(fib(0, 0), fib(0, 0), 0, false, const(0, [boolean]integer)), 100);
+        trace(100, {
+            fib1 = fib(0, 0);
+            fib2 = fib(0, 0);
+            a = 0;
+            b = false;
+            c = const(0, [boolean]integer);
+        });
         print_cex(fib1.a);
     }
 }

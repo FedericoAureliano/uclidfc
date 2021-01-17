@@ -13,7 +13,8 @@ class TestEndToEnd {
     Option[Double],
     Option[Double],
     Option[Double],
-    Option[Double]
+    Option[Double],
+    List[String]
   ) = {
     val lines = Source.fromFile(file).getLines().mkString("\n")
     val solver = "(?<=Solver=)(.*)".r.findFirstIn(lines) match {
@@ -43,6 +44,8 @@ class TestEndToEnd {
       case Some(v) => Some(v.toDouble)
       case _       => None
     }
+    val rewrites =
+      "(?<=Rewrite=)(.*)".r.findAllIn(lines).map(r => "--" + r).toList
     (
       (
         file.getAbsolutePath(),
@@ -51,18 +54,25 @@ class TestEndToEnd {
         maxParseTime,
         maxProcessTime,
         maxGenerationTime,
-        maxSolveTime
+        maxSolveTime,
+        rewrites
       )
     )
   }
 
-  def endToEnd(filename: String, solver: Option[String]): UclidResult =
+  def endToEnd(
+    filename: String,
+    solver: Option[String],
+    rewrites: List[String]
+  ): UclidResult =
     solver match {
       case Some(value) =>
-        UclidMain.main(UclidMain.parseOptions(Array(filename, "-s", value)).get)
+        UclidMain.main(
+          UclidMain.parseOptions(Array(filename, "-s", value) ++ rewrites).get
+        )
       case None =>
         UclidMain.main(
-          UclidMain.parseOptions(Array(filename, "-r", "false")).get
+          UclidMain.parseOptions(Array(filename, "-r", "false") ++ rewrites).get
         )
     }
 
@@ -73,10 +83,28 @@ class TestEndToEnd {
       .filter(_.isFile)
       .map(f => readTestFile(f))
     tests.foreach { t =>
-      val answer = endToEnd(t._1, t._2)
+      println("Running:", t._1)
+      val answer = endToEnd(t._1, t._2, t._8)
       assert(
         t._3 == answer.presult.result,
         s"Failed: ${t._1}\nExpected: ${t._3}\nGot: ${answer.presult.result}\nOutput: ${answer.presult.messages}"
+      )
+    }
+  }
+
+  @Test def testRewrites(): Unit = {
+    val tests = (new File("models/tests/rewrites").listFiles ++ new File(
+      "models/examples"
+    ).listFiles)
+      .filter(_.isFile)
+      .map(f => readTestFile(f))
+    tests.foreach { t =>
+      println("Running:", t._1)
+      val answerWithRewrite = endToEnd(t._1, t._2, t._8)
+      val answerWithoutRewrite = endToEnd(t._1, t._2, List.empty)
+      assert(
+        answerWithoutRewrite.presult.result == answerWithRewrite.presult.result,
+        s"Failed: ${t._1}\nWithout Rewrite: ${answerWithoutRewrite.presult.result}\nWith Rewrite: ${answerWithRewrite.presult.result}\nOutput on Rewrite: ${answerWithRewrite.presult.messages}"
       )
     }
   }
@@ -86,7 +114,8 @@ class TestEndToEnd {
       .filter(_.isFile)
       .map(f => readTestFile(f))
     tests.foreach { t =>
-      val answer = endToEnd(t._1, t._2)
+      println("Running:", t._1)
+      val answer = endToEnd(t._1, t._2, t._8)
       assert(
         t._3 == answer.presult.result,
         s"Failed: ${t._1}\nExpected: ${t._3}\nGot: ${answer.presult.result}\nOutput: ${answer.presult.messages}"
@@ -99,7 +128,8 @@ class TestEndToEnd {
       .filter(_.isFile)
       .map(f => readTestFile(f))
     tests.foreach { t =>
-      val answer = endToEnd(t._1, t._2)
+      println("Running:", t._1)
+      val answer = endToEnd(t._1, t._2, t._8)
       assert(
         t._3 == answer.presult.result,
         s"Failed: ${t._1}\nExpected: ${t._3}\nGot: ${answer.presult.result}\nOutput: ${answer.presult.messages}"
@@ -112,7 +142,8 @@ class TestEndToEnd {
       .filter(_.isFile)
       .map(f => readTestFile(f))
     tests.foreach { t =>
-      val answer = endToEnd(t._1, t._2)
+      println("Running:", t._1)
+      val answer = endToEnd(t._1, t._2, t._8)
       assert(
         t._3 == answer.presult.result,
         s"Failed: ${t._1}\nExpected: ${t._3}\nGot: ${answer.presult.result}\nOutput: ${answer.presult.messages}"
@@ -125,7 +156,8 @@ class TestEndToEnd {
       .filter(_.isFile)
       .map(f => readTestFile(f))
     tests.foreach { t =>
-      val answer = endToEnd(t._1, t._2)
+      println("Running:", t._1)
+      val answer = endToEnd(t._1, t._2, t._8)
       assert(
         t._3 == answer.presult.result,
         s"Failed: ${t._1}\nExpected: ${t._3}\nGot: ${answer.presult.result}\nOutput: ${answer.presult.messages}"

@@ -48,6 +48,7 @@ object UclidMain {
     mainModuleName: String = "main",
     solver: Solvers.Value = Solvers.z3,
     run: Boolean = true,
+    blastEnumQuantifierFlag: Boolean = false,
     outFile: Option[String] = None,
     files: Seq[java.io.File] = Seq()
   )
@@ -78,6 +79,12 @@ object UclidMain {
         .action((x, c) => c.copy(outFile = Some(x)))
         .text("Write query to <file>.")
 
+      opt[Unit]("blast-enum-quantifiers")
+        .action((_, c) => c.copy(blastEnumQuantifierFlag = true))
+        .text(
+          "rewrite quantifiers over enums to finite disjunctions/conjunctions"
+        )
+
       arg[java.io.File]("<file> ...")
         .unbounded()
         .required()
@@ -104,6 +111,7 @@ object UclidMain {
       print("Processing model ... ")
       val startProcess = System.nanoTime
       val obs = Encoder.run(modules, Some(config.mainModuleName))
+      obs.rewrite(config.blastEnumQuantifierFlag)
       val processDuration = (System.nanoTime - startProcess) / 1e9d
       println(s"Processing completed in ${processDuration} seconds.")
 
@@ -138,14 +146,14 @@ object UclidMain {
   /** Parse modules, typecheck them, inline procedures, create LTL monitors, etc. */
   def compile(
     srcFiles: Seq[java.io.File]
-  ): List[TopLevelOnlyDecl] = {
+  ): List[OuterDecl] = {
     // Helper function to parse a single file.
-    def parseFile(srcFile: String): List[TopLevelOnlyDecl] = {
+    def parseFile(srcFile: String): List[OuterDecl] = {
       val text = scala.io.Source.fromFile(srcFile).mkString
       UclidParser.parseModel(srcFile, text)
     }
 
-    val parsedModules = srcFiles.foldLeft(List.empty[TopLevelOnlyDecl]) {
+    val parsedModules = srcFiles.foldLeft(List.empty[OuterDecl]) {
       (acc, srcFile) => acc ++ parseFile(srcFile.getPath())
     }
 

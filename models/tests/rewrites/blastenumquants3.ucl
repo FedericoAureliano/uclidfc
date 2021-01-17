@@ -1,0 +1,18 @@
+// UCLID TEST
+// Solver=z3
+// Rewrite=blast-enum-quantifiers
+
+type cases = enum {A, B, C};
+
+module main
+{
+    var arr: [cases]integer;
+
+    invariant toblastexists: forall (x: cases, y: cases, z: cases) :: arr[x] == arr[y] && arr[y] == arr[z];
+
+    control
+    {
+        induction;
+        check;
+    }
+}

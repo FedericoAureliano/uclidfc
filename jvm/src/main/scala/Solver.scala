@@ -128,6 +128,8 @@ class CVC4Solver() extends Solver() {
           "(error \"Cannot get the current model unless immediately preceded by SAT/INVALID or UNKNOWN response.\")"
         ) && !p.startsWith(
           "(error \"Cannot get the current assignment unless immediately preceded by SAT/INVALID or UNKNOWN response.\")"
+        ) && !p.startsWith(
+          "(error \"Cannot get value unless immediately preceded by SAT/INVALID or UNKNOWN response.\")"
         )
       )
       .mkString("\n")

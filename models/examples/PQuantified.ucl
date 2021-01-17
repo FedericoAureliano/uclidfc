@@ -1,0 +1,303 @@
+// Declare machine reference types
+type AbstractServerMachine_ref_t = enum {s1, s2};
+type ClientMachine_ref_t = enum {c1, c2};
+const default_server: AbstractServerMachine_ref_t;
+const default_client: ClientMachine_ref_t;
+
+// Declare event types
+type eRequest_t = record {source: ClientMachine_ref_t, target: AbstractServerMachine_ref_t, id : integer};
+type eResponse_t = record {source: AbstractServerMachine_ref_t, target: ClientMachine_ref_t, id : integer, success: boolean};
+
+// Declare event queue types
+type eRequest_queue = record {start: integer, end: integer, data: [integer]eRequest_t};
+type eResponse_queue = record {start: integer, end: integer, data: [integer]eResponse_t};
+
+// Declare event queue helpers
+define pop_request(q: eRequest_queue) : eRequest_queue = eRequest_queue(q.start + 1, q.end, q.data);
+define peak_request(q: eRequest_queue) : eRequest_t = q.data[q.start];
+define push_request(q: eRequest_queue, r : eRequest_t) : eRequest_queue = eRequest_queue(q.start, q.end + 1, q.data[q.end -> r]);
+define init_requests() : eRequest_queue = eRequest_queue(0, 0, const(eRequest_t(default_client, default_server, 0), [integer]eRequest_t));
+define is_empty_requests(q: eRequest_queue) : boolean = q.end <= q.start;
+define requests_size(q: eRequest_queue) : integer = q.end - q.start; // only with integers
+define in_requests(q: eRequest_queue, pos: integer) : boolean = pos >= q.start && pos < q.end;
+define get_request(q: eRequest_queue, pos: integer) : eRequest_t = q.data[pos];
+
+define pop_response(q: eResponse_queue) : eResponse_queue = eResponse_queue(q.start + 1, q.end, q.data);
+define peak_response(q: eResponse_queue) : eResponse_t = q.data[q.start];
+define push_response(q: eResponse_queue, r: eResponse_t) : eResponse_queue = eResponse_queue(q.start, q.end + 1, q.data[q.end -> r]);
+define init_responses() : eResponse_queue = eResponse_queue(0, 0, const(eResponse_t(default_server, default_client, 0, false), [integer]eResponse_t));
+define is_empty_responses(q: eResponse_queue) : boolean = q.end <= q.start;
+define responses_size(q: eResponse_queue) : integer = q.end - q.start; // only with integers
+define in_responses(q: eResponse_queue, pos: integer) : boolean = pos >= q.start && pos < q.end;
+define get_response(q: eResponse_queue, pos: integer) : eResponse_t = q.data[pos];
+
+// declare machines
+module AbstractServerMachine {
+    
+    sharedvar eRequest_from_ClientMachine : eRequest_queue;
+    sharedvar eResponse_to_ClientMachine : eResponse_queue;
+
+    var success : boolean;
+    
+    init
+    {
+        eRequest_from_ClientMachine = init_requests();
+        eResponse_to_ClientMachine = init_responses();
+    }// End of init block
+
+    next
+    {
+        if (!is_empty_requests(eRequest_from_ClientMachine)) {
+            havoc success;
+            // send a response
+            let top = peak_request(eRequest_from_ClientMachine);
+            eResponse_to_ClientMachine = push_response(eResponse_to_ClientMachine, eResponse_t(top.target, top.source, top.id, success));
+            // pop request
+            eRequest_from_ClientMachine = pop_request(eRequest_from_ClientMachine);
+        }
+    }// End of next block
+
+} // End of AbstractServerMachine module
+
+module ClientMachine {
+    sharedvar eResponse_from_AbstractServerMachine : eResponse_queue;
+    sharedvar eRequest_to_AbstractServerMachine : eRequest_queue;
+    
+    var entry : boolean;
+    
+    // Declare local variables
+    var server : AbstractServerMachine_ref_t;
+    var next_id : integer;
+    var last_id : integer;
+
+    var this : ClientMachine_ref_t;
+
+    // ghosts
+    var ghost_last_id : integer;
+
+    init
+    {
+        next_id = 1;
+        last_id = 0;
+        entry = true;
+
+        eResponse_from_AbstractServerMachine = init_responses();
+        eRequest_to_AbstractServerMachine = init_requests();
+
+        ghost_last_id = 0;
+    }// End of init block
+
+    next
+    {
+        ghost_last_id = last_id;
+        if (entry) {
+            // send request
+            eRequest_to_AbstractServerMachine = push_request(eRequest_to_AbstractServerMachine, eRequest_t(this, server, next_id));
+            next_id = next_id + 1;
+            entry = false;
+        } else {
+            if (!is_empty_responses(eResponse_from_AbstractServerMachine)) {
+                last_id = peak_response(eResponse_from_AbstractServerMachine).id;
+                eResponse_from_AbstractServerMachine = pop_response(eResponse_from_AbstractServerMachine);
+                entry = true;
+            }
+        }
+    }// End of next block
+
+} // End of ClientMachine module
+
+type cases = enum {client_to_server, server_to_client};
+
+module main {
+    var sinstances : [AbstractServerMachine_ref_t]AbstractServerMachine;
+    var cinstances : [ClientMachine_ref_t]ClientMachine;
+    var schoice: AbstractServerMachine_ref_t;
+    var cchoice: ClientMachine_ref_t;
+    var sstep: boolean;
+    var cstep: boolean;
+
+    var mediate: boolean;
+
+    var AbstractServerMachine_tmp : AbstractServerMachine_ref_t;
+    var ClientMachine_tmp : ClientMachine_ref_t;
+
+    var case_switch : cases;
+
+    next {
+        havoc mediate;
+        if (mediate) {
+            havoc case_switch;
+            case 
+            (case_switch == server_to_client) : {
+                havoc AbstractServerMachine_tmp;
+                let server_responses = sinstances[AbstractServerMachine_tmp].eResponse_to_ClientMachine;
+                if (!is_empty_responses(server_responses)) {
+                    let top = peak_response(server_responses);
+                    let client_responses = cinstances[top.target].eResponse_from_AbstractServerMachine;
+                    // send to client
+                    cinstances[top.target].eResponse_from_AbstractServerMachine = push_response(client_responses, top);
+                    // remove from server
+                    sinstances[AbstractServerMachine_tmp].eResponse_to_ClientMachine = pop_response(server_responses);
+                }
+            }
+            (case_switch == client_to_server) : {
+                havoc ClientMachine_tmp;
+                let client_requests = cinstances[ClientMachine_tmp].eRequest_to_AbstractServerMachine;
+                if (!is_empty_requests(client_requests)) {
+                    let top = peak_request(client_requests);
+                    let server_requests = sinstances[top.target].eRequest_from_ClientMachine;
+                    // send to server
+                    sinstances[top.target].eRequest_from_ClientMachine = push_request(server_requests, top);
+                    // remove from client
+                    cinstances[ClientMachine_tmp].eRequest_to_AbstractServerMachine = pop_request(client_requests);
+                }
+            }
+            esac
+        } else {
+            if (cstep) {
+                havoc cstep;
+                havoc cchoice;
+                next(cinstances[cchoice]);
+            }
+            if (sstep) {
+                havoc sstep;
+                havoc schoice;
+                next(sinstances[schoice]);
+            }
+        }
+    }
+
+    invariant main_assertion: forall (client_x: ClientMachine_ref_t) :: 
+        !is_empty_responses(cinstances[client_x].eResponse_from_AbstractServerMachine) ==> 
+            peak_response(cinstances[client_x].eResponse_from_AbstractServerMachine).id > cinstances[client_x].ghost_last_id;
+
+    axiom correct_this_pointer_at_start: forall (client_x: ClientMachine_ref_t) :: cinstances[client_x].this == client_x;
+
+    axiom sizes_never_negative_at_start: forall (client_x: ClientMachine_ref_t, server_x: AbstractServerMachine_ref_t) :: 
+        responses_size(sinstances[server_x].eResponse_to_ClientMachine) >= 0 &&
+        responses_size(cinstances[client_x].eResponse_from_AbstractServerMachine) >= 0 &&
+        requests_size(sinstances[server_x].eRequest_from_ClientMachine) >= 0 &&
+        requests_size(cinstances[client_x].eRequest_to_AbstractServerMachine) >= 0;
+
+    // these next four invariants encode at most one queue in system has an event related to each client
+    invariant if_response_to_client_then_no_other_client_event: forall (client_x: ClientMachine_ref_t, pos2 : integer) :: 
+        (exists (pos1: integer) :: in_responses(sinstances[cinstances[client_x].server].eResponse_to_ClientMachine, pos1) &&  
+        get_response(sinstances[cinstances[client_x].server].eResponse_to_ClientMachine, pos1).target == client_x) ==>
+            ((in_responses(cinstances[client_x].eResponse_from_AbstractServerMachine, pos2) ==>  
+                get_response(cinstances[client_x].eResponse_from_AbstractServerMachine, pos2).target != client_x) &&
+            (in_requests(sinstances[cinstances[client_x].server].eRequest_from_ClientMachine, pos2) ==>  
+                get_request(sinstances[cinstances[client_x].server].eRequest_from_ClientMachine, pos2).source != client_x) &&
+            (in_requests(cinstances[client_x].eRequest_to_AbstractServerMachine, pos2) ==>  
+                get_request(cinstances[client_x].eRequest_to_AbstractServerMachine, pos2).source != client_x));
+
+    invariant if_response_from_server_then_no_other_client_event: forall (client_x: ClientMachine_ref_t, pos2 : integer) :: 
+        (exists (pos1: integer) :: in_responses(cinstances[client_x].eResponse_from_AbstractServerMachine, pos1) &&  
+        get_response(cinstances[client_x].eResponse_from_AbstractServerMachine, pos1).target == client_x) ==>
+            ((in_responses(sinstances[cinstances[client_x].server].eResponse_to_ClientMachine, pos2) ==>  
+                get_response(sinstances[cinstances[client_x].server].eResponse_to_ClientMachine, pos2).target != client_x) &&
+            (in_requests(sinstances[cinstances[client_x].server].eRequest_from_ClientMachine, pos2) ==>  
+                get_request(sinstances[cinstances[client_x].server].eRequest_from_ClientMachine, pos2).source != client_x) &&
+            (in_requests(cinstances[client_x].eRequest_to_AbstractServerMachine, pos2) ==>  
+                get_request(cinstances[client_x].eRequest_to_AbstractServerMachine, pos2).source != client_x));
+
+    invariant if_request_from_client_then_no_other_client_event: forall (client_x: ClientMachine_ref_t, pos2 : integer) :: 
+        (exists (pos1: integer) :: in_requests(sinstances[cinstances[client_x].server].eRequest_from_ClientMachine, pos1) &&  
+        get_request(sinstances[cinstances[client_x].server].eRequest_from_ClientMachine, pos1).source == client_x) ==>
+            ((in_responses(cinstances[client_x].eResponse_from_AbstractServerMachine, pos2) ==>  
+                get_response(cinstances[client_x].eResponse_from_AbstractServerMachine, pos2).target != client_x) &&
+            (in_responses(sinstances[cinstances[client_x].server].eResponse_to_ClientMachine, pos2) ==>  
+                get_response(sinstances[cinstances[client_x].server].eResponse_to_ClientMachine, pos2).target != client_x) &&
+            (in_requests(cinstances[client_x].eRequest_to_AbstractServerMachine, pos2) ==>  
+                get_request(cinstances[client_x].eRequest_to_AbstractServerMachine, pos2).source != client_x));
+
+    invariant if_request_to_server_then_no_other_client_event: forall (client_x: ClientMachine_ref_t, pos2 : integer) :: 
+        (exists (pos1: integer) :: in_requests(cinstances[client_x].eRequest_to_AbstractServerMachine, pos1) &&  
+        get_request(cinstances[client_x].eRequest_to_AbstractServerMachine, pos1).source == client_x) ==>
+            ((in_responses(cinstances[client_x].eResponse_from_AbstractServerMachine, pos2) ==>  
+                get_response(cinstances[client_x].eResponse_from_AbstractServerMachine, pos2).target != client_x) &&
+            (in_requests(sinstances[cinstances[client_x].server].eRequest_from_ClientMachine, pos2) ==>  
+                get_request(sinstances[cinstances[client_x].server].eRequest_from_ClientMachine, pos2).source != client_x) &&
+            (in_responses(sinstances[cinstances[client_x].server].eResponse_to_ClientMachine, pos2) ==>  
+                get_response(sinstances[cinstances[client_x].server].eResponse_to_ClientMachine, pos2).target != client_x));
+
+    // this invariant encodes that each event queue has at most one event related to each client
+    invariant sizes_never_gt_1: forall (client_x: ClientMachine_ref_t, pos1: integer, pos2: integer) :: 
+        ((in_responses(sinstances[cinstances[client_x].server].eResponse_to_ClientMachine, pos1) && 
+            in_responses(sinstances[cinstances[client_x].server].eResponse_to_ClientMachine, pos2) &&
+            get_response(sinstances[cinstances[client_x].server].eResponse_to_ClientMachine, pos1).target == client_x &&
+            get_response(sinstances[cinstances[client_x].server].eResponse_to_ClientMachine, pos2).target == client_x) ==>
+                pos1 == pos2) &&
+        ((in_responses(cinstances[client_x].eResponse_from_AbstractServerMachine, pos1) && 
+            in_responses(cinstances[client_x].eResponse_from_AbstractServerMachine, pos2) &&
+            get_response(cinstances[client_x].eResponse_from_AbstractServerMachine, pos1).target == client_x &&
+            get_response(cinstances[client_x].eResponse_from_AbstractServerMachine, pos2).target == client_x) ==>
+                pos1 == pos2) &&
+        ((in_requests(sinstances[cinstances[client_x].server].eRequest_from_ClientMachine, pos1) && 
+            in_requests(sinstances[cinstances[client_x].server].eRequest_from_ClientMachine, pos2) &&
+            get_request(sinstances[cinstances[client_x].server].eRequest_from_ClientMachine, pos1).source == client_x &&
+            get_request(sinstances[cinstances[client_x].server].eRequest_from_ClientMachine, pos2).source == client_x) ==>
+                pos1 == pos2) &&
+        ((in_requests(cinstances[client_x].eRequest_to_AbstractServerMachine, pos1) && 
+            in_requests(cinstances[client_x].eRequest_to_AbstractServerMachine, pos2) &&
+            get_request(cinstances[client_x].eRequest_to_AbstractServerMachine, pos1).source == client_x &&
+            get_request(cinstances[client_x].eRequest_to_AbstractServerMachine, pos2).source == client_x) ==>
+                pos1 == pos2);
+
+    // if a client is in entry, then there are no events for it floating around
+    invariant entry_means_everything_empty: forall (client_x: ClientMachine_ref_t, pos: integer) :: 
+        cinstances[client_x].entry ==>
+            ((in_responses(sinstances[cinstances[client_x].server].eResponse_to_ClientMachine, pos) ==> get_response(sinstances[cinstances[client_x].server].eResponse_to_ClientMachine, pos).target != client_x) &&
+            (in_responses(cinstances[client_x].eResponse_from_AbstractServerMachine, pos)           ==> get_response(cinstances[client_x].eResponse_from_AbstractServerMachine, pos).target          != client_x) &&
+            (in_requests(sinstances[cinstances[client_x].server].eRequest_from_ClientMachine, pos)  ==> get_request(sinstances[cinstances[client_x].server].eRequest_from_ClientMachine, pos).source != client_x) &&
+            (in_requests(cinstances[client_x].eRequest_to_AbstractServerMachine, pos)               ==> get_request(cinstances[client_x].eRequest_to_AbstractServerMachine, pos).source              != client_x));
+
+    invariant every_event_id_gt_last_id: forall (client_x: ClientMachine_ref_t, pos: integer) :: 
+        (in_requests(cinstances[client_x].eRequest_to_AbstractServerMachine, pos) ==> 
+            get_request(cinstances[client_x].eRequest_to_AbstractServerMachine, pos).id == cinstances[client_x].next_id - 1) &&
+        (in_requests(sinstances[cinstances[client_x].server].eRequest_from_ClientMachine, pos) ==> 
+            get_request(sinstances[cinstances[client_x].server].eRequest_from_ClientMachine, pos).id == cinstances[client_x].next_id - 1) &&
+        (in_responses(sinstances[cinstances[client_x].server].eResponse_to_ClientMachine, pos) ==> 
+            get_response(sinstances[cinstances[client_x].server].eResponse_to_ClientMachine, pos).id == cinstances[client_x].next_id - 1) &&
+        (in_responses(cinstances[client_x].eResponse_from_AbstractServerMachine, pos) ==> 
+            get_response(cinstances[client_x].eResponse_from_AbstractServerMachine, pos).id == cinstances[client_x].next_id - 1);
+
+    invariant next_gt_last: forall (client_x: ClientMachine_ref_t) :: 
+        cinstances[client_x].next_id - cinstances[client_x].last_id > 1 || 
+        (cinstances[client_x].entry && cinstances[client_x].next_id - cinstances[client_x].last_id == 1);
+
+    invariant ghost_trails_real: forall (client_x: ClientMachine_ref_t) :: 
+        cinstances[client_x].last_id >= cinstances[client_x].ghost_last_id;
+
+    invariant server_only_communicates_with_matching_client: forall (server_x: AbstractServerMachine_ref_t, pos: integer) ::
+        (in_responses(sinstances[server_x].eResponse_to_ClientMachine, pos) ==> 
+            cinstances[get_response(sinstances[server_x].eResponse_to_ClientMachine, pos).target].server == server_x) && 
+        (in_requests(sinstances[server_x].eRequest_from_ClientMachine, pos) ==> 
+            cinstances[get_request(sinstances[server_x].eRequest_from_ClientMachine, pos).source].server == server_x);
+
+    invariant client_only_communicates_with_matching_server: forall (client_x: ClientMachine_ref_t, pos: integer) ::
+        (in_responses(cinstances[client_x].eResponse_from_AbstractServerMachine, pos) ==> 
+            get_response(cinstances[client_x].eResponse_from_AbstractServerMachine, pos).source == cinstances[client_x].server) && 
+        (in_requests(cinstances[client_x].eRequest_to_AbstractServerMachine, pos) ==> 
+            get_request(cinstances[client_x].eRequest_to_AbstractServerMachine, pos).target == cinstances[client_x].server);
+
+    invariant correct_server_source_and_target: forall (server_x : AbstractServerMachine_ref_t, pos: integer) ::
+        (in_responses(sinstances[server_x].eResponse_to_ClientMachine, pos) ==> 
+            get_response(sinstances[server_x].eResponse_to_ClientMachine, pos).source == server_x) && 
+        (in_requests(sinstances[server_x].eRequest_from_ClientMachine, pos) ==> 
+            get_request(sinstances[server_x].eRequest_from_ClientMachine, pos).target == server_x);
+
+    invariant correct_client_source_and_target: forall (client_x : ClientMachine_ref_t, pos: integer) ::
+        (in_responses(cinstances[client_x].eResponse_from_AbstractServerMachine, pos) ==> 
+            get_response(cinstances[client_x].eResponse_from_AbstractServerMachine, pos).target == client_x) && 
+        (in_requests(cinstances[client_x].eRequest_to_AbstractServerMachine, pos) ==> 
+            get_request(cinstances[client_x].eRequest_to_AbstractServerMachine, pos).source == client_x);
+
+    control {
+        induction;
+        set_solver_option("timeout", "30000");
+        set_solver_option("smt.relevancy", "0");
+        set_solver_option("smt.qi.cost", "0");
+        set_solver_option("smt.mbqi", "false");
+        check;
+    }
+}

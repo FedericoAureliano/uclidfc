@@ -6,6 +6,7 @@ import scala.collection.mutable.HashMap
 
 import front._
 import scala.collection.mutable.Stack
+import scala.collection.immutable.Nil
 
 class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
   val proofStates: ListBuffer[Ref] = new ListBuffer()
@@ -613,12 +614,74 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
     res
   }
 
+  def getAxiomRef(stateParam: Ref, axioms: List[InnerAxiom]): Ref = {
+    // make sure invariant axioms hold on the fresh instance
+    val specConjuncts = new ListBuffer[Ref]()
+    val axiomRef = if (axioms.length > 1) {
+      val andRef = memoAddInstruction(TheoryMacro("and"))
+      axioms.foreach { d =>
+        val t = exprToTerm(
+          Some(stateParam),
+          Map.empty,
+          d.expr
+        )._1 //specs shouldn't create new nondets
+        specConjuncts.addOne(t)
+        t
+      }
+      memoAddInstruction(Application(andRef, specConjuncts.toList))
+    } else if (axioms.length == 1) {
+      exprToTerm(Some(stateParam), Map.empty, axioms(0).expr)._1 //specs shouldn't create new nondets
+    } else {
+      val trueRef = memoAddInstruction(TheoryMacro("true"))
+      trueRef
+    }
+    axiomRef
+  }
+
   def executeControl(
     moduleId: Identifier,
     initParams: List[Ref],
     nextParams: List[Ref],
-    cmds: List[Command]
-  ): Unit =
+    cmds: List[Command],
+    axioms: List[InnerAxiom]
+  ): Unit = {
+
+    def generateInitVariables(): List[Ref] =
+      initParams.map { p =>
+        stmts(p.loc) match {
+          case FunctionParameter(name, sort) => {
+            val vRef =
+              memoAddInstruction(UserFunction(name, sort))
+            vRef
+          }
+        }
+      }
+
+    def stepKTimes(k: Int, startRef: Ref, nextRef: Ref): List[Ref] = {
+      val steps: ListBuffer[Ref] = new ListBuffer()
+      steps.addOne(startRef)
+      (1 to k).foreach { i =>
+        val args = nextParams.tail.map { p =>
+          stmts(p.loc) match {
+            case FunctionParameter(name, sort) => {
+              val vRef =
+                memoAddInstruction(
+                  UserFunction(s"$name!step!$i", sort)
+                )
+              vRef
+            }
+          }
+        }
+        steps.addOne(
+          memoAddInstruction(
+            Application(nextRef, List(steps.last) ++ args),
+            Some(s"State_At_Step!$i")
+          )
+        )
+      }
+      steps.tail.toList
+    }
+
     cmds.foreach(p =>
       p match {
         case c: SolverCommand =>
@@ -632,10 +695,31 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
               getValues = Some(vs)
             }
             case Trace(unwind, init, start) => {
-              val startTerm = start match {
-                case Some(t) => exprToTerm(None, Map.empty, t)._1
-                case None    => fuzz(typeMap(moduleId))
-              }
+              // get the module declaration
+              val modRef = typeMap(moduleId)
+              val mod = stmts(modRef.loc)
+                .asInstanceOf[middle.Module]
+              val initRef = mod.init
+              val nextRef = mod.next
+
+              // TODO: currently ignores axioms
+              val preInit = transitionToTerm(
+                mod.name + "!pre_init",
+                initParams.head,
+                mod.ct,
+                start
+              )
+              val fuzzed = fuzz(modRef)
+              val startTerm = memoAddInstruction(
+                Application(preInit._1, fuzzed :: preInit._2.map { p =>
+                  stmts(p.loc) match {
+                    case FunctionParameter(_, sort) => {
+                      fuzz(sort)
+                    }
+                  }
+                })
+              )
+
               val initVariables = startTerm :: initParams.tail.map { p =>
                 stmts(p.loc) match {
                   case FunctionParameter(_, sort) => {
@@ -644,18 +728,12 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
                 }
               }
 
-              // get the module declaration
-              val mod = stmts(typeMap(moduleId).loc)
-                .asInstanceOf[middle.Module]
-              val initRef = mod.init
-              val nextRef = mod.next
-
               var transRef = if (init.literal) {
                 // apply init
                 val initAppRef =
                   memoAddInstruction(
                     Application(initRef, initVariables),
-                    Some("State_At_Step!0")
+                    Some("State_After_Init")
                   )
                 proofStates.addOne(initAppRef)
                 initAppRef
@@ -663,9 +741,8 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
                 startTerm
               }
 
-              // Take k steps
+              // Take k steps but fuzz at each step
               val k = unwind.literal.toInt
-
               (1 to k).foreach { i =>
                 val args = nextParams.tail.map { p =>
                   stmts(p.loc) match {
@@ -689,14 +766,11 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
           name.name match {
             case "induction" => {
               // create all the variables you need
-              val initVariables = initParams.map { p =>
-                stmts(p.loc) match {
-                  case FunctionParameter(name, sort) => {
-                    val vRef =
-                      memoAddInstruction(UserFunction(name, sort))
-                    vRef
-                  }
-                }
+              val initVariables = generateInitVariables()
+              if (axioms.length > 0) {
+                // make sure invariant axioms hold on the fresh instance
+                val axiomRef = getAxiomRef(initVariables.head, axioms)
+                addAxiom(axiomRef)
               }
 
               // get the module declaration
@@ -711,7 +785,7 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
               val initAppRef =
                 memoAddInstruction(
                   Application(initRef, initVariables),
-                  Some("State_At_Step!0")
+                  Some("State_After_Init")
                 )
               proofStates.addOne(initAppRef)
 
@@ -726,7 +800,6 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
                   Application(negRef, List(initSpecRef)),
                   Some("Counterexample_In_Invariants_BaseCase")
                 )
-
               addAssertion(baseRef)
 
               // induction step
@@ -740,33 +813,20 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
 
               // Take k steps
               val k = unwind.getOrElse(IntLit(1)).literal.toInt
-
-              var transRef = initVariables.head
-
-              (1 to k).foreach {
-                i =>
-                  val args = nextParams.tail.map { p =>
-                    stmts(p.loc) match {
-                      case FunctionParameter(name, sort) => {
-                        val vRef =
-                          memoAddInstruction(
-                            UserFunction(s"$name!step!$i", sort)
-                          )
-                        vRef
-                      }
-                    }
-                  }
-                  transRef = memoAddInstruction(
-                    Application(nextRef, List(transRef) ++ args),
-                    Some(if (i == k) { "State_After" }
-                    else { s"State_At_Step!$i" })
-                  )
-                  proofStates.addOne(transRef)
+              val states = stepKTimes(k, initVariables.head, nextRef)
+              proofStates.addAll(states)
+              val inductiveAxioms = axioms.filter(p => p.invariant)
+              if (inductiveAxioms.length > 0) {
+                // inductiveAxioms hold on every inner step
+                states.foreach { s =>
+                  val axiomRef = getAxiomRef(s, inductiveAxioms)
+                  addAxiom(axiomRef)
+                }
               }
 
               // holds on exit
               val exitRef =
-                memoAddInstruction(Application(specRef, List(transRef)))
+                memoAddInstruction(Application(specRef, List(states.last)))
 
               val negExitRef =
                 memoAddInstruction(Application(negRef, List(exitRef)))
@@ -783,15 +843,7 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
             }
             case "unroll" => {
               // create all the variables you need
-              val initVariables = initParams.map { p =>
-                stmts(p.loc) match {
-                  case FunctionParameter(name, sort) => {
-                    val vRef =
-                      memoAddInstruction(UserFunction(name, sort))
-                    vRef
-                  }
-                }
-              }
+              val initVariables = generateInitVariables()
 
               // get the module declaration
               val mod = stmts(typeMap(moduleId).loc)
@@ -803,63 +855,47 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
               val initAppRef =
                 memoAddInstruction(
                   Application(initRef, initVariables),
-                  Some("State_At_Step!0")
+                  Some("State_After_Init")
                 )
               proofStates.addOne(initAppRef)
 
-              // apply spec to result of init
-              val initSpecRef =
-                memoAddInstruction(Application(specRef, List(initAppRef)))
+              // apply axiom after init so that fresh variables don't cause problems when unrolling
+              if (axioms.length > 0) {
+                val axiomRef = getAxiomRef(initAppRef, axioms)
+                addAxiom(axiomRef)
+              }
 
               val negRef = memoAddInstruction(TheoryMacro("not"))
 
-              val baseRef =
-                memoAddInstruction(
-                  Application(negRef, List(initSpecRef)),
-                  Some("Counterexample_In_Invariants_Step!0")
-                )
-
-              addAssertion(baseRef)
-
               // Take k steps
               val k = unwind.getOrElse(IntLit(1)).literal.toInt
+              val states = initAppRef :: stepKTimes(k, initAppRef, nextRef)
+              proofStates.addAll(states)
+              val inductiveAxioms = axioms.filter(p => p.invariant)
+              if (inductiveAxioms.length > 0) {
+                // inductiveAxioms hold on every inner step
+                states.foreach { s =>
+                  val axiomRef = getAxiomRef(s, inductiveAxioms)
+                  addAxiom(axiomRef)
+                }
+              }
 
-              var transRef = initAppRef
-
-              (1 to k).foreach {
-                i =>
-                  val args = nextParams.tail.map { p =>
-                    stmts(p.loc) match {
-                      case FunctionParameter(name, sort) => {
-                        val vRef =
-                          memoAddInstruction(
-                            UserFunction(s"$name!step!$i", sort)
-                          )
-                        vRef
-                      }
-                    }
-                  }
-                  transRef = memoAddInstruction(
-                    Application(nextRef, List(transRef) ++ args),
-                    Some(s"State_At_Step!$i")
+              states.zipWithIndex.foreach { p =>
+                val exitRef =
+                  memoAddInstruction(Application(specRef, List(p._1)))
+                val negExitRef =
+                  memoAddInstruction(
+                    Application(negRef, List(exitRef)),
+                    Some(s"Counterexample_In_Step!${p._2}")
                   )
-                  proofStates.addOne(transRef)
-                  // holds on exit
-                  val exitRef =
-                    memoAddInstruction(Application(specRef, List(transRef)))
-                  val negExitRef =
-                    memoAddInstruction(
-                      Application(negRef, List(exitRef)),
-                      Some(s"Counterexample_In_Invariants_Step!${i}")
-                    )
-
-                  addAssertion(negExitRef)
+                addAssertion(negExitRef)
               }
             }
           }
         }
       }
     )
+  }
 
   // get all the specs and create a function from them
   def specsToTerm(
@@ -900,76 +936,76 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
     specRef
   } // end helper specsToTerm
 
-  def createInitCalls(
+  // for every variable, if it contains first class modules then make sure they are inited.
+  def createInitAssumes(
     fields: List[
-      (Identifier, InlineType)
+      (Expr, InlineType)
     ] // variable we want to init and its type
-  ): List[AssignStmt] =
-    fields.foldLeft(List.empty: List[AssignStmt])((acc, f) =>
-      createInitCallRhs(f._2, f._1) match {
-        case Some(value) =>
-          acc ++ List(AssignStmt(f._1, value))
-        case None => acc
-      }
-    )
-
-  def createInitCallRhs(typ: InlineType, starter: Expr): Option[Expr] =
-    typ match {
-      case ArrayType(inType, outType) => {
-        val idx = inType.defaultVal() match {
-          case Some(default) => default
-          case None          => FreshLit(inType)
-        }
-        val newStarter = OperatorApplication(ArraySelect(), List(starter, idx))
-        createInitCallRhs(outType, newStarter) match {
-          case Some(value) =>
-            Some(OperatorApplication(ConstArray(typ), List(value)))
-          case None => None
-        }
-      }
-
-      case NamedType(id) => {
-        val sortRef = typeMap(id)
-        stmts(sortRef.loc) match {
-          case _: middle.Module => Some(ModuleInitCallExpr(starter))
-          case adt: AbstractDataType => {
-            val ctr =
-              stmts(adt.defaultCtr().loc).asInstanceOf[Constructor]
-
-            val components = ctr.selectors.map { s =>
-              val sel = stmts(s.loc).asInstanceOf[Selector]
-              val newStarter =
+  ): List[InnerAxiom] =
+    fields.foldLeft(List.empty: List[InnerAxiom]) { (acc, f) =>
+      f._2 match {
+        case BooleanType() => acc
+        case IntegerType() => acc
+        case ArrayType(inType, outType) => {
+          val idx = Identifier(freshSymbolName())
+          val select = OperatorApplication(ArraySelect(), List(f._1, idx))
+          createInitAssumes(List((select, outType))) match {
+            case Nil => acc
+            case head :: Nil => {
+              val innerExpr = head.expr
+              val forall =
                 OperatorApplication(
-                  PolymorphicSelect(Identifier(sel.name)),
-                  List(starter)
+                  ForallOp(List((idx, inType))),
+                  List(innerExpr)
                 )
-              val typ = sortToType(sel.sort)
-              (newStarter, createInitCallRhs(typ, newStarter))
-            }
-
-            if (components.exists(p => p._2.isDefined)) {
-              Some(
-                FunctionApplication(
-                  Identifier(ctr.name),
-                  components.map(p =>
-                    p._2 match {
-                      case Some(value) => value
-                      case None        => p._1
-                    }
-                  )
+              acc ++ List(
+                InnerAxiom(
+                  Identifier(s"init_axiom_${f._1.pos.line}_${f._1.pos.column}"),
+                  forall,
+                  false
                 )
               )
-            } else {
-              None
             }
+            case _ =>
+              throw new UnreachableError(
+                "createInitAssumes on arrays should not return a list of length greater than one! Please contact developers."
+              )
           }
-          case _ => None
         }
+        case NamedType(id) => {
+          val sortRef = typeMap(id)
+          stmts(sortRef.loc) match {
+            case _: middle.Module =>
+              acc ++ List(
+                InnerAxiom(
+                  Identifier(s"init_axiom_${f._1.pos.line}_${f._1.pos.column}"),
+                  OperatorApplication(
+                    EqualityOp(),
+                    List(f._1, ModuleInitCallExpr(f._1))
+                  ),
+                  false
+                )
+              )
+            case adt: AbstractDataType => {
+              val ctr =
+                stmts(adt.defaultCtr().loc).asInstanceOf[Constructor]
 
+              val components = ctr.selectors.map { s =>
+                val sel = stmts(s.loc).asInstanceOf[Selector]
+                val newStarter =
+                  OperatorApplication(
+                    PolymorphicSelect(Identifier(sel.name)),
+                    List(f._1)
+                  )
+                val typ = sortToType(sel.sort)
+                (newStarter, typ)
+              }
+              acc ++ createInitAssumes(components)
+            }
+            case _ => acc
+          }
+        }
       }
-
-      case BooleanType() | IntegerType() =>
-        None // don't need to be inited
     }
 
   def typeDeclToTerm(td: TypeDecl): Unit =
@@ -1051,7 +1087,7 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
     )
   }
 
-  def axiomToAssertion(ax: Axiom): Unit = {
+  def axiomToAssertion(ax: OuterAxiom): Unit = {
     val bodyRef = exprToTerm(None, Map.empty, ax.expr)._1
     addAxiom(bodyRef)
   }
@@ -1152,11 +1188,11 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
       )
     )
 
-    val initInitCalls = createInitCalls(fields)
+    val initAssumes = createInitAssumes(fields)
     var initParams = List(inputStateRef)
     val initBlock = m.init match {
-      case Some(decl) => BlockStmt(decl.body.stmts ++ initInitCalls)
-      case None       => BlockStmt(initInitCalls)
+      case Some(decl) => BlockStmt(decl.body.stmts)
+      case None       => BlockStmt(List.empty)
     }
     val initRef = {
       val res = transitionToTerm(
@@ -1200,7 +1236,13 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
     )
 
     if (execute) {
-      executeControl(m.id, initParams, nextParams, m.cmds)
+      executeControl(
+        m.id,
+        initParams,
+        nextParams,
+        m.cmds,
+        m.axioms ++ initAssumes
+      )
     }
   } // End Module to Term
 }

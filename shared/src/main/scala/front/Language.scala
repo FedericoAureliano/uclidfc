@@ -227,53 +227,55 @@ case class ModuleNextCallStmt(expr: Expr) extends Statement {}
 
 case class LetStatement(id: Identifier, expr: Expr) extends Statement {}
 
-sealed abstract class TopLevelOnlyDecl extends ASTNode {}
-sealed abstract class InnerOnlyDecl extends ASTNode {}
+sealed abstract class OuterDecl extends ASTNode {}
+sealed abstract class InnerDecl extends ASTNode {}
 
-case class TypeDecl(id: Identifier, typ: Option[Type])
-    extends TopLevelOnlyDecl {}
+case class TypeDecl(id: Identifier, typ: Option[Type]) extends OuterDecl {}
 
 case class StateVarDecl(ids: List[Identifier], typ: InlineType)
-    extends InnerOnlyDecl {}
+    extends InnerDecl {}
 
 case class StateConstDecl(ids: List[Identifier], typ: InlineType)
-    extends InnerOnlyDecl {}
+    extends InnerDecl {}
 
 case class InputVarsDecl(ids: List[Identifier], typ: InlineType)
-    extends InnerOnlyDecl {}
+    extends InnerDecl {}
 
 case class OutputVarsDecl(ids: List[Identifier], typ: InlineType)
-    extends InnerOnlyDecl {}
+    extends InnerDecl {}
 
 case class SharedVarsDecl(ids: List[Identifier], typ: InlineType)
-    extends InnerOnlyDecl {}
+    extends InnerDecl {}
 
 case class DefineDecl(
   id: Identifier,
   params: List[(Identifier, InlineType)],
   retTyp: Type,
   expr: Expr
-) extends TopLevelOnlyDecl {}
+) extends OuterDecl {}
 
 case class FunctionDecl(
   id: Identifier,
   argTypes: List[Type],
   retTyp: Type
-) extends TopLevelOnlyDecl {}
+) extends OuterDecl {}
 
 case class SynthesisDecl(
   id: Identifier,
   params: List[(Identifier, InlineType)],
   retTyp: Type
-) extends TopLevelOnlyDecl {}
+) extends OuterDecl {}
 
-case class Axiom(expr: Expr) extends TopLevelOnlyDecl {}
+case class OuterAxiom(expr: Expr) extends OuterDecl {}
 
-case class InitDecl(body: BlockStmt) extends InnerOnlyDecl {}
+case class InnerAxiom(id: Identifier, expr: Expr, invariant: Boolean)
+    extends InnerDecl {}
 
-case class NextDecl(body: BlockStmt) extends InnerOnlyDecl {}
+case class InitDecl(body: BlockStmt) extends InnerDecl {}
 
-case class SpecDecl(id: Identifier, expr: Expr) extends InnerOnlyDecl {}
+case class NextDecl(body: BlockStmt) extends InnerDecl {}
+
+case class SpecDecl(id: Identifier, expr: Expr) extends InnerDecl {}
 
 case class ProofCommand(
   name: Identifier,
@@ -286,14 +288,14 @@ abstract class SolverCommand extends Command
 case class Check() extends SolverCommand
 case class GetValue(vars: List[Expr]) extends SolverCommand
 
-case class Trace(k: IntLit, init: BoolLit, start: Option[Expr])
+case class Trace(k: IntLit, init: BoolLit, preInit: BlockStmt)
     extends SolverCommand
 
 case class ModuleDecl(
   id: Identifier,
-  decls: List[InnerOnlyDecl],
+  decls: List[InnerDecl],
   cmds: List[Command]
-) extends TopLevelOnlyDecl {
+) extends OuterDecl {
 
   // module inputs.
   val inputs: List[(Identifier, InlineType)] =
@@ -326,6 +328,11 @@ case class ModuleDecl(
   // module properties.
   val properties: List[SpecDecl] = decls.collect {
     case spec: SpecDecl =>
+      spec
+  }
+
+  val axioms: List[InnerAxiom] = decls.collect {
+    case spec: InnerAxiom =>
       spec
   }
 

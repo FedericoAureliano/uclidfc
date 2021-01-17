@@ -3,7 +3,7 @@ package middle
 import scala.collection.mutable.ArrayBuffer
 import scala.util.Random
 
-class Fuzzable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
+class Fuzzable(stmts: ArrayBuffer[Instruction]) extends Rewritable(stmts) {
   val random = new Random
 
   def fuzz(position: Ref): Ref =

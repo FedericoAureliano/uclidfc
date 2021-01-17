@@ -2,8 +2,12 @@ package middle
 
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.HashMap
+import scala.collection.mutable.ListBuffer
 
 class Minimal(stmts: ArrayBuffer[Instruction]) extends WellFormed(stmts) {
+
+  val assertionRefs: ListBuffer[Ref] = new ListBuffer()
+  val axiomRefs: ListBuffer[Ref] = new ListBuffer()
 
   val memo: HashMap[Instruction, Ref] =
     new HashMap().addAll(stmts.zipWithIndex.map(p => (p._1, Ref(p._2, None))))
@@ -11,26 +15,29 @@ class Minimal(stmts: ArrayBuffer[Instruction]) extends WellFormed(stmts) {
   def memoAddInstruction(
     inst: Instruction,
     toName: Option[String] = None
-  ): Ref = {
+  ): Ref =
     // we want to name what ever reference we get back, unless it already has a name
-    val res: Ref = memo.getOrElse(inst, {
-      // it is not already saved, so name it
-      val newLoc = Ref(stmts.length, toName)
-      stmts.addOne(inst)
-      memo(inst) = newLoc
-      newLoc
-    })
-    // if res is named then return that, otherwise give it the name
-    res.named match {
-      case Some(_) => res
+    memo.get(inst) match {
+      case Some(value) => {
+        value.named match {
+          case Some(_) => value
+          case None => {
+            // it is not already named so name it
+            val newLoc = Ref(stmts.length, toName)
+            stmts.addOne(inst)
+            memo.addOne((inst, newLoc))
+            newLoc
+          }
+        }
+      }
       case None => {
-        val newLoc = Ref(res.loc, toName)
+        // it is not already saved, so name it
+        val newLoc = Ref(stmts.length, toName)
         stmts.addOne(inst)
-        memo(inst) = newLoc
+        memo.addOne((inst, newLoc))
         newLoc
       }
     }
-  }
 
   def addInstruction(inst: Instruction): Ref = {
     stmts.addOne(inst)
@@ -89,4 +96,55 @@ class Minimal(stmts: ArrayBuffer[Instruction]) extends WellFormed(stmts) {
     marks(position.loc) = true
     markInstruction(stmts(position.loc))
   }
+
+  /*
+  Copy an application term by inserting new copies of all instructions and returning a map describing the copy
+   */
+  def copyTerm(pos: Ref): Ref = {
+    assert(
+      stmts(pos.loc).isInstanceOf[Application],
+      s"should be an application but is ${stmts(pos.loc)}"
+    )
+    val map = copyTermHelper(pos)
+    updateTerm(map(pos), map)
+    map(pos)
+  }
+
+  /*
+  Copies the term but instead of updating references, returns a map describing the changes
+   */
+  def copyTermHelper(
+    pos: Ref,
+    map: HashMap[Ref, Ref] = HashMap.empty
+  ): HashMap[Ref, Ref] = {
+    stmts(pos.loc) match {
+      case Application(caller, args) => {
+        val newCaller = copyTermHelper(caller, map).getOrElse(caller, caller)
+        val newArgs = args.map(a => copyTermHelper(a, map).getOrElse(a, a))
+        val newPos: Ref = addInstruction(Application(newCaller, newArgs))
+        map.addOne((pos, newPos))
+      }
+      case _ =>
+    }
+    map
+  }
+
+  /*
+  Updates the references in an application using the map
+   */
+  def updateTerm(pos: Ref, map: HashMap[Ref, Ref]): Unit =
+    stmts(pos.loc) match {
+      case Application(caller, args) => {
+        memoUpdateInstruction(
+          pos,
+          Application(
+            map.getOrElse(caller, caller),
+            args.map(a => map.getOrElse(a, a))
+          )
+        )
+        updateTerm(caller, map)
+        args.foreach(a => updateTerm(a, map))
+      }
+      case _ =>
+    }
 }

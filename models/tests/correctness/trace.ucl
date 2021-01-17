@@ -16,7 +16,10 @@ module main {
     }
 
     control {
-        trace(5, false, main(7, false));
+        trace(5, false, {
+            x = 7;
+            y = false;
+        });
         print_cex(x, y);
     }
 }

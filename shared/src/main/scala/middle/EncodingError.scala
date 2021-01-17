@@ -12,3 +12,5 @@ class NotSupportedYet(msg: String) extends EncodingError(msg) {}
 class FuzzingError(msg: String) extends EncodingError(msg) {}
 
 class VariableOverride(msg: String) extends EncodingError(msg) {}
+
+class UnreachableError(msg: String) extends EncodingError(msg) {}

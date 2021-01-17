@@ -1,0 +1,26 @@
+// UCLID TEST
+// Solver=cvc4
+// Result=Some(true)
+
+module main {
+    var x : integer;
+    var y : integer;
+
+    init {
+        y = 1;
+    }
+
+    next {
+        y = y * x;
+        havoc x;
+    }
+
+    invariant axiom gt0: x >= 0;
+    invariant y_gt_x: y > 0;
+
+    control {
+        induction;
+        check;
+        print_cex(x, y);
+    }
+}

@@ -1,7 +1,6 @@
 package middle
 
 import scala.collection.mutable.ArrayBuffer
-import scala.collection.mutable.ListBuffer
 import scala.collection.mutable.HashSet
 
 class Writable(stmts: ArrayBuffer[Instruction]) extends Fuzzable(stmts) {
@@ -71,9 +70,6 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Fuzzable(stmts) {
 
   var options: List[(String, String)] =
     List(("produce-assignments", "true"))
-
-  val assertionRefs: ListBuffer[Ref] = new ListBuffer()
-  val axiomRefs: ListBuffer[Ref] = new ListBuffer()
 
   val alreadyDeclared = new HashSet[Ref]()
 
