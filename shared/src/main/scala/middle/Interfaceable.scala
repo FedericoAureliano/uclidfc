@@ -9,26 +9,26 @@ import scala.collection.mutable.Stack
 import scala.collection.immutable.Nil
 
 class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
-  val proofStates: ListBuffer[Ref] = new ListBuffer()
+  val proofStates: ListBuffer[Int] = new ListBuffer()
 
   // all types are global
-  val typeMap: HashMap[Identifier, Ref] = new HashMap()
+  val typeMap: HashMap[Identifier, Int] = new HashMap()
   // all functions, synthesis functions, and macros are global
-  val globalsMap: HashMap[Identifier, Ref] = new HashMap()
+  val globalsMap: HashMap[Identifier, Int] = new HashMap()
   // let statements stack
-  val letsMapStack: Stack[HashMap[Identifier, Ref]] = new Stack()
+  val letsMapStack: Stack[HashMap[Identifier, Int]] = new Stack()
 
-  def addAssertion(ass: Ref): Unit =
+  private def addAssertion(ass: Int): Unit =
     assertionRefs.addOne(ass)
 
-  def addAxiom(ax: Ref): Unit =
+  private def addAxiom(ax: Int): Unit =
     axiomRefs.addOne(ax)
 
   // encode a type use (adds to program if type not yet used)
   // and return a pointer to the type
-  def typeUseToSortRef(
+  private def typeUseToSortRef(
     t: Type
-  ): Ref =
+  ): Int =
     t match {
       case BooleanType() => memoAddInstruction(TheorySort("Bool"))
       case IntegerType() => memoAddInstruction(TheorySort("Int"))
@@ -44,14 +44,14 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
         throw new NotSupportedYet(t)
     }
 
-  def getTypeFromExpr(stateParam: Ref, exp: Expr): Type = {
+  private def getTypeFromExpr(stateParam: Int, exp: Expr): Type = {
     val termRef = exprToTerm(Some(stateParam), Map.empty, exp)._1
     val typeRef = inferTermType(termRef)
     sortToType(typeRef)
   }
 
-  def sortToType(sortRef: Ref): InlineType =
-    stmts(sortRef.loc) match {
+  private def sortToType(sortRef: Int): InlineType =
+    stmts(sortRef) match {
       case DataType(name, _)        => NamedType(Identifier(name))
       case Module(name, _, _, _, _) => NamedType(Identifier(name))
       case TheorySort(name, params) =>
@@ -69,12 +69,12 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
     }
 
   // encode a term and return a pointer to the start of the term
-  def exprToTerm(
-    stateParam: Option[Ref],
-    local: Map[Identifier, Ref],
+  private def exprToTerm(
+    stateParam: Option[Int],
+    local: Map[Identifier, Int],
     expr: Expr
-  ): (Ref, List[Ref]) = {
-    var newNondets: List[Ref] = List.empty
+  ): (Int, List[Int]) = {
+    var newNondets: List[Int] = List.empty
     expr match {
       case id: Identifier => {
         // try locals first
@@ -85,13 +85,13 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
             stateParam match {
               case Some(state) => {
                 val ctrRef = stmts(
-                  inferTermType(state).loc
+                  inferTermType(state)
                 ).asInstanceOf[AbstractDataType]
                   .defaultCtr()
-                val selectorsZip = stmts(ctrRef.loc)
+                val selectorsZip = stmts(ctrRef)
                   .asInstanceOf[Constructor]
                   .selectors
-                  .map(p => (p, stmts(p.loc).asInstanceOf[Selector]))
+                  .map(p => (p, stmts(p).asInstanceOf[Selector]))
                 val selRef =
                   selectorsZip.find(p => p._2.name == id.name) match {
                     case Some(value) => value._1
@@ -143,14 +143,14 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
           val exprCtrRef = {
             val res = exprToTerm(stateParam, local, exp)
             stmts(
-              inferTermType(res._1).loc
+              inferTermType(res._1)
             ).asInstanceOf[AbstractDataType]
               .defaultCtr()
           }
-          val ctr = stmts(exprCtrRef.loc).asInstanceOf[Constructor]
+          val ctr = stmts(exprCtrRef).asInstanceOf[Constructor]
           ctr.selectors
             .find { s =>
-              val sel = stmts(s.loc).asInstanceOf[Selector]
+              val sel = stmts(s).asInstanceOf[Selector]
               sel.name == id.name
             }
             .getOrElse(throw new IdentifierOutOfScope(id))
@@ -235,7 +235,7 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
       case OperatorApplication(op, operands) => {
         val opRef = memoAddInstruction(TheoryMacro(op.name))
 
-        val operandRefs = new ListBuffer[Ref]()
+        val operandRefs = new ListBuffer[Int]()
         operands.foreach { x =>
           val loc = exprToTerm(stateParam, local, x)
           newNondets = newNondets ++ loc._2
@@ -253,7 +253,7 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
           res._1
         }
 
-        val operandRefs = new ListBuffer[Ref]()
+        val operandRefs = new ListBuffer[Int]()
         operands.foreach { x =>
           val loc = exprToTerm(stateParam, local, x)
           newNondets = newNondets ++ loc._2
@@ -273,11 +273,11 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
           res._1
         }
         // get the module it belongs to
-        val mod = stmts(inferTermType(instanceRef).loc)
+        val mod = stmts(inferTermType(instanceRef))
           .asInstanceOf[middle.Module]
         // find next function location
         val nextMacro =
-          stmts(mod.next.loc).asInstanceOf[UserMacro]
+          stmts(mod.next).asInstanceOf[UserMacro]
 
         val extraArgs = nextMacro.params.tail
 
@@ -296,11 +296,11 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
           res._1
         }
         // get the module it belongs to
-        val mod = stmts(inferTermType(instanceRef).loc)
+        val mod = stmts(inferTermType(instanceRef))
           .asInstanceOf[middle.Module]
         // find init function location
         val initMacro =
-          stmts(mod.init.loc).asInstanceOf[UserMacro]
+          stmts(mod.init).asInstanceOf[UserMacro]
 
         val extraArgs = initMacro.params.tail
 
@@ -315,12 +315,12 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
   }
 
   // statements are encoded as functions.
-  def assignToMacro(
-    stateParam: Ref,
-    ctrRef: Ref, // this is the constructor to build the target object
+  private def assignToMacro(
+    stateParam: Int,
+    ctrRef: Int, // this is the constructor to build the target object
     stmt: AssignStmt
-  ): (Ref, List[Ref]) = {
-    var newParams: List[Ref] = List.empty
+  ): (Int, List[Int]) = {
+    var newParams: List[Int] = List.empty
     (
       {
         val lhs = stmt.lhs
@@ -339,12 +339,12 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
           }
           case id: Identifier => {
             // get the constructor
-            val ctr = stmts(ctrRef.loc)
+            val ctr = stmts(ctrRef)
               .asInstanceOf[Constructor]
 
             var found = false
-            val components: List[Ref] = ctr.selectors.map { s =>
-              val sel = stmts(s.loc).asInstanceOf[Selector]
+            val components: List[Int] = ctr.selectors.map { s =>
+              val sel = stmts(s).asInstanceOf[Selector]
               if (id.name == sel.name) {
                 found = true
                 val res = exprToTerm(Some(stateParam), Map.empty, rhs)
@@ -385,17 +385,17 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
               val res = exprToTerm(Some(stateParam), Map.empty, expr)
               newParams ++= res._2
               stmts(
-                inferTermType(res._1).loc
+                inferTermType(res._1)
               ).asInstanceOf[AbstractDataType]
                 .defaultCtr()
             }
 
             val exprCtr =
-              stmts(exprCtrRef.loc).asInstanceOf[Constructor]
+              stmts(exprCtrRef).asInstanceOf[Constructor]
 
             // now get the components
             val components: List[Expr] = exprCtr.selectors.map { s =>
-              val sel = stmts(s.loc).asInstanceOf[Selector]
+              val sel = stmts(s).asInstanceOf[Selector]
               if (field.name == sel.name) {
                 rhs
               } else {
@@ -437,14 +437,14 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
     )
   }
 
-  def blockToMacro(
-    stateParam: Ref,
-    ctrRef: Ref, // current module constructor
+  private def blockToMacro(
+    stateParam: Int,
+    ctrRef: Int, // current module constructor
     block: BlockStmt
-  ): (Ref, List[Ref]) = {
+  ): (Int, List[Int]) = {
     letsMapStack.push(new HashMap())
-    var newParams: List[Ref] = List.empty
-    var mostRecentParams: List[Ref] = List.empty
+    var newParams: List[Int] = List.empty
+    var mostRecentParams: List[Int] = List.empty
 
     val bodyRef = if (block.stmts.length > 0) {
 
@@ -483,7 +483,7 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
     val blockRef = memoAddInstruction(
       UserMacro(
         s"line${block.pos.line}col${block.pos.column}!${block.astNodeId}",
-        stmts(ctrRef.loc).asInstanceOf[Constructor].sort,
+        stmts(ctrRef).asInstanceOf[Constructor].sort,
         bodyRef,
         List(stateParam) ++ newParams
       )
@@ -493,11 +493,11 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
     (blockRef, newParams)
   }
 
-  def ifelseToMacro(
-    stateParam: Ref,
-    ctrRef: Ref, // current module constructor
+  private def ifelseToMacro(
+    stateParam: Int,
+    ctrRef: Int, // current module constructor
     ifelse: IfElseStmt
-  ): (Ref, List[Ref]) = {
+  ): (Int, List[Int]) = {
     val left = stmtToMacro(stateParam, ctrRef, ifelse.ifblock)
     val leftAppRef = memoAddInstruction(
       Application(left._1, List(stateParam) ++ left._2)
@@ -519,7 +519,7 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
     val macroRef = memoAddInstruction(
       UserMacro(
         s"line${ifelse.pos.line}col${ifelse.pos.column}!${ifelse.astNodeId}",
-        stmts(ctrRef.loc).asInstanceOf[Constructor].sort,
+        stmts(ctrRef).asInstanceOf[Constructor].sort,
         bodyRef,
         List(stateParam) ++ cond._2 ++ left._2 ++ right._2
       )
@@ -528,9 +528,9 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
     (macroRef, cond._2 ++ left._2 ++ right._2)
   }
 
-  def stmtToMacro(stateParam: Ref, ctrRef: Ref, stmt: Statement): (
-    Ref,
-    List[Ref]
+  private def stmtToMacro(stateParam: Int, ctrRef: Int, stmt: Statement): (
+    Int,
+    List[Int]
   ) = // returns a pointer to the macro and the extra args you need for it
     stmt match {
       case a: AssignStmt => assignToMacro(stateParam, ctrRef, a)
@@ -563,12 +563,12 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
       }
       case l: LetStatement => {
 
-        val modRef = stmts(stateParam.loc).asInstanceOf[FunctionParameter].sort
-        val selRefs = stmts(stmts(modRef.loc).asInstanceOf[Module].ct.loc)
+        val modRef = stmts(stateParam).asInstanceOf[FunctionParameter].sort
+        val selRefs = stmts(stmts(modRef).asInstanceOf[Module].ct)
           .asInstanceOf[Constructor]
           .selectors
         if (selRefs.exists { s =>
-              stmts(s.loc).asInstanceOf[Selector].name == l.id.name
+              stmts(s).asInstanceOf[Selector].name == l.id.name
             }) {
           throw new VariableOverride(
             s"Let statements cannot override state variables!\n\n${l.id.pos.longString}"
@@ -592,19 +592,19 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
     }
 
   // encode a transition block and return a pointer to the function definition
-  def transitionToTerm(
+  private def transitionToTerm(
     funcName: String,
-    stateParam: Ref,
-    ctrRef: Ref,
+    stateParam: Int,
+    ctrRef: Int,
     block: BlockStmt
-  ): (Ref, List[Ref]) = {
+  ): (Int, List[Int]) = {
     val res = stmtToMacro(
       stateParam,
       ctrRef,
       block
     )
 
-    val um = stmts(res._1.loc).asInstanceOf[UserMacro]
+    val um = stmts(res._1).asInstanceOf[UserMacro]
 
     memoUpdateInstruction(
       res._1,
@@ -614,9 +614,9 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
     res
   }
 
-  def getAxiomRef(stateParam: Ref, axioms: List[InnerAxiom]): Ref = {
+  private def getAxiomRef(stateParam: Int, axioms: List[InnerAxiom]): Int = {
     // make sure invariant axioms hold on the fresh instance
-    val specConjuncts = new ListBuffer[Ref]()
+    val specConjuncts = new ListBuffer[Int]()
     val axiomRef = if (axioms.length > 1) {
       val andRef = memoAddInstruction(TheoryMacro("and"))
       axioms.foreach { d =>
@@ -638,17 +638,17 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
     axiomRef
   }
 
-  def executeControl(
+  private def executeControl(
     moduleId: Identifier,
-    initParams: List[Ref],
-    nextParams: List[Ref],
+    initParams: List[Int],
+    nextParams: List[Int],
     cmds: List[Command],
     axioms: List[InnerAxiom]
   ): Unit = {
 
-    def generateInitVariables(): List[Ref] =
+    def generateInitVariables(): List[Int] =
       initParams.map { p =>
-        stmts(p.loc) match {
+        stmts(p) match {
           case FunctionParameter(name, sort) => {
             val vRef =
               memoAddInstruction(UserFunction(name, sort))
@@ -657,12 +657,12 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
         }
       }
 
-    def stepKTimes(k: Int, startRef: Ref, nextRef: Ref): List[Ref] = {
-      val steps: ListBuffer[Ref] = new ListBuffer()
+    def stepKTimes(k: Int, startRef: Int, nextRef: Int): List[Int] = {
+      val steps: ListBuffer[Int] = new ListBuffer()
       steps.addOne(startRef)
       (1 to k).foreach { i =>
         val args = nextParams.tail.map { p =>
-          stmts(p.loc) match {
+          stmts(p) match {
             case FunctionParameter(name, sort) => {
               val vRef =
                 memoAddInstruction(
@@ -689,7 +689,7 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
             case Check() => checkQuery = true
             case GetValue(vars) => {
               options = options.appended(("produce-models", "true"))
-              val vs = proofStates.foldLeft(List.empty: List[Ref]) { (acc, s) =>
+              val vs = proofStates.foldLeft(List.empty: List[Int]) { (acc, s) =>
                 acc ++ vars.map(p => exprToTerm(Some(s), Map.empty, p)._1)
               }
               getValues = Some(vs)
@@ -697,7 +697,7 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
             case Trace(unwind, init, start) => {
               // get the module declaration
               val modRef = typeMap(moduleId)
-              val mod = stmts(modRef.loc)
+              val mod = stmts(modRef)
                 .asInstanceOf[middle.Module]
               val initRef = mod.init
               val nextRef = mod.next
@@ -712,7 +712,7 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
               val fuzzed = fuzz(modRef)
               val startTerm = memoAddInstruction(
                 Application(preInit._1, fuzzed :: preInit._2.map { p =>
-                  stmts(p.loc) match {
+                  stmts(p) match {
                     case FunctionParameter(_, sort) => {
                       fuzz(sort)
                     }
@@ -721,7 +721,7 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
               )
 
               val initVariables = startTerm :: initParams.tail.map { p =>
-                stmts(p.loc) match {
+                stmts(p) match {
                   case FunctionParameter(_, sort) => {
                     fuzz(sort)
                   }
@@ -745,7 +745,7 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
               val k = unwind.literal.toInt
               (1 to k).foreach { i =>
                 val args = nextParams.tail.map { p =>
-                  stmts(p.loc) match {
+                  stmts(p) match {
                     case FunctionParameter(_, sort) => {
                       fuzz(sort)
                     }
@@ -774,7 +774,7 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
               }
 
               // get the module declaration
-              val mod = stmts(typeMap(moduleId).loc)
+              val mod = stmts(typeMap(moduleId))
                 .asInstanceOf[middle.Module]
               val initRef = mod.init
               val nextRef = mod.next
@@ -846,7 +846,7 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
               val initVariables = generateInitVariables()
 
               // get the module declaration
-              val mod = stmts(typeMap(moduleId).loc)
+              val mod = stmts(typeMap(moduleId))
                 .asInstanceOf[middle.Module]
               val initRef = mod.init
               val nextRef = mod.next
@@ -898,16 +898,16 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
   }
 
   // get all the specs and create a function from them
-  def specsToTerm(
+  private def specsToTerm(
     funcName: String,
-    stateParam: Ref,
-    params: List[Ref],
+    stateParam: Int,
+    params: List[Int],
     properties: List[SpecDecl]
-  ): Ref = {
+  ): Int = {
     // spec needs Bool, so add Bool if it's not already there
     val boolRef = memoAddInstruction(TheorySort("Bool"))
 
-    val specConjuncts = new ListBuffer[Ref]()
+    val specConjuncts = new ListBuffer[Int]()
 
     val bodyRef = if (properties.length > 1) {
       val andRef = memoAddInstruction(TheoryMacro("and"))
@@ -937,7 +937,7 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
   } // end helper specsToTerm
 
   // for every variable, if it contains first class modules then make sure they are inited.
-  def createInitAssumes(
+  private def createInitAssumes(
     fields: List[
       (Expr, InlineType)
     ] // variable we want to init and its type
@@ -974,7 +974,7 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
         }
         case NamedType(id) => {
           val sortRef = typeMap(id)
-          stmts(sortRef.loc) match {
+          stmts(sortRef) match {
             case _: middle.Module =>
               acc ++ List(
                 InnerAxiom(
@@ -988,10 +988,10 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
               )
             case adt: AbstractDataType => {
               val ctr =
-                stmts(adt.defaultCtr().loc).asInstanceOf[Constructor]
+                stmts(adt.defaultCtr()).asInstanceOf[Constructor]
 
               val components = ctr.selectors.map { s =>
-                val sel = stmts(s.loc).asInstanceOf[Selector]
+                val sel = stmts(s).asInstanceOf[Selector]
                 val newStarter =
                   OperatorApplication(
                     PolymorphicSelect(Identifier(sel.name)),
@@ -1133,10 +1133,10 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
     val moduleRef = addInstruction(
       middle.Module(
         m.id.name,
-        Ref(-1, None),
-        Ref(-1, None),
-        Ref(-1, None),
-        Ref(-1, None)
+        -1,
+        -1,
+        -1,
+        -1
       )
     )
 
@@ -1156,7 +1156,7 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
       )
 
     // create selectors and remember where they are
-    val selectorTerms = new HashMap[String, Ref]()
+    val selectorTerms = new HashMap[String, Int]()
     val selectorRefs =
       fields.map { v =>
         val typeRef = typeUseToSortRef(v._2)
@@ -1182,9 +1182,9 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
       middle.Module(
         m.id.name,
         constructorRef,
-        Ref(-1, None),
-        Ref(-1, None),
-        Ref(-1, None)
+        -1,
+        -1,
+        -1
       )
     )
 

@@ -5,14 +5,14 @@ import scala.collection.mutable.HashSet
 
 class Writable(stmts: ArrayBuffer[Instruction]) extends Fuzzable(stmts) {
 
-  val TAB = "  "
+  private val TAB = "  "
 
   var isSynthesisQuery = false
   var checkQuery = false
   var traceQuery = false
-  var getValues: Option[List[Ref]] = None
+  var getValues: Option[List[Int]] = None
 
-  def inferLogic(): String = {
+  protected def inferLogic(): String = {
     var uf = false
     var a = false
     var dt = false
@@ -29,10 +29,10 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Fuzzable(stmts) {
           inst._1 match {
             case _: AbstractDataType => dt = true
             case Application(caller, args) => {
-              stmts(caller.loc) match {
+              stmts(caller) match {
                 case TheoryMacro("*", _) => {
                   if (args.filter { a =>
-                        stmts(a.loc) match {
+                        stmts(a) match {
                           case TheoryMacro(name, _) =>
                             name.toIntOption.isDefined
                           case _ => false
@@ -71,43 +71,40 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Fuzzable(stmts) {
   var options: List[(String, String)] =
     List(("produce-assignments", "true"))
 
-  val alreadyDeclared = new HashSet[Ref]()
+  private val alreadyDeclared = new HashSet[Int]()
 
-  def programPointToQueryTerm(
-    point: Ref,
+  protected def programPointToQueryTerm(
+    point: Int,
     indentInput: Int = 0
   ): String = {
     var indent = indentInput
 
-    def dispatch(position: Ref): String = {
-      val res = stmts(position.loc) match {
+    def dispatch(position: Int): String =
+      stmts(position) match {
         case a: Application       => applicationToQueryTerm(a)
         case c: Constructor       => constructorToQueryTerm(c)
         case d: DataType          => datatypeToQueryTerm(d)
         case f: FunctionParameter => functionparameterToQueryTerm(f)
         case s: Selector          => selectorToQueryTerm(s)
         case n: Numeral           => numeralToQueryTerm(n)
-        case r: Ref               => dispatch(r)
-        case t: TheoryMacro       => theorymacroToQueryTerm(t)
-        case t: TheorySort        => theorysortToQueryTerm(t)
-        case u: UserFunction      => userfunctionToQueryTerm(u)
-        case s: Synthesis         => synthesisToQueryTerm(s)
-        case u: UserMacro         => usermacroToQueryTerm(u)
-        case u: UserSort          => usersortToQueryTerm(u)
-        case m: middle.Module     => moduleToQueryTerm(m)
-      }
-      position.named match {
-        case Some(name) if !isSynthesisQuery => {
-          if (alreadyDeclared.contains(position)) {
-            name
+        case r: Ref => {
+          if (!isSynthesisQuery && !alreadyDeclared.contains(r.loc)) {
+            alreadyDeclared.add(r.loc)
+            s"(! ${dispatch(r.loc)} :named ${r.named})"
+          } else if (!isSynthesisQuery && alreadyDeclared.contains(r.loc)) {
+            r.named
           } else {
-            alreadyDeclared.add(position)
-            s"(! ${res} :named ${name})"
+            dispatch(r.loc)
           }
         }
-        case _ => res
+        case t: TheoryMacro   => theorymacroToQueryTerm(t)
+        case t: TheorySort    => theorysortToQueryTerm(t)
+        case u: UserFunction  => userfunctionToQueryTerm(u)
+        case s: Synthesis     => synthesisToQueryTerm(s)
+        case u: UserMacro     => usermacroToQueryTerm(u)
+        case u: UserSort      => usersortToQueryTerm(u)
+        case m: middle.Module => moduleToQueryTerm(m)
       }
-    }
 
     // Helper functions that deal with each case
 
@@ -120,9 +117,9 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Fuzzable(stmts) {
               val t = dispatch(p._1)
 
               // if we have a constructor lets label the arguments
-              if (stmts(a.caller.loc).isInstanceOf[Constructor]) {
+              if (stmts(a.caller).isInstanceOf[Constructor]) {
                 //get the ith selector
-                val ctr = stmts(a.caller.loc).asInstanceOf[Constructor]
+                val ctr = stmts(a.caller).asInstanceOf[Constructor]
                 val comment =
                   s"; assigning to ${dispatch(ctr.selectors(p._2))}\n${TAB * indent}"
                 comment + t
@@ -161,7 +158,7 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Fuzzable(stmts) {
     def theorymacroToQueryTerm(t: TheoryMacro): String =
       if (t.params.length > 0) {
         val args = t.params.map { s =>
-          val sel = stmts(s.loc).asInstanceOf[FunctionParameter]
+          val sel = stmts(s).asInstanceOf[FunctionParameter]
           s"(${sel.name} ${programPointToQueryTerm(sel.sort, 0)})"
         }
         s"${t.name} (${args.mkString(" ")})"
@@ -204,11 +201,11 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Fuzzable(stmts) {
       assertionRefs ++ getValues.getOrElse(List.empty) ++ axiomRefs
     )
 
-    def dispatch(position: Ref): Option[String] =
-      if (toDeclare(position.loc)) {
-        toDeclare.update(position.loc, false)
-        stmts(position.loc) match {
-          case r: Ref          => dispatch(r)
+    def dispatch(position: Int): Option[String] =
+      if (toDeclare(position)) {
+        toDeclare.update(position, false)
+        stmts(position) match {
+          case r: Ref          => dispatch(r.loc)
           case d: DataType     => Some(datatypeToQueryCtx(d))
           case u: UserFunction => Some(userfunctionToQueryCtx(u))
           case s: Synthesis    => Some(synthesisToQueryCtx(s))
@@ -246,12 +243,12 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Fuzzable(stmts) {
       tmp ++= s"${TAB * indent}(declare-datatypes ((${d.name} 0)) (("
       indent += 1
       d.constructors.foreach { ct =>
-        val ctr = stmts(ct.loc).asInstanceOf[Constructor]
+        val ctr = stmts(ct).asInstanceOf[Constructor]
         tmp ++= s"(${ctr.name}"
         indent += 1
         ctr.selectors.foreach { s =>
           tmp ++= "\n"
-          val sel = stmts(s.loc).asInstanceOf[Selector]
+          val sel = stmts(s).asInstanceOf[Selector]
           tmp ++= s"${TAB * indent}(${sel.name} ${programPointToQueryTerm(sel.sort, indent)})"
         }
         indent -= 1
@@ -290,7 +287,7 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Fuzzable(stmts) {
       val tmp = new StringBuilder()
       tmp ++= s"${TAB * indent}(define-fun ${u.name} (${u.params
         .map { p =>
-          val fp = stmts(p.loc).asInstanceOf[FunctionParameter]
+          val fp = stmts(p).asInstanceOf[FunctionParameter]
           s"(${fp.name} ${programPointToQueryTerm(fp.sort, indent)})"
         }
         .mkString(" ")}) "
@@ -310,7 +307,7 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Fuzzable(stmts) {
       val tmp = new StringBuilder()
       tmp ++= s"${TAB * indent}(synth-fun ${u.name} (${u.params
         .map { p =>
-          val fp = stmts(p.loc).asInstanceOf[FunctionParameter]
+          val fp = stmts(p).asInstanceOf[FunctionParameter]
           s"(${fp.name} ${programPointToQueryTerm(fp.sort, indent)})"
         }
         .mkString(" ")}) "
@@ -325,14 +322,14 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Fuzzable(stmts) {
 
     def moduleToQueryCtx(m: middle.Module): String = {
       val tmp = new StringBuilder()
-      val ctr = stmts(m.ct.loc).asInstanceOf[Constructor]
+      val ctr = stmts(m.ct).asInstanceOf[Constructor]
       tmp ++= s"${TAB * indent}; declaring module ${m.name} \n"
       indent += 1
       tmp ++= s"${TAB * indent}(declare-datatypes ((${m.name} 0)) (((${ctr.name}"
       indent += 1
       ctr.selectors.foreach { s =>
         tmp ++= "\n"
-        val sel = stmts(s.loc).asInstanceOf[Selector]
+        val sel = stmts(s).asInstanceOf[Selector]
         tmp ++= s"${TAB * indent}(${sel.name} ${programPointToQueryTerm(sel.sort, indent)})"
       }
       tmp ++= "))))\n\n"
@@ -349,7 +346,7 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Fuzzable(stmts) {
     }
 
     stmts.zipWithIndex
-      .map(p => dispatch(Ref(p._2, None)))
+      .map(p => dispatch(p._2))
       .flatten
       .mkString("\n")
   }

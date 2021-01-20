@@ -6,104 +6,107 @@ import scala.collection.mutable.ListBuffer
 
 class Minimal(stmts: ArrayBuffer[Instruction]) extends WellFormed(stmts) {
 
-  val assertionRefs: ListBuffer[Ref] = new ListBuffer()
-  val axiomRefs: ListBuffer[Ref] = new ListBuffer()
+  val assertionRefs: ListBuffer[Int] = new ListBuffer()
+  val axiomRefs: ListBuffer[Int] = new ListBuffer()
 
-  val memo: HashMap[Instruction, Ref] =
-    new HashMap().addAll(stmts.zipWithIndex.map(p => (p._1, Ref(p._2, None))))
+  private val memo: HashMap[Instruction, Int] =
+    new HashMap().addAll(stmts.zipWithIndex.map(p => (p._1, p._2)))
 
-  def memoAddInstruction(
+  /** Add instruction to stmts if it isn't already there, otherwise return its location.
+    *
+    * If the instruction should be named, then add a reference to it and point to that.
+    *
+    * @param inst instruction to add
+    * @param toName the Option[String] to name the instruction
+    * @return the location of the instruction
+    */
+  protected def memoAddInstruction(
     inst: Instruction,
     toName: Option[String] = None
-  ): Ref =
-    // we want to name what ever reference we get back, unless it already has a name
-    memo.get(inst) match {
-      case Some(value) => {
-        value.named match {
-          case Some(_) => value
-          case None => {
-            // it is not already named so name it
-            val newLoc = Ref(stmts.length, toName)
-            stmts.addOne(inst)
-            memo.addOne((inst, newLoc))
-            newLoc
-          }
-        }
-      }
+  ): Int = {
+    val location = memo.get(inst) match {
+      case Some(loc) => loc
       case None => {
-        // it is not already saved, so name it
-        val newLoc = Ref(stmts.length, toName)
         stmts.addOne(inst)
-        memo.addOne((inst, newLoc))
+        val newLoc = stmts.length - 1
+        memo(inst) = newLoc
         newLoc
       }
     }
+    toName match {
+      case Some(name) => {
+        stmts.addOne(Ref(location, name))
+        val newLoc = stmts.length - 1
+        memo(inst) = newLoc
+        newLoc
+      }
+      case None => location
+    }
+  }
 
-  def addInstruction(inst: Instruction): Ref = {
+  protected def addInstruction(inst: Instruction): Int = {
     stmts.addOne(inst)
-    Ref(stmts.length - 1, None)
+    stmts.length - 1
   }
 
-  def memoUpdateInstruction(r: Ref, newInstruction: Instruction): Unit = {
-    val old = stmts(r.loc)
-    stmts.update(r.loc, newInstruction)
+  protected def memoUpdateInstruction(
+    r: Int,
+    newInstruction: Instruction
+  ): Unit = {
+    val old = stmts(r)
+    memo(newInstruction) = memo.getOrElse(old, r)
     memo.remove(old)
-    memo(newInstruction) = r
+    stmts.update(r, newInstruction)
   }
 
-  def mark(startingPoints: Iterable[Ref]): Array[Boolean] = {
+  protected def memoGetInstruction(inst: Instruction): Int =
+    memo(inst)
+
+  protected def mark(startingPoints: Iterable[Int]): Array[Boolean] = {
     val marks = Array.fill[Boolean](stmts.length)(false)
     startingPoints.foreach(r => mark_i(r, marks))
     marks
   }
 
-  def mark_i(position: Ref, marks: Array[Boolean]): Unit = {
-    def markParams(params: List[Ref]) =
-      params.foreach { p =>
-        if (!marks(p.loc)) {
-          marks(p.loc) = true
-          markInstruction(stmts(p.loc))
+  private def mark_i(position: Int, marks: Array[Boolean]): Unit = {
+    def markParams(params: List[Int]) =
+      params.foreach(p => markInstruction(p))
+
+    def markInstruction(pos: Int): Unit =
+      if (!marks(pos)) {
+        marks(pos) = true
+        stmts(pos) match {
+          case Ref(i, _)               => markInstruction(i)
+          case Numeral(_)              =>
+          case TheorySort(_, p)        => markParams(p)
+          case UserSort(_, _)          =>
+          case FunctionParameter(_, s) => markInstruction(s)
+          case TheoryMacro(_, p)       => markParams(p)
+          case UserMacro(_, s, b, p) =>
+            markInstruction(s); markInstruction(b); markParams(p)
+          case UserFunction(_, s, p) => markInstruction(s); markParams(p)
+          case Synthesis(_, s, p)    => markInstruction(s); markParams(p)
+          case Constructor(_, _, p)  => markParams(p)
+          case Selector(_, s)        => markInstruction(s)
+          case DataType(_, p)        => markParams(p)
+          case Module(_, d, i, x, v) =>
+            markInstruction(i); markInstruction(d); markInstruction(x);
+            markInstruction(v)
+          case Application(caller, args) =>
+            markInstruction(caller); args.foreach(i => markInstruction(i))
         }
       }
 
-    def markInstruction(instruction: Instruction): Unit =
-      instruction match {
-        case Ref(i, _) => {
-          if (!marks(i)) {
-            marks(i) = true
-            markInstruction(stmts(i))
-          }
-        }
-        case Numeral(_)              =>
-        case TheorySort(_, p)        => markParams(p)
-        case UserSort(_, _)          =>
-        case FunctionParameter(_, s) => markInstruction(s)
-        case TheoryMacro(_, p)       => markParams(p)
-        case UserMacro(_, s, b, p) =>
-          markInstruction(s); markInstruction(b); markParams(p)
-        case UserFunction(_, s, p) => markInstruction(s); markParams(p)
-        case Synthesis(_, s, p)    => markInstruction(s); markParams(p)
-        case Constructor(_, _, p)  => markParams(p)
-        case Selector(_, s)        => markInstruction(s)
-        case DataType(_, p)        => markParams(p)
-        case Module(_, d, i, x, v) =>
-          markInstruction(i); markInstruction(d); markInstruction(x);
-          markInstruction(v)
-        case Application(caller, args) =>
-          markInstruction(caller); args.foreach(i => markInstruction(i))
-      }
-
-    marks(position.loc) = true
-    markInstruction(stmts(position.loc))
+    markInstruction(position)
   }
 
   /*
   Copy an application term by inserting new copies of all instructions and returning a map describing the copy
    */
-  def copyTerm(pos: Ref): Ref = {
+  protected def copyTerm(pos: Int): Int = {
     assert(
-      stmts(pos.loc).isInstanceOf[Application],
-      s"should be an application but is ${stmts(pos.loc)}"
+      stmts(pos).isInstanceOf[Application],
+      s"should be an application but is ${stmts(pos)}"
     )
     val map = copyTermHelper(pos)
     updateTerm(map(pos), map)
@@ -113,15 +116,15 @@ class Minimal(stmts: ArrayBuffer[Instruction]) extends WellFormed(stmts) {
   /*
   Copies the term but instead of updating references, returns a map describing the changes
    */
-  def copyTermHelper(
-    pos: Ref,
-    map: HashMap[Ref, Ref] = HashMap.empty
-  ): HashMap[Ref, Ref] = {
-    stmts(pos.loc) match {
+  private def copyTermHelper(
+    pos: Int,
+    map: HashMap[Int, Int] = HashMap.empty
+  ): HashMap[Int, Int] = {
+    stmts(pos) match {
       case Application(caller, args) => {
         val newCaller = copyTermHelper(caller, map).getOrElse(caller, caller)
         val newArgs = args.map(a => copyTermHelper(a, map).getOrElse(a, a))
-        val newPos: Ref = addInstruction(Application(newCaller, newArgs))
+        val newPos: Int = addInstruction(Application(newCaller, newArgs))
         map.addOne((pos, newPos))
       }
       case _ =>
@@ -132,8 +135,8 @@ class Minimal(stmts: ArrayBuffer[Instruction]) extends WellFormed(stmts) {
   /*
   Updates the references in an application using the map
    */
-  def updateTerm(pos: Ref, map: HashMap[Ref, Ref]): Unit =
-    stmts(pos.loc) match {
+  protected def updateTerm(pos: Int, map: HashMap[Int, Int]): Unit =
+    stmts(pos) match {
       case Application(caller, args) => {
         memoUpdateInstruction(
           pos,

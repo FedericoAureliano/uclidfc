@@ -1,6 +1,7 @@
 // UCLID TEST
 // Solver=z3
 // Rewrite=blast-enum-quantifiers
+// Result=Some(false)
 
 type cases = enum {A, B, C};
 

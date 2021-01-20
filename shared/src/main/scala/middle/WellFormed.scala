@@ -9,14 +9,14 @@ Passing semantic checks must gurantee a well formed query
 class WellFormed(stmts: ArrayBuffer[Instruction]) extends TermGraph(stmts) {
 
   def checkRefBounds(): Unit = {
-    def checkRef(r: Ref): Boolean = r.loc < stmts.length && r.loc >= 0
+    def checkRef(r: Int): Boolean = r < stmts.length && r >= 0
 
     stmts.zipWithIndex.foreach {
       case (s, i) => {
         val err = s"${i}: ${s} >>> REFERENCE OUT OF BOUNDS!"
         s match {
           case r: Ref =>
-            if (!checkRef(r)) throw new RefOutOfBoundsError(err)
+            if (!checkRef(r.loc)) throw new RefOutOfBoundsError(err)
           case Numeral(_) =>
           case TheorySort(_, p) =>
             p.foreach(a => if (!checkRef(a)) throw new RefOutOfBoundsError(err))
@@ -63,19 +63,19 @@ class WellFormed(stmts: ArrayBuffer[Instruction]) extends TermGraph(stmts) {
     None
   }
 
-  def inferTermType(
-    app: Ref
-  ): Ref =
-    stmts(app.loc) match {
+  protected def inferTermType(
+    app: Int
+  ): Int =
+    stmts(app) match {
       case Application(caller, args) => {
-        stmts(caller.loc) match {
+        stmts(caller) match {
           case TheoryMacro("ite", _) => inferTermType(args.head)
           case TheoryMacro("store", _) =>
             inferTermType(args.head)
           case TheoryMacro("select", _) => {
             val arrayRef = inferTermType(args.head)
             val arraySort =
-              stmts(arrayRef.loc).asInstanceOf[TheorySort]
+              stmts(arrayRef).asInstanceOf[TheorySort]
             arraySort.params.last
           }
           case _ => inferTermType(caller)
@@ -86,9 +86,10 @@ class WellFormed(stmts: ArrayBuffer[Instruction]) extends TermGraph(stmts) {
       case Selector(_, sort)          => sort
       case UserMacro(_, sort, _, _)   => sort
       case UserFunction(_, sort, _)   => sort
+      case Ref(loc, _)                => inferTermType(loc)
       case _ =>
         throw new IllegalArgumentException(
-          s"type inference not yet supported: ${stmts(app.loc)}"
+          s"type inference not yet supported: ${stmts(app)}"
         )
     }
 }

@@ -6,11 +6,11 @@ import scala.collection.mutable.ArrayBuffer
 abstract class Instruction
 
 abstract class AbstractDataType extends Instruction {
-  def defaultCtr(): Ref
+  def defaultCtr(): Int
 }
 
 // Points to another position in the array
-case class Ref(loc: Int, named: Option[String]) extends Instruction {}
+case class Ref(loc: Int, named: String) extends Instruction {}
 
 /*
 Numerals are used for e.g. fixed-width bit-vectors
@@ -25,7 +25,7 @@ Theory sorts are interpreted sorts like "Int." For example, 32-bit bit-vectors a
 
 The params can point to other sorts or numerals.
  */
-case class TheorySort(name: String, params: List[Ref] = List.empty)
+case class TheorySort(name: String, params: List[Int] = List.empty)
     extends Instruction {}
 
 /*
@@ -37,7 +37,7 @@ case class UserSort(name: String, arity: Numeral = Numeral(0))
 /*
 Function parameters, must be arity 0
  */
-case class FunctionParameter(name: String, sort: Ref) extends Instruction {}
+case class FunctionParameter(name: String, sort: Int) extends Instruction {}
 
 /*
 Theory macros are interpreted functions, like "+", "1", and "#b11110000".
@@ -51,7 +51,7 @@ Quantifiers are special in that they bind parameters. For example, (forall ((x I
 [fpr] x       #6
 [tst] Int
  */
-case class TheoryMacro(name: String, params: List[Ref] = List.empty)
+case class TheoryMacro(name: String, params: List[Int] = List.empty)
     extends Instruction {}
 
 /*
@@ -65,9 +65,9 @@ User macros are function definitions like f(x) = x + x, which would be in LIR
  */
 case class UserMacro(
   name: String,
-  sort: Ref,
-  body: Ref,
-  params: List[Ref] = List.empty
+  sort: Int,
+  body: Int,
+  params: List[Int] = List.empty
 ) extends Instruction {}
 
 /*
@@ -77,22 +77,22 @@ User functions are uninterpreted functions. For example, f(x : Int) : Int would 
 [fpr] x   #2
 [tst] Int
  */
-case class UserFunction(name: String, sort: Ref, params: List[Ref] = List.empty)
+case class UserFunction(name: String, sort: Int, params: List[Int] = List.empty)
     extends Instruction {}
 
 case class Synthesis(
   name: String,
-  sort: Ref,
-  params: List[Ref] = List.empty
+  sort: Int,
+  params: List[Int] = List.empty
 ) extends Instruction {}
 
 case class Constructor(
   name: String,
-  sort: Ref,
-  selectors: List[Ref] = List.empty
+  sort: Int,
+  selectors: List[Int] = List.empty
 ) extends Instruction {}
 
-case class Selector(name: String, sort: Ref) extends Instruction {}
+case class Selector(name: String, sort: Int) extends Instruction {}
 
 /*
 For algebraic datatypes like enums, records, and so on. For example a record R = {x: Int, y: Real} is
@@ -104,25 +104,25 @@ For algebraic datatypes like enums, records, and so on. For example a record R =
 [tst] Int
 [tst] Real
  */
-case class DataType(name: String, constructors: List[Ref])
+case class DataType(name: String, constructors: List[Int])
     extends AbstractDataType {
-  override def defaultCtr(): Ref = constructors.head
+  override def defaultCtr(): Int = constructors.head
 }
 
 /*
 A module is a record with associated init function, next function, and spec function.
  */
-case class Module(name: String, ct: Ref, init: Ref, next: Ref, spec: Ref)
+case class Module(name: String, ct: Int, init: Int, next: Int, spec: Int)
     extends AbstractDataType {
-  override def defaultCtr(): Ref = ct
+  override def defaultCtr(): Int = ct
 }
 
-case class Application(caller: Ref, args: List[Ref]) extends Instruction {}
+case class Application(caller: Int, args: List[Int]) extends Instruction {}
 
 class TermGraph(val stmts: ArrayBuffer[Instruction]) {
   var uniqueId = 0
 
-  def freshSymbolName(): String = {
+  protected def freshSymbolName(): String = {
     uniqueId += 1
     s"fresh!${uniqueId}"
   }

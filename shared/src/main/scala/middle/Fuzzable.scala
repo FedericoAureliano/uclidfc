@@ -6,8 +6,8 @@ import scala.util.Random
 class Fuzzable(stmts: ArrayBuffer[Instruction]) extends Rewritable(stmts) {
   val random = new Random
 
-  def fuzz(position: Ref): Ref =
-    stmts(position.loc) match {
+  def fuzz(position: Int): Int =
+    stmts(position) match {
       case d: DataType      => fuzzDatatype(d)
       case t: TheorySort    => fuzzTheorysort(t)
       case u: UserSort      => fuzzUsersort(u)
@@ -18,33 +18,34 @@ class Fuzzable(stmts: ArrayBuffer[Instruction]) extends Rewritable(stmts) {
         )
     }
 
-  def fuzzModule(mod: Module): Ref = {
+  private def fuzzModule(mod: Module): Int = {
     // apply constructor to random instances of all its selectors
-    val components = stmts(mod.ct.loc).asInstanceOf[Constructor].selectors.map {
+    val components = stmts(mod.ct).asInstanceOf[Constructor].selectors.map {
       s =>
-        val sel = stmts(s.loc).asInstanceOf[Selector]
+        val sel = stmts(s).asInstanceOf[Selector]
         fuzz(sel.sort)
     }
     val body = memoAddInstruction(Application(mod.ct, components))
     memoAddInstruction(
-      UserMacro(freshSymbolName(), memo(mod), body, List.empty)
+      UserMacro(freshSymbolName(), memoGetInstruction(mod), body, List.empty)
     )
   }
 
-  def fuzzDatatype(d: DataType): Ref = {
+  private def fuzzDatatype(d: DataType): Int = {
     // pick a random constructor
     val ctr = d.constructors(random.nextInt(d.constructors.length))
     // apply constructor to random instances of all its selectors
-    val components = stmts(ctr.loc).asInstanceOf[Constructor].selectors.map {
-      s =>
-        val sel = stmts(s.loc).asInstanceOf[Selector]
-        fuzz(sel.sort)
+    val components = stmts(ctr).asInstanceOf[Constructor].selectors.map { s =>
+      val sel = stmts(s).asInstanceOf[Selector]
+      fuzz(sel.sort)
     }
     val body = memoAddInstruction(Application(ctr, components))
-    memoAddInstruction(UserMacro(freshSymbolName(), memo(d), body, List.empty))
+    memoAddInstruction(
+      UserMacro(freshSymbolName(), memoGetInstruction(d), body, List.empty)
+    )
   }
 
-  def fuzzTheorysort(t: TheorySort): Ref =
+  private def fuzzTheorysort(t: TheorySort): Int =
     t match {
       case TheorySort("Bool", _) =>
         memoAddInstruction(TheoryMacro(random.nextBoolean().toString()))
@@ -54,7 +55,9 @@ class Fuzzable(stmts: ArrayBuffer[Instruction]) extends Rewritable(stmts) {
         val out = fuzz(params.last)
         val asConstAppRef = {
           val asConstRef = memoAddInstruction(TheoryMacro("as const"))
-          memoAddInstruction(Application(asConstRef, List(memo(t))))
+          memoAddInstruction(
+            Application(asConstRef, List(memoGetInstruction(t)))
+          )
         }
         memoAddInstruction(
           Application(asConstAppRef, List(out))
@@ -66,6 +69,6 @@ class Fuzzable(stmts: ArrayBuffer[Instruction]) extends Rewritable(stmts) {
         )
     }
 
-  def fuzzUsersort(u: UserSort): Ref =
-    memoAddInstruction(UserFunction(freshSymbolName(), memo(u)))
+  private def fuzzUsersort(u: UserSort): Int =
+    memoAddInstruction(UserFunction(freshSymbolName(), memoGetInstruction(u)))
 }
