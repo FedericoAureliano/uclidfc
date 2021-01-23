@@ -8,9 +8,7 @@ import java.io.File
 class Feature {
 
   @Test def testFeatures(): Unit = {
-    val tests = (new File("models/tests/features").listFiles ++ new File(
-      "models/examples"
-    ).listFiles)
+    val tests = (new File("models/tests/features").listFiles)
       .filter(_.isFile)
       .map(f => readTestFile(f))
     tests.foreach { t =>

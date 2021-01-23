@@ -1,10 +1,6 @@
-// UCLID TEST
-// Solver=z3
-// Result=Some(false)
-
 // Declare machine reference types
-type AbstractServerMachine_ref_t = enum {server_a};
-type ClientMachine_ref_t = enum {client_a};
+type AbstractServerMachine_ref_t = enum {s1, s2};
+type ClientMachine_ref_t = enum {c1, c2};
 const default_server: AbstractServerMachine_ref_t;
 const default_client: ClientMachine_ref_t;
 
@@ -23,6 +19,8 @@ define push_request(q: eRequest_queue, r : eRequest_t) : eRequest_queue = eReque
 define init_requests() : eRequest_queue = eRequest_queue(0, 0, const(eRequest_t(default_client, default_server, 0), [integer]eRequest_t));
 define is_empty_requests(q: eRequest_queue) : boolean = q.end <= q.start;
 define requests_size(q: eRequest_queue) : integer = q.end - q.start; // only with integers
+define in_requests(q: eRequest_queue, pos: integer) : boolean = pos >= q.start && pos < q.end;
+define get_request(q: eRequest_queue, pos: integer) : eRequest_t = q.data[pos];
 
 define pop_response(q: eResponse_queue) : eResponse_queue = eResponse_queue(q.start + 1, q.end, q.data);
 define peak_response(q: eResponse_queue) : eResponse_t = q.data[q.start];
@@ -30,6 +28,8 @@ define push_response(q: eResponse_queue, r: eResponse_t) : eResponse_queue = eRe
 define init_responses() : eResponse_queue = eResponse_queue(0, 0, const(eResponse_t(default_server, default_client, 0, false), [integer]eResponse_t));
 define is_empty_responses(q: eResponse_queue) : boolean = q.end <= q.start;
 define responses_size(q: eResponse_queue) : integer = q.end - q.start; // only with integers
+define in_responses(q: eResponse_queue, pos: integer) : boolean = pos >= q.start && pos < q.end;
+define get_response(q: eResponse_queue, pos: integer) : eResponse_t = q.data[pos];
 
 // declare machines
 module AbstractServerMachine {
@@ -167,61 +167,134 @@ module main {
         }
     }
 
-    invariant assertion: !is_empty_responses(cinstances[client_a].eResponse_in) ==> 
-        peak_response(cinstances[client_a].eResponse_in).id > cinstances[client_a].ghost_last_id;
+    invariant main_assertion: forall (client_x: ClientMachine_ref_t) :: 
+        !is_empty_responses(cinstances[client_x].eResponse_in) ==> 
+            peak_response(cinstances[client_x].eResponse_in).id > cinstances[client_x].ghost_last_id;
 
-    invariant max_one_event_in_whole_system: 
-        responses_size(sinstances[server_a].eResponse_out) + 
-        responses_size(cinstances[client_a].eResponse_in) + 
-        requests_size(sinstances[server_a].eRequest_in) + 
-        requests_size(cinstances[client_a].eRequest_out) <= 1;
+    axiom correct_this_pointer_at_start: forall (client_x: ClientMachine_ref_t) :: cinstances[client_x].this == client_x;
 
-    invariant entry_means_everything_empty: cinstances[client_a].entry ==>
-        responses_size(sinstances[server_a].eResponse_out) + 
-        responses_size(cinstances[client_a].eResponse_in) + 
-        requests_size(sinstances[server_a].eRequest_in) + 
-        requests_size(cinstances[client_a].eRequest_out) == 0;
+    axiom sizes_never_negative_at_start: forall (client_x: ClientMachine_ref_t, server_x: AbstractServerMachine_ref_t) :: 
+        responses_size(sinstances[server_x].eResponse_out) >= 0 &&
+        responses_size(cinstances[client_x].eResponse_in) >= 0 &&
+        requests_size(sinstances[server_x].eRequest_in) >= 0 &&
+        requests_size(cinstances[client_x].eRequest_out) >= 0;
 
-    invariant sizes_never_negative: 
-        responses_size(sinstances[server_a].eResponse_out) >= 0 &&
-        responses_size(cinstances[client_a].eResponse_in) >= 0 &&
-        requests_size(sinstances[server_a].eRequest_in) >= 0 &&
-        requests_size(cinstances[client_a].eRequest_out) >= 0;
+    // these next four invariants encode at most one queue in system has an event related to each client
+    invariant if_response_to_client_then_no_other_client_event: forall (client_x: ClientMachine_ref_t, pos2 : integer) :: 
+        (exists (pos1: integer) :: in_responses(sinstances[cinstances[client_x].server].eResponse_out, pos1) &&  
+        get_response(sinstances[cinstances[client_x].server].eResponse_out, pos1).target == client_x) ==>
+            ((in_responses(cinstances[client_x].eResponse_in, pos2) ==>  
+                get_response(cinstances[client_x].eResponse_in, pos2).target != client_x) &&
+            (in_requests(sinstances[cinstances[client_x].server].eRequest_in, pos2) ==>  
+                get_request(sinstances[cinstances[client_x].server].eRequest_in, pos2).source != client_x) &&
+            (in_requests(cinstances[client_x].eRequest_out, pos2) ==>  
+                get_request(cinstances[client_x].eRequest_out, pos2).source != client_x));
 
-    invariant sizes_never_gt_1: 
-        responses_size(sinstances[server_a].eResponse_out) <= 1 &&
-        responses_size(cinstances[client_a].eResponse_in) <= 1 &&
-        requests_size(sinstances[server_a].eRequest_in) <= 1 &&
-        requests_size(cinstances[client_a].eRequest_out) <= 1;
+    invariant if_response_from_server_then_no_other_client_event: forall (client_x: ClientMachine_ref_t, pos2 : integer) :: 
+        (exists (pos1: integer) :: in_responses(cinstances[client_x].eResponse_in, pos1) &&  
+        get_response(cinstances[client_x].eResponse_in, pos1).target == client_x) ==>
+            ((in_responses(sinstances[cinstances[client_x].server].eResponse_out, pos2) ==>  
+                get_response(sinstances[cinstances[client_x].server].eResponse_out, pos2).target != client_x) &&
+            (in_requests(sinstances[cinstances[client_x].server].eRequest_in, pos2) ==>  
+                get_request(sinstances[cinstances[client_x].server].eRequest_in, pos2).source != client_x) &&
+            (in_requests(cinstances[client_x].eRequest_out, pos2) ==>  
+                get_request(cinstances[client_x].eRequest_out, pos2).source != client_x));
 
-    invariant every_event_id_gt_last_id: 
-        (!is_empty_requests(cinstances[client_a].eRequest_out) ==> 
-            peak_request(cinstances[client_a].eRequest_out).id == cinstances[client_a].next_id - 1) &&
-        (!is_empty_requests(sinstances[server_a].eRequest_in) ==> 
-            peak_request(sinstances[server_a].eRequest_in).id == cinstances[client_a].next_id - 1) &&
-        (!is_empty_responses(sinstances[server_a].eResponse_out) ==> 
-            peak_response(sinstances[server_a].eResponse_out).id == cinstances[client_a].next_id - 1) &&
-        (!is_empty_responses(cinstances[client_a].eResponse_in) ==> 
-            peak_response(cinstances[client_a].eResponse_in).id == cinstances[client_a].next_id - 1);
+    invariant if_request_from_client_then_no_other_client_event: forall (client_x: ClientMachine_ref_t, pos2 : integer) :: 
+        (exists (pos1: integer) :: in_requests(sinstances[cinstances[client_x].server].eRequest_in, pos1) &&  
+        get_request(sinstances[cinstances[client_x].server].eRequest_in, pos1).source == client_x) ==>
+            ((in_responses(cinstances[client_x].eResponse_in, pos2) ==>  
+                get_response(cinstances[client_x].eResponse_in, pos2).target != client_x) &&
+            (in_responses(sinstances[cinstances[client_x].server].eResponse_out, pos2) ==>  
+                get_response(sinstances[cinstances[client_x].server].eResponse_out, pos2).target != client_x) &&
+            (in_requests(cinstances[client_x].eRequest_out, pos2) ==>  
+                get_request(cinstances[client_x].eRequest_out, pos2).source != client_x));
 
-    invariant next_gt_last: 
-        cinstances[client_a].next_id - cinstances[client_a].last_id > 1 || 
-        (cinstances[client_a].entry && cinstances[client_a].next_id - cinstances[client_a].last_id == 1);
+    invariant if_request_to_server_then_no_other_client_event: forall (client_x: ClientMachine_ref_t, pos2 : integer) :: 
+        (exists (pos1: integer) :: in_requests(cinstances[client_x].eRequest_out, pos1) &&  
+        get_request(cinstances[client_x].eRequest_out, pos1).source == client_x) ==>
+            ((in_responses(cinstances[client_x].eResponse_in, pos2) ==>  
+                get_response(cinstances[client_x].eResponse_in, pos2).target != client_x) &&
+            (in_requests(sinstances[cinstances[client_x].server].eRequest_in, pos2) ==>  
+                get_request(sinstances[cinstances[client_x].server].eRequest_in, pos2).source != client_x) &&
+            (in_responses(sinstances[cinstances[client_x].server].eResponse_out, pos2) ==>  
+                get_response(sinstances[cinstances[client_x].server].eResponse_out, pos2).target != client_x));
 
-    invariant ghost_trails_real: cinstances[client_a].last_id >= cinstances[client_a].ghost_last_id;
+    // this invariant encodes that each event queue has at most one event related to each client
+    invariant sizes_never_gt_1: forall (client_x: ClientMachine_ref_t, pos1: integer, pos2: integer) :: 
+        ((in_responses(sinstances[cinstances[client_x].server].eResponse_out, pos1) && 
+            in_responses(sinstances[cinstances[client_x].server].eResponse_out, pos2) &&
+            get_response(sinstances[cinstances[client_x].server].eResponse_out, pos1).target == client_x &&
+            get_response(sinstances[cinstances[client_x].server].eResponse_out, pos2).target == client_x) ==>
+                pos1 == pos2) &&
+        ((in_responses(cinstances[client_x].eResponse_in, pos1) && 
+            in_responses(cinstances[client_x].eResponse_in, pos2) &&
+            get_response(cinstances[client_x].eResponse_in, pos1).target == client_x &&
+            get_response(cinstances[client_x].eResponse_in, pos2).target == client_x) ==>
+                pos1 == pos2) &&
+        ((in_requests(sinstances[cinstances[client_x].server].eRequest_in, pos1) && 
+            in_requests(sinstances[cinstances[client_x].server].eRequest_in, pos2) &&
+            get_request(sinstances[cinstances[client_x].server].eRequest_in, pos1).source == client_x &&
+            get_request(sinstances[cinstances[client_x].server].eRequest_in, pos2).source == client_x) ==>
+                pos1 == pos2) &&
+        ((in_requests(cinstances[client_x].eRequest_out, pos1) && 
+            in_requests(cinstances[client_x].eRequest_out, pos2) &&
+            get_request(cinstances[client_x].eRequest_out, pos1).source == client_x &&
+            get_request(cinstances[client_x].eRequest_out, pos2).source == client_x) ==>
+                pos1 == pos2);
 
-    invariant all_ids_gte_zero: cinstances[client_a].last_id >= 0 && cinstances[client_a].next_id >= 0 && cinstances[client_a].ghost_last_id >= 0;
+    // if a client is in entry, then there are no events for it floating around
+    invariant entry_means_everything_empty: forall (client_x: ClientMachine_ref_t, pos: integer) :: 
+        cinstances[client_x].entry ==>
+            ((in_responses(sinstances[cinstances[client_x].server].eResponse_out, pos) ==> get_response(sinstances[cinstances[client_x].server].eResponse_out, pos).target != client_x) &&
+            (in_responses(cinstances[client_x].eResponse_in, pos)           ==> get_response(cinstances[client_x].eResponse_in, pos).target          != client_x) &&
+            (in_requests(sinstances[cinstances[client_x].server].eRequest_in, pos)  ==> get_request(sinstances[cinstances[client_x].server].eRequest_in, pos).source != client_x) &&
+            (in_requests(cinstances[client_x].eRequest_out, pos)               ==> get_request(cinstances[client_x].eRequest_out, pos).source              != client_x));
+
+    invariant every_event_id_gt_last_id: forall (client_x: ClientMachine_ref_t, pos: integer) :: 
+        (in_requests(cinstances[client_x].eRequest_out, pos) ==> 
+            get_request(cinstances[client_x].eRequest_out, pos).id == cinstances[client_x].next_id - 1) &&
+        (in_requests(sinstances[cinstances[client_x].server].eRequest_in, pos) ==> 
+            get_request(sinstances[cinstances[client_x].server].eRequest_in, pos).id == cinstances[client_x].next_id - 1) &&
+        (in_responses(sinstances[cinstances[client_x].server].eResponse_out, pos) ==> 
+            get_response(sinstances[cinstances[client_x].server].eResponse_out, pos).id == cinstances[client_x].next_id - 1) &&
+        (in_responses(cinstances[client_x].eResponse_in, pos) ==> 
+            get_response(cinstances[client_x].eResponse_in, pos).id == cinstances[client_x].next_id - 1);
+
+    invariant next_gt_last: forall (client_x: ClientMachine_ref_t) :: 
+        cinstances[client_x].next_id - cinstances[client_x].last_id > 1 || 
+        (cinstances[client_x].entry && cinstances[client_x].next_id - cinstances[client_x].last_id == 1);
+
+    invariant ghost_trails_real: forall (client_x: ClientMachine_ref_t) :: 
+        cinstances[client_x].last_id >= cinstances[client_x].ghost_last_id;
+
+    invariant server_only_communicates_with_matching_client: forall (server_x: AbstractServerMachine_ref_t, pos: integer) ::
+        (in_responses(sinstances[server_x].eResponse_out, pos) ==> 
+            cinstances[get_response(sinstances[server_x].eResponse_out, pos).target].server == server_x) && 
+        (in_requests(sinstances[server_x].eRequest_in, pos) ==> 
+            cinstances[get_request(sinstances[server_x].eRequest_in, pos).source].server == server_x);
+
+    invariant client_only_communicates_with_matching_server: forall (client_x: ClientMachine_ref_t, pos: integer) ::
+        (in_responses(cinstances[client_x].eResponse_in, pos) ==> 
+            get_response(cinstances[client_x].eResponse_in, pos).source == cinstances[client_x].server) && 
+        (in_requests(cinstances[client_x].eRequest_out, pos) ==> 
+            get_request(cinstances[client_x].eRequest_out, pos).target == cinstances[client_x].server);
+
+    invariant correct_server_source_and_target: forall (server_x : AbstractServerMachine_ref_t, pos: integer) ::
+        (in_responses(sinstances[server_x].eResponse_out, pos) ==> 
+            get_response(sinstances[server_x].eResponse_out, pos).source == server_x) && 
+        (in_requests(sinstances[server_x].eRequest_in, pos) ==> 
+            get_request(sinstances[server_x].eRequest_in, pos).target == server_x);
+
+    invariant correct_client_source_and_target: forall (client_x : ClientMachine_ref_t, pos: integer) ::
+        (in_responses(cinstances[client_x].eResponse_in, pos) ==> 
+            get_response(cinstances[client_x].eResponse_in, pos).target == client_x) && 
+        (in_requests(cinstances[client_x].eRequest_out, pos) ==> 
+            get_request(cinstances[client_x].eRequest_out, pos).source == client_x);
 
     control {
         induction;
         set_solver_option("timeout", "5000");
         check;
-        print_cex(
-            responses_size(cinstances[client_a].eResponse_in),
-            peak_response(cinstances[client_a].eResponse_in).id,
-            cinstances[client_a].next_id,
-            cinstances[client_a].last_id,
-            cinstances[client_a].ghost_last_id
-        );
     }
 }

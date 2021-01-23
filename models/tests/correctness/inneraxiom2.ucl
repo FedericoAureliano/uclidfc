@@ -19,7 +19,7 @@ module main {
     invariant y_gt_x: y >= 0;
 
     control {
-        induction(5);
+        unroll(5);
         check;
         print_cex(x, y);
     }

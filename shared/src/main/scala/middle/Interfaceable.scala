@@ -649,9 +649,9 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Fuzzable(stmts) {
     def generateInitVariables(): List[Int] =
       initParams.map { p =>
         stmts(p) match {
-          case FunctionParameter(name, sort) => {
+          case FunctionParameter(_, sort) => {
             val vRef =
-              memoAddInstruction(UserFunction(name, sort))
+              addInstruction(UserFunction(freshSymbolName(), sort))
             vRef
           }
         }
@@ -766,10 +766,10 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Fuzzable(stmts) {
           name.name match {
             case "induction" => {
               // create all the variables you need
-              val initVariables = generateInitVariables()
+              val baseInitVariables = generateInitVariables()
               if (axioms.length > 0) {
-                // make sure invariant axioms hold on the fresh instance
-                val axiomRef = getAxiomRef(initVariables.head, axioms)
+                // all axioms should hold before base case
+                val axiomRef = getAxiomRef(baseInitVariables.head, axioms)
                 addAxiom(axiomRef)
               }
 
@@ -784,7 +784,7 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Fuzzable(stmts) {
               // apply init
               val initAppRef =
                 memoAddInstruction(
-                  Application(initRef, initVariables),
+                  Application(initRef, baseInitVariables),
                   Some("State_After_Init")
                 )
               proofStates.addOne(initAppRef)
@@ -804,18 +804,26 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Fuzzable(stmts) {
 
               // induction step
               // holds on entry
-              proofStates.addOne(initVariables.head)
+              // create all the variables you need
+              val inductiveInitVariables = generateInitVariables()
+              val inductiveAxioms = axioms.filter(p => p.invariant)
+              if (inductiveAxioms.length > 0) {
+                // all inductiveAxioms should hold before inductive case
+                val axiomRef =
+                  getAxiomRef(inductiveInitVariables.head, inductiveAxioms)
+                addAxiom(axiomRef)
+              }
+              proofStates.addOne(inductiveInitVariables.head)
               val entryRef =
                 memoAddInstruction(
-                  Application(specRef, List(initVariables.head))
+                  Application(specRef, List(inductiveInitVariables.head))
                 )
               // we can borrow the nondet state from init since we pop between asserts (this lets us just generate the auxiliary arguments when applying next)
 
               // Take k steps
               val k = unwind.getOrElse(IntLit(1)).literal.toInt
-              val states = stepKTimes(k, initVariables.head, nextRef)
+              val states = stepKTimes(k, inductiveInitVariables.head, nextRef)
               proofStates.addAll(states)
-              val inductiveAxioms = axioms.filter(p => p.invariant)
               if (inductiveAxioms.length > 0) {
                 // inductiveAxioms hold on every inner step
                 states.foreach { s =>
@@ -1147,7 +1155,7 @@ class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Fuzzable(stmts) {
 
     // input state
     val inputStateRef = memoAddInstruction(
-      FunctionParameter("State_Before", moduleRef)
+      FunctionParameter("State", moduleRef)
     )
 
     val fields =
