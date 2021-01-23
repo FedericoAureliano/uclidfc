@@ -8,9 +8,7 @@ import java.io.File
 class Rewrite {
 
   @Test def testRewrites(): Unit = {
-    val tests = (new File("models/tests/rewrites").listFiles ++ new File(
-      "models/examples"
-    ).listFiles)
+    val tests = (new File("models/tests/rewrites").listFiles)
       .filter(_.isFile)
       .map(f => readTestFile(f))
     tests.foreach { t =>

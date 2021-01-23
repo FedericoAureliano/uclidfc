@@ -107,13 +107,15 @@ object UclidMain {
       val modules = compile(config.files)
       val parseDuration = (System.nanoTime - startParse) / 1e9d
       println(s"Parsing completed in ${parseDuration} seconds.")
-
+      // println(s"Size of parse tree ... ${SizeEstimator.estimate(modules)}")
       print("Processing model ... ")
       val startProcess = System.nanoTime
       val obs = Encoder.run(modules, Some(config.mainModuleName))
       obs.rewrite(config.blastEnumQuantifierFlag)
       val processDuration = (System.nanoTime - startProcess) / 1e9d
       println(s"Processing completed in ${processDuration} seconds.")
+      println(s"-- Term graph contains ${obs.getStmtsSize()} nodes.")
+      println(s"-- Memoization map has ${obs.getMemoSize()} entries.")
 
       val solver = config.solver match {
         case Solvers.alt_ergo => new AltErgoSolver()

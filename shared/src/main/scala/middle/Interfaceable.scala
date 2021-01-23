@@ -8,7 +8,7 @@ import front._
 import scala.collection.mutable.Stack
 import scala.collection.immutable.Nil
 
-class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
+class Interfaceable(stmts: ArrayBuffer[Instruction]) extends Fuzzable(stmts) {
   val proofStates: ListBuffer[Int] = new ListBuffer()
 
   // all types are global

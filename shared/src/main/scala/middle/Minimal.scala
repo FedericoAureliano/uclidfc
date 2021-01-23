@@ -9,6 +9,12 @@ class Minimal(stmts: ArrayBuffer[Instruction]) extends WellFormed(stmts) {
   val assertionRefs: ListBuffer[Int] = new ListBuffer()
   val axiomRefs: ListBuffer[Int] = new ListBuffer()
 
+  def getStmtsSize(): Int = stmts.length
+  def getMemoSize(): Int = memo.toList.length
+
+  /**
+    * Points an instruction to its address in the term graph.
+    */
   private val memo: HashMap[Instruction, Int] =
     new HashMap().addAll(stmts.zipWithIndex.map(p => (p._1, p._2)))
 
@@ -23,40 +29,68 @@ class Minimal(stmts: ArrayBuffer[Instruction]) extends WellFormed(stmts) {
   protected def memoAddInstruction(
     inst: Instruction,
     toName: Option[String] = None
-  ): Int = {
-    val location = memo.get(inst) match {
-      case Some(loc) => loc
-      case None => {
-        stmts.addOne(inst)
-        val newLoc = stmts.length - 1
-        memo(inst) = newLoc
-        newLoc
+  ): Int =
+    inst match {
+      case FunctionParameter(_, _) => {
+        // We never want to memoize variables so that we avoid accidental variable capture.
+        // This would happen a lot in rewrites where updating a variable in some function could mess up some other function.
+        addInstruction(inst)
+      }
+      case _ => {
+        val location = memo.get(inst) match {
+          case Some(loc) => loc
+          case None      => addInstruction(inst)
+        }
+        toName match {
+          case Some(name) => {
+            val newLoc = addInstruction(Ref(location, name))
+            memo.put(inst, newLoc)
+            newLoc
+          }
+          case None => {
+            memo.put(inst, location)
+            location
+          }
+        }
       }
     }
-    toName match {
-      case Some(name) => {
-        stmts.addOne(Ref(location, name))
-        val newLoc = stmts.length - 1
-        memo(inst) = newLoc
-        newLoc
-      }
-      case None => location
-    }
-  }
 
+  /** Add an instruction to the end of the array buffer representing the term graph WITHOUT ADDING TO MEMO.
+    *
+    * @param inst instruction to add
+    * @return address where the location was added
+    */
   protected def addInstruction(inst: Instruction): Int = {
+    val r = stmts.length
     stmts.addOne(inst)
-    stmts.length - 1
+    r
   }
 
+  /** Update an instruction and keep the memo map in sync.
+    *
+    * @param r location we want to update
+    * @param newInstruction new instruction that we will put at that location
+    */
   protected def memoUpdateInstruction(
     r: Int,
     newInstruction: Instruction
   ): Unit = {
+    // require that at most one instruction points to this address
+    require(memo.forall(p => p._2 != r || stmts(r) == p._1))
+
     val old = stmts(r)
-    memo(newInstruction) = memo.getOrElse(old, r)
     memo.remove(old)
-    stmts.update(r, newInstruction)
+
+    // update the address r to contain the new instruction
+    stmts.update(
+      r,
+      newInstruction
+    )
+    // make sure the memo map points to this position
+    memo.put(
+      newInstruction,
+      r
+    )
   }
 
   protected def memoGetInstruction(inst: Instruction): Int =
@@ -99,55 +133,4 @@ class Minimal(stmts: ArrayBuffer[Instruction]) extends WellFormed(stmts) {
 
     markInstruction(position)
   }
-
-  /*
-  Copy an application term by inserting new copies of all instructions and returning a map describing the copy
-   */
-  protected def copyTerm(pos: Int): Int = {
-    assert(
-      stmts(pos).isInstanceOf[Application],
-      s"should be an application but is ${stmts(pos)}"
-    )
-    val map = copyTermHelper(pos)
-    updateTerm(map(pos), map)
-    map(pos)
-  }
-
-  /*
-  Copies the term but instead of updating references, returns a map describing the changes
-   */
-  private def copyTermHelper(
-    pos: Int,
-    map: HashMap[Int, Int] = HashMap.empty
-  ): HashMap[Int, Int] = {
-    stmts(pos) match {
-      case Application(caller, args) => {
-        val newCaller = copyTermHelper(caller, map).getOrElse(caller, caller)
-        val newArgs = args.map(a => copyTermHelper(a, map).getOrElse(a, a))
-        val newPos: Int = addInstruction(Application(newCaller, newArgs))
-        map.addOne((pos, newPos))
-      }
-      case _ =>
-    }
-    map
-  }
-
-  /*
-  Updates the references in an application using the map
-   */
-  protected def updateTerm(pos: Int, map: HashMap[Int, Int]): Unit =
-    stmts(pos) match {
-      case Application(caller, args) => {
-        memoUpdateInstruction(
-          pos,
-          Application(
-            map.getOrElse(caller, caller),
-            args.map(a => map.getOrElse(a, a))
-          )
-        )
-        updateTerm(caller, map)
-        args.foreach(a => updateTerm(a, map))
-      }
-      case _ =>
-    }
 }

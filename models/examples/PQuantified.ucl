@@ -1,6 +1,11 @@
+// UCLID TEST
+// Solver=z3
+// Result=Some(false)
+// Rewrite=blast-enum-quantifiers
+
 // Declare machine reference types
-type AbstractServerMachine_ref_t = enum {s1};
-type ClientMachine_ref_t = enum {c1, c2, c3};
+type AbstractServerMachine_ref_t = enum {s1, s2};
+type ClientMachine_ref_t = enum {c1, c2};
 const default_server: AbstractServerMachine_ref_t;
 const default_client: ClientMachine_ref_t;
 

@@ -3,7 +3,7 @@ package middle
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.HashMap
 
-class Rewritable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
+class Rewritable(stmts: ArrayBuffer[Instruction]) extends Writable(stmts) {
 
   /** Entry point to all rewrites. Boolean flags specify choices.
     *
@@ -26,13 +26,10 @@ class Rewritable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
     var changeHappened = true
     while (changeHappened) {
       changeHappened = false
-      val marks = mark(assertionRefs ++ axiomRefs)
-      marks.zipWithIndex.foreach(p =>
-        if (p._1) {
-          changeHappened =
-            blastEnumQuantifier(p._2) || changeHappened
-        }
-      )
+      (0 to stmts.length - 1).foreach { p =>
+        val update = blastEnumQuantifier(p)
+        changeHappened = update || changeHappened
+      }
     }
   }
 
@@ -110,6 +107,8 @@ class Rewritable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
     // make n copies of the body
     val copies = variants.map { x =>
       val newBody = copyTerm(body)
+      // v is the bound variable we want to replace
+      // x is the enum variant we want to plug in for v
       val replaceMap = HashMap((v, x))
       updateTerm(newBody, replaceMap)
       newBody
@@ -234,4 +233,62 @@ class Rewritable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
       }
     }
   }
+
+  /** Copy an application term by inserting new copies of all instructions and returning a map describing the copy
+    *
+    * @param pos the starting location
+    * @return the new location
+    */
+  protected def copyTerm(pos: Int): Int = {
+    assert(
+      stmts(pos).isInstanceOf[Application],
+      s"should be an application but is ${stmts(pos)}"
+    )
+    val map = copyTermHelper(pos)
+    updateTerm(map(pos), map)
+    map(pos)
+  }
+
+  /** Copies the term but instead of updating references, returns a map describing the changes
+    *
+    * @param pos start location of the term
+    * @param map map from locations to locations describing the changes
+    * @return the map describing the term copy
+    */
+  private def copyTermHelper(
+    pos: Int,
+    map: HashMap[Int, Int] = HashMap.empty
+  ): HashMap[Int, Int] = {
+    stmts(pos) match {
+      case Application(caller, args) => {
+        val newCaller = copyTermHelper(caller, map).getOrElse(caller, caller)
+        val newArgs = args.map(a => copyTermHelper(a, map).getOrElse(a, a))
+        val newPos: Int = addInstruction(Application(newCaller, newArgs))
+        map.addOne((pos, newPos))
+      }
+      case _ =>
+    }
+    map
+  }
+
+  /** Updates the references in an application using the map
+    *
+    * @param pos starting location
+    * @param map the changes we want to make: whenever we see x we will replace it with map(x)
+    */
+  protected def updateTerm(pos: Int, map: HashMap[Int, Int]): Unit =
+    stmts(pos) match {
+      case Application(caller, args) => {
+        memoUpdateInstruction(
+          pos,
+          Application(
+            map.getOrElse(caller, caller),
+            args.map(a => map.getOrElse(a, a))
+          )
+        )
+        updateTerm(caller, map)
+        args.foreach(a => updateTerm(a, map))
+      }
+      case _ =>
+    }
 }
