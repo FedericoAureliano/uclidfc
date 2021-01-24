@@ -17,7 +17,7 @@ abstract class Solver() {
     val t1 = System.nanoTime
     val exit = qb ! ProcessLogger((s) => out ::= s, (s) => err ::= s)
     val duration = (System.nanoTime - t1) / 1e9d
-    println(s"Solver terminated in ${duration} seconds.\n")
+    println(s"Solver terminated in ${duration} seconds.")
 
     (out.reverse, err.reverse, exit, duration)
   }
@@ -62,6 +62,10 @@ abstract class Solver() {
     val query = generateQuery(program)
     val generationDuration = (System.nanoTime - t1) / 1e9d
     println(s"Query generated in ${generationDuration} seconds.")
+    if (program.isSynthesisQuery) {
+      println("-- Query requires program synthesis.")
+    }
+    println(s"-- Logic is ${program.logic}.")
 
     val suffix = if (program.isSynthesisQuery) { ".sl" }
     else { ".smt2" }
@@ -250,8 +254,8 @@ class ProofResult(
       case None        => "Neither Verified Nor Rejected."
     }
     List(
-      s"\n${"*" * answer.length()}\n" + answer + s"\n${"*" * answer.length()}\n",
+      s"\n\n${"*" * answer.length()}\n" + answer + s"\n${"*" * answer.length()}\n",
       extra
-    ).mkString("\n")
+    ).mkString("\n") + "\n"
   }
 }

@@ -10,7 +10,8 @@ class Minimal(stmts: ArrayBuffer[Instruction]) extends WellFormed(stmts) {
   val axiomRefs: ListBuffer[Int] = new ListBuffer()
 
   def getStmtsSize(): Int = stmts.length
-  def getMemoSize(): Int = memo.toList.length
+  def getMemoKeySize(): Int = memo.keys.toList.length
+  def getMemoValueSize(): Int = memo.values.toList.length
 
   /**
     * Points an instruction to its address in the term graph.

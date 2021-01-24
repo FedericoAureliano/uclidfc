@@ -115,7 +115,9 @@ object UclidMain {
       val processDuration = (System.nanoTime - startProcess) / 1e9d
       println(s"Processing completed in ${processDuration} seconds.")
       println(s"-- Term graph contains ${obs.getStmtsSize()} nodes.")
-      println(s"-- Memoization map has ${obs.getMemoSize()} entries.")
+      println(s"-- Memoization map has ${obs.getMemoKeySize()} keys.")
+      // TODO: When would the number of unique keys not match the number of unique values?
+      // println(s"-- Memoization map has ${obs.getMemoValueSize()} unique values.")
 
       val solver = config.solver match {
         case Solvers.alt_ergo => new AltErgoSolver()

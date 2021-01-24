@@ -12,6 +12,8 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
   var traceQuery = false
   var getValues: Option[List[Int]] = None
 
+  var logic: String = "ALL"
+
   protected def inferLogic(): String = {
     var uf = false
     var a = false
@@ -353,7 +355,8 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
 
   def programToQuery(): String = {
     alreadyDeclared.clear()
-    val logic = s"(set-logic ${inferLogic()})"
+    logic = inferLogic()
+    val logicString = s"(set-logic ${logic})"
     val opts = options.map(o => s"(set-option :${o._1} ${o._2})").mkString("\n")
 
     val axiomStrings = axiomRefs
@@ -411,6 +414,6 @@ class Writable(stmts: ArrayBuffer[Instruction]) extends Minimal(stmts) {
       ""
     }
 
-    s"$logic\n$opts\n\n$body\n$postQuery"
+    s"$logicString\n$opts\n\n$body\n$postQuery"
   }
 }
