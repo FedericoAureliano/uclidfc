@@ -1,28 +1,17 @@
-ThisBuild / scalaVersion := "2.13.3"
+val scala3Version = "3.0.0-M3"
 
 lazy val root = project
-  .in(file("."))
-  .aggregate(uclid.js, uclid.jvm)
-  .settings(
-    publish := {},
-    publishLocal := {}
-  )
-
-lazy val uclid = crossProject(JSPlatform, JVMPlatform)
   .in(file("."))
   .settings(
     name := "uclidfc",
     version := "1.0",
-    javacOptions ++= Seq("-source", "1.6", "-target", "1.6"),
-    scalacOptions ++= Seq("-unchecked", "-deprecation", "-feature", "-Wunused"),
-    libraryDependencies += ("org.scala-lang.modules" %%% "scala-parser-combinators" % "1.1.2")
-      .withSources(),
-    libraryDependencies += "com.novocode" % "junit-interface" % "0.11" % "test",
-    test in assembly := {}
-  )
-  .jvmSettings(
-    // JVM-specific settings
-    libraryDependencies += "com.github.scopt" %% "scopt" % "3.7.1",
+
+    scalaVersion := scala3Version,
+    scalacOptions ++= Seq("-unchecked", "-deprecation", "-feature"),
+
+    libraryDependencies += ("org.scala-lang.modules" %% "scala-parser-combinators" % "1.2.0-M1"),
+    libraryDependencies += ("com.novocode" % "junit-interface" % "0.11" % "test"),
+    libraryDependencies += "com.github.scopt" %% "scopt" % "4.0.0",
     jacocoReportSettings := JacocoReportSettings(
       "Jacoco Coverage Report",
       Some("shared"),
@@ -37,9 +26,4 @@ lazy val uclid = crossProject(JSPlatform, JVMPlatform)
       Seq(JacocoReportFormats.ScalaHTML),
       "utf-8"
     )
-  )
-  .jsSettings(
-    // JS-specific settings
-    scalaJSUseMainModuleInitializer := true,
-    libraryDependencies += "org.scala-js" %%% "scalajs-dom" % "1.1.0"
   )
