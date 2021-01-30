@@ -82,75 +82,78 @@ object UclidLexer extends RegexParsers {
     }
 
   lazy val reserved: Parser[UclidToken] =
-    lparenParser |
-      rparenParser |
-      commaParser |
-      lbracketParser |
-      rbracketParser |
-      lbraceParser |
-      rbraceParser |
-      semicolonParser |
-      coloncolonParser |
-      colonParser |
-      periodParser |
-      arrowParser |
-      biimplParser |
-      implParser |
-      eqParser |
-      assignParser |
-      andParser |
-      orParser |
-      addParser |
-      subParser |
-      mulParser |
-      leParser |
-      geParser |
-      ltParser |
-      gtParser |
-      neqParser |
-      notParser |
-      primeParser |
-      booleanKwParser |
-      integerKwParser |
-      varKwParser |
-      sharedvarKwParser |
-      constKwParser |
-      functionKwParser |
-      defineKwParser |
-      ifKwParser |
-      thenKwParser |
-      elseKwParser |
-      typeKwParser |
-      inputKwParser |
-      outputKwParser |
-      initKwParser |
-      nextKwParser |
-      moduleKwParser |
-      controlKwParser |
-      invariantKwParser |
-      caseKwParser |
-      esacKwParser |
-      defaultKwParser |
-      enumKwParser |
-      recordKwParser |
-      forallKwParser |
-      existsKwParser |
-      havocKwParser |
-      assumeKwParser |
-      assertKwParser |
-      set_solver_optionKwParser |
-      synthesisKwParser |
-      print_cexKwParser |
-      checkKwParser |
-      traceKwParser |
-      axiomKwParser |
-      letKwParser
+    kwLparen |
+      kwRparen |
+      kwComma |
+      kwLbracket |
+      kwRbracket |
+      kwLbrace |
+      kwRbrace |
+      kwSemicolon |
+      kwColoncolon |
+      kwColon |
+      kwPeriod |
+      kwArrow |
+      kwBiimpl |
+      kwImpl |
+      kwEq |
+      kwAssign |
+      kwAnd |
+      kwOr |
+      kwAdd |
+      kwSub |
+      kwMul |
+      kwLe |
+      kwGe |
+      kwLt |
+      kwGt |
+      kwNeq |
+      kwNot |
+      kwPrime |
+      kwBoolean |
+      kwInteger |
+      kwVar |
+      kwSharedvar |
+      kwConst |
+      kwFunction |
+      kwDefine |
+      kwIf |
+      kwThen |
+      kwElse |
+      kwType |
+      kwInput |
+      kwOutput |
+      kwInit |
+      kwNext |
+      kwModule |
+      kwControl |
+      kwInvariant |
+      kwCase |
+      kwEsac |
+      kwDefault |
+      kwEnum |
+      kwRecord |
+      kwForall |
+      kwExists |
+      kwHavoc |
+      kwAssume |
+      kwAssert |
+      kwSet_solver_option |
+      kwSynthesis |
+      kwPrint_cex |
+      kwCheck |
+      kwTrace |
+      kwAxiom |
+      kwLet |
+      intliteralParser |
+      strliteralParser |
+      boolliteralParser
 
-  def identifierParser: Parser[IDENTIFIER] = positioned {
+  lazy val identifierParser: Parser[IDENTIFIER] = positioned {
     "[a-zA-Z_][a-zA-Z0-9_]*".r ^^ { str => IDENTIFIER(str) }
   }
 
-  def strliteralParser: Parser[STRLITERAL] = positioned {
+  lazy val strliteralParser: Parser[STRLITERAL] = positioned {
     """"[^"]*"""".r ^^ { str =>
       val content = str.substring(1, str.length - 1)
       STRLITERAL(content)
@@ -166,80 +169,77 @@ object UclidLexer extends RegexParsers {
       "false".r ^^ { str => BOOLLITERAL(str) }
   }
 
-  def lparenParser = positioned("(" ^^ (_ => LPARENTHESIS()))
-  def rparenParser = positioned(")" ^^ (_ => RPARENTHESIS()))
-  def commaParser = positioned("," ^^ (_ => COMMA()))
-  def lbracketParser = positioned("[" ^^ (_ => LBRACKET()))
-  def rbracketParser = positioned("]" ^^ (_ => RBRACKET()))
-  def lbraceParser = positioned("{" ^^ (_ => LBRACE()))
-  def rbraceParser = positioned("}" ^^ (_ => RBRACE()))
-  def semicolonParser = positioned(";" ^^ (_ => SEMICOLON()))
-  def coloncolonParser = positioned("::" ^^ (_ => COLONCOLON()))
-  def colonParser = positioned(":" ^^ (_ => COLON()))
-  def periodParser = positioned("." ^^ (_ => PERIOD()))
-  def arrowParser = positioned("->" ^^ (_ => ARROW()))
-  def biimplParser = positioned("<==>" ^^ (_ => OPBIIMPL()))
-  def implParser = positioned("==>" ^^ (_ => OPIMPL()))
-  def eqParser = positioned("==" ^^ (_ => OPEQ()))
-  def assignParser = positioned("=" ^^ (_ => ASSIGN()))
-  def andParser = positioned("&&" ^^ (_ => OPAND()))
-  def orParser = positioned("||" ^^ (_ => OPOR()))
-  def addParser = positioned("+" ^^ (_ => OPADD()))
-  def subParser = positioned("-" ^^ (_ => OPSUB()))
-  def mulParser = positioned("*" ^^ (_ => OPMUL()))
-  def leParser = positioned("<=" ^^ (_ => OPLE()))
-  def geParser = positioned(">=" ^^ (_ => OPGE()))
-  def ltParser = positioned("<" ^^ (_ => OPLT()))
-  def gtParser = positioned(">" ^^ (_ => OPGT()))
-  def neqParser = positioned("!=" ^^ (_ => OPNE()))
-  def notParser = positioned("!" ^^ (_ => OPNOT()))
-  def primeParser = positioned("'" ^^ (_ => OPPRIME()))
-  def booleanKwParser = positioned("boolean" ^^ (_ => KWBOOLEAN()))
-  def integerKwParser = positioned("integer" ^^ (_ => KWINTEGER()))
-  def varKwParser = positioned("var" ^^ (_ => KWVAR()))
-  def sharedvarKwParser = positioned("sharedvar" ^^ (_ => KWSHAREDVAR()))
-  def constKwParser = positioned("const" ^^ (_ => KWCONST()))
-  def functionKwParser = positioned("function" ^^ (_ => KWFUNC()))
-  def defineKwParser = positioned("define" ^^ (_ => KWDEF()))
-  def ifKwParser = positioned("if" ^^ (_ => KWIF()))
-  def thenKwParser = positioned("then" ^^ (_ => KWTHEN()))
-  def elseKwParser = positioned("else" ^^ (_ => KWELSE()))
-  def typeKwParser = positioned("type" ^^ (_ => KWTYPE()))
-  def inputKwParser = positioned("input" ^^ (_ => KWINPUT()))
-  def outputKwParser = positioned("output" ^^ (_ => KWOUTPUT()))
-  def initKwParser = positioned("init" ^^ (_ => KWINIT()))
-  def nextKwParser = positioned("next" ^^ (_ => KWNEXT()))
-  def moduleKwParser = positioned("module" ^^ (_ => KWMODULE()))
-  def controlKwParser = positioned("control" ^^ (_ => KWCONTROL()))
-  def invariantKwParser = positioned("invariant" ^^ (_ => KWINVARIANT()))
-  def caseKwParser = positioned("case" ^^ (_ => KWCASE()))
-  def esacKwParser = positioned("esac" ^^ (_ => KWESAC()))
-  def defaultKwParser = positioned("default" ^^ (_ => KWDEFAULT()))
-  def enumKwParser = positioned("enum" ^^ (_ => KWENUM()))
-  def recordKwParser = positioned("record" ^^ (_ => KWRECORD()))
-  def forallKwParser = positioned("forall" ^^ (_ => KWFORALL()))
-  def existsKwParser = positioned("exists" ^^ (_ => KWEXISTS()))
-  def havocKwParser = positioned("havoc" ^^ (_ => KWHAVOC()))
-  def assumeKwParser = positioned("assume" ^^ (_ => KWASSUME()))
-  def assertKwParser = positioned("assert" ^^ (_ => KWASSERT()))
+  def kwLparen = positioned("(" ^^ (_ => LPARENTHESIS()))
+  def kwRparen = positioned(")" ^^ (_ => RPARENTHESIS()))
+  def kwComma = positioned("," ^^ (_ => COMMA()))
+  def kwLbracket = positioned("[" ^^ (_ => LBRACKET()))
+  def kwRbracket = positioned("]" ^^ (_ => RBRACKET()))
+  def kwLbrace = positioned("{" ^^ (_ => LBRACE()))
+  def kwRbrace = positioned("}" ^^ (_ => RBRACE()))
+  def kwSemicolon = positioned(";" ^^ (_ => SEMICOLON()))
+  def kwColoncolon = positioned("::" ^^ (_ => COLONCOLON()))
+  def kwColon = positioned(":" ^^ (_ => COLON()))
+  def kwPeriod = positioned("." ^^ (_ => PERIOD()))
+  def kwArrow = positioned("->" ^^ (_ => ARROW()))
+  def kwBiimpl = positioned("<==>" ^^ (_ => OPBIIMPL()))
+  def kwImpl = positioned("==>" ^^ (_ => OPIMPL()))
+  def kwEq = positioned("==" ^^ (_ => OPEQ()))
+  def kwAssign = positioned("=" ^^ (_ => ASSIGN()))
+  def kwAnd = positioned("&&" ^^ (_ => OPAND()))
+  def kwOr = positioned("||" ^^ (_ => OPOR()))
+  def kwAdd = positioned("+" ^^ (_ => OPADD()))
+  def kwSub = positioned("-" ^^ (_ => OPSUB()))
+  def kwMul = positioned("*" ^^ (_ => OPMUL()))
+  def kwLe = positioned("<=" ^^ (_ => OPLE()))
+  def kwGe = positioned(">=" ^^ (_ => OPGE()))
+  def kwLt = positioned("<" ^^ (_ => OPLT()))
+  def kwGt = positioned(">" ^^ (_ => OPGT()))
+  def kwNeq = positioned("!=" ^^ (_ => OPNE()))
+  def kwNot = positioned("!" ^^ (_ => OPNOT()))
+  def kwPrime = positioned("'" ^^ (_ => OPPRIME()))
+  def kwBoolean = positioned("boolean\\b".r ^^ (_ => KWBOOLEAN()))
+  def kwInteger = positioned("integer\\b".r ^^ (_ => KWINTEGER()))
+  def kwVar = positioned("var\\b".r ^^ (_ => KWVAR()))
+  def kwSharedvar = positioned("sharedvar\\b".r ^^ (_ => KWSHAREDVAR()))
+  def kwConst = positioned("const\\b".r ^^ (_ => KWCONST()))
+  def kwFunction = positioned("function\\b".r ^^ (_ => KWFUNC()))
+  def kwDefine = positioned("define\\b".r ^^ (_ => KWDEF()))
+  def kwIf = positioned("if\\b".r ^^ (_ => KWIF()))
+  def kwThen = positioned("then\\b".r ^^ (_ => KWTHEN()))
+  def kwElse = positioned("else\\b".r ^^ (_ => KWELSE()))
+  def kwType = positioned("type\\b".r ^^ (_ => KWTYPE()))
+  def kwInput = positioned("input\\b".r ^^ (_ => KWINPUT()))
+  def kwOutput = positioned("output\\b".r ^^ (_ => KWOUTPUT()))
+  def kwInit = positioned("init\\b".r ^^ (_ => KWINIT()))
+  def kwNext = positioned("next\\b".r ^^ (_ => KWNEXT()))
+  def kwModule = positioned("module\\b".r ^^ (_ => KWMODULE()))
+  def kwControl = positioned("control\\b".r ^^ (_ => KWCONTROL()))
+  def kwInvariant = positioned("invariant\\b".r ^^ (_ => KWINVARIANT()))
+  def kwCase = positioned("case\\b".r ^^ (_ => KWCASE()))
+  def kwEsac = positioned("esac\\b".r ^^ (_ => KWESAC()))
+  def kwDefault = positioned("default\\b".r ^^ (_ => KWDEFAULT()))
+  def kwEnum = positioned("enum\\b".r ^^ (_ => KWENUM()))
+  def kwRecord = positioned("record\\b".r ^^ (_ => KWRECORD()))
+  def kwForall = positioned("forall\\b".r ^^ (_ => KWFORALL()))
+  def kwExists = positioned("exists\\b".r ^^ (_ => KWEXISTS()))
+  def kwHavoc = positioned("havoc\\b".r ^^ (_ => KWHAVOC()))
+  def kwAssume = positioned("assume\\b".r ^^ (_ => KWASSUME()))
+  def kwAssert = positioned("assert\\b".r ^^ (_ => KWASSERT()))
 
-  def set_solver_optionKwParser = positioned {
-    "set_solver_option" ^^ (_ => KWOPTION())
+  def kwSet_solver_option = positioned {
+    "set_solver_option\\b".r ^^ (_ => KWOPTION())
   }
-  def synthesisKwParser = positioned("synthesis" ^^ (_ => KWSYNTHESIS()))
-  def print_cexKwParser = positioned("print_cex" ^^ (_ => KWGETVALUE()))
-  def checkKwParser = positioned("check" ^^ (_ => KWCHECK()))
-  def traceKwParser = positioned("trace" ^^ (_ => KWTRACE()))
-  def axiomKwParser = positioned("axiom" ^^ (_ => KWAXIOM()))
-  def letKwParser = positioned("let" ^^ (_ => KWLET()))
+  def kwSynthesis = positioned("synthesis\\b".r ^^ (_ => KWSYNTHESIS()))
+  def kwPrint_cex = positioned("print_cex\\b".r ^^ (_ => KWGETVALUE()))
+  def kwCheck = positioned("check\\b".r ^^ (_ => KWCHECK()))
+  def kwTrace = positioned("trace\\b".r ^^ (_ => KWTRACE()))
+  def kwAxiom = positioned("axiom\\b".r ^^ (_ => KWAXIOM()))
+  def kwLet = positioned("let\\b".r ^^ (_ => KWLET()))
 
-  def tokens: Parser[List[UclidToken]] =
+  lazy val tokens: Parser[List[UclidToken]] =
     phrase(
       rep1(
         reserved |
-        intliteralParser |
-        strliteralParser |
-        boolliteralParser |
         identifierParser
       )
     )

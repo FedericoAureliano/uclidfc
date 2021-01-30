@@ -20,7 +20,7 @@ lazy val root = project
         method = 65,
         branch = 55,
         complexity = 60,
-        line = 85,
+        line = 90,
         clazz = 90
       ),
       Seq(JacocoReportFormats.ScalaHTML),
