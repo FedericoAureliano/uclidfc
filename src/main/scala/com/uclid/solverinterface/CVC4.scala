@@ -1,7 +1,5 @@
 package com.uclid.solverinterface
 
-
-
 import sys.process._
 import java.io.{File, PrintWriter}
 
@@ -9,7 +7,7 @@ class CVC4(ctx: Context) extends Solver(ctx) {
   def getCommand(): String = "cvc4"
 
   def generateQuery(): String = {
-    val query = ctx.programToQuery()
+    val query = ctx.toQuery()
     query
   }
 

@@ -1,7 +1,5 @@
 package com.uclid.solverinterface
 
-
-
 import sys.process._
 import java.io.{File, PrintWriter}
 

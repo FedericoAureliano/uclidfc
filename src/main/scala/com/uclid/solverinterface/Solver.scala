@@ -2,7 +2,6 @@ package com.uclid.solverinterface
 
 import com.uclid.termgraph
 
-
 import sys.process._
 import java.io.{File, PrintWriter}
 
@@ -15,7 +14,7 @@ abstract class Solver(ctx: Context) {
     var err = List[String]()
 
     val t1 = System.nanoTime
-    val exit = qb ! ProcessLogger((s) => out ::= s, (s) => err ::= s)
+    val exit = qb ! ProcessLogger(s => out ::= s, s => err ::= s)
     val duration = (System.nanoTime - t1) / 1e9d
     println(s"Solver terminated in ${duration} seconds.")
 
@@ -29,19 +28,15 @@ abstract class Solver(ctx: Context) {
   ): File = {
     val f = outFile match {
       case Some(value) => new File(value)
-      case None => {
+      case None =>
         val tempFi = File.createTempFile("tmp", suffix)
         tempFi.deleteOnExit()
         tempFi
-      }
     }
 
     new PrintWriter(f) {
-      try {
-        write(query)
-      } finally {
-        close()
-      }
+      try write(query)
+      finally close()
     }
     f
   }
@@ -64,14 +59,14 @@ abstract class Solver(ctx: Context) {
     if (ctx.isSynthesisQuery) {
       println("-- Query requires program synthesis.")
     }
-    println(s"-- Logic is ${ctx.logic}.")
+    println(s"-- Logic is ${ctx.getLogic()}.")
 
     val suffix = if (ctx.isSynthesisQuery) { ".sl" }
     else { ".smt2" }
     val qfile =
       writeQueryToFile(query, outFile, suffix).getAbsolutePath()
 
-    if (!run || (!ctx.checkQuery && !ctx.traceQuery)) {
+    if (!run) {
       return (
         new ProofResult(
           None,
@@ -85,30 +80,28 @@ abstract class Solver(ctx: Context) {
     val result = runProcess(s"${getCommand()} ${qfile}")
     val answer = parseAnswer(" " + (result._1 ++ result._2).mkString("\n"))
 
-    if (answer.contains("error") || answer.contains(
-          "unknown"
-        )) {
+    if (
+      answer.contains("error") || answer.contains(
+        "unknown"
+      )
+    ) {
       (new ProofResult(None, answer), generationDuration, result._4)
     } else {
-      if (ctx.traceQuery) {
-        (new ProofResult(None, answer), generationDuration, result._4)
+      if ("(\\ssat)".r.findFirstIn(answer).isDefined) {
+        (new ProofResult(Some(true), answer), generationDuration, result._4)
       } else {
-        if ("(\\ssat)".r.findFirstIn(answer).isDefined) {
-          (new ProofResult(Some(true), answer), generationDuration, result._4)
+        if (ctx.isSynthesisQuery) {
+          (
+            new ProofResult(Some(false), answer),
+            generationDuration,
+            result._4
+          )
         } else {
-          if (ctx.isSynthesisQuery) {
-            (
-              new ProofResult(Some(false), answer),
-              generationDuration,
-              result._4
-            )
-          } else {
-            (
-              new ProofResult(Some(false), " unsat"),
-              generationDuration,
-              result._4
-            )
-          }
+          (
+            new ProofResult(Some(false), " unsat"),
+            generationDuration,
+            result._4
+          )
         }
       }
     }

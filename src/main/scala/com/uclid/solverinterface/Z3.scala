@@ -1,7 +1,5 @@
 package com.uclid.solverinterface
 
-
-
 import sys.process._
 import java.io.{File, PrintWriter}
 
@@ -11,7 +9,7 @@ class Z3(ctx: Context) extends Solver(ctx) {
   def generateQuery(): String = {
     // get the query but remove the set logic command
     val query = ctx
-      .programToQuery()
+      .toQuery()
       .split("\n")
       .filter(p => !p.startsWith("(set-logic"))
       .mkString("\n")

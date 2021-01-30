@@ -1,6 +1,5 @@
 package com.uclid.solverinterface
 
-
 import sys.process._
 import java.io.{File, PrintWriter}
 
@@ -10,7 +9,7 @@ class AltErgo(ctx: Context) extends Solver(ctx) {
   def generateQuery(): String = {
     // get the query but remove the set logic and set-option commands
     val query = ctx
-      .programToQuery()
+      .toQuery()
       .split("\n")
       .filter(p =>
         !(p.startsWith("(set-logic") || p.startsWith("(set-option") || p

@@ -4,13 +4,12 @@ import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.HashMap
 
 abstract class AbstractTermGraph() {
-  /**
-    * The actual graph data structure.
+
+  /** The actual graph data structure.
     */
   val stmts: ArrayBuffer[Instruction] = new ArrayBuffer[Instruction]()
 
-  /**
-    * Points an instruction to its address in the term graph.
+  /** Points an instruction to its address in the term graph.
     */
   private val memo: HashMap[Instruction, Int] =
     new HashMap().addAll(stmts.zipWithIndex.map(p => (p._1, p._2)))
@@ -22,12 +21,11 @@ abstract class AbstractTermGraph() {
     s"fresh!${uniqueId}"
   }
 
-  def clear() : Unit = {
+  def clear(): Unit = {
     stmts.clear()
     memo.clear()
     uniqueId = 0
   }
-
 
   def getStmtsSize(): Int = stmts.length
   def getMemoKeySize(): Int = memo.keys.toList.length
@@ -46,28 +44,24 @@ abstract class AbstractTermGraph() {
     toName: Option[String] = None
   ): Int =
     inst match {
-      case FunctionParameter(_, _) => {
+      case FunctionParameter(_, _) =>
         // We never want to memoize variables so that we avoid accidental variable capture.
         // This would happen a lot in rewrites where updating a variable in some function could mess up some other function.
         addInstruction(inst)
-      }
-      case _ => {
+      case _ =>
         val location = memo.get(inst) match {
           case Some(loc) => loc
           case None      => addInstruction(inst)
         }
         toName match {
-          case Some(name) => {
+          case Some(name) =>
             val newLoc = addInstruction(Ref(location, name))
             memo.put(inst, newLoc)
             newLoc
-          }
-          case None => {
+          case None =>
             memo.put(inst, location)
             location
-          }
         }
-      }
     }
 
   /** Add an instruction to the end of the array buffer representing the term graph WITHOUT ADDING TO MEMO.
@@ -150,4 +144,8 @@ abstract class AbstractTermGraph() {
   }
 }
 
-class TermGraph extends AbstractTermGraph with Fuzzable with Rewritable with WellFormed
+class TermGraph
+    extends AbstractTermGraph
+    with Fuzzable
+    with Rewritable
+    with WellFormed
