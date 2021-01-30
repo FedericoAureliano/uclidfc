@@ -6,37 +6,52 @@ import scala.util.parsing.input.Positional
 sealed trait UclidToken extends Positional
 
 case class IDENTIFIER(str: String) extends UclidToken
+case class BOOLLITERAL(str: String) extends UclidToken
 case class INTLITERAL(str: String) extends UclidToken
 case class STRLITERAL(str: String) extends UclidToken
 
 // "(",
 case class LPARENTHESIS() extends UclidToken
+
 // ")",
 case class RPARENTHESIS() extends UclidToken
+
 // ",",
 case class COMMA() extends UclidToken
+
 // "[",
 case class LBRACKET() extends UclidToken
+
 // "]",
 case class RBRACKET() extends UclidToken
+
 // "{",
 case class LBRACE() extends UclidToken
+
 // "}",
 case class RBRACE() extends UclidToken
+
 // ";",
 case class SEMICOLON() extends UclidToken
+
+// "==",
+case class OPEQ() extends UclidToken
+
 // "=",
-case class EQ() extends UclidToken
+case class ASSIGN() extends UclidToken
+
 // ":",
 case class COLON() extends UclidToken
+
 // ".",
 case class PERIOD() extends UclidToken
-// "*",
-case class STAR() extends UclidToken
+
 // "::",
 case class COLONCOLON() extends UclidToken
+
 // "->",
 case class ARROW() extends UclidToken
+
 case class OPAND() extends UclidToken
 case class OPOR() extends UclidToken
 case class OPADD() extends UclidToken
@@ -48,7 +63,6 @@ case class OPLT() extends UclidToken
 case class OPGT() extends UclidToken
 case class OPLE() extends UclidToken
 case class OPGE() extends UclidToken
-case class OPEQ() extends UclidToken
 case class OPNE() extends UclidToken
 case class OPNOT() extends UclidToken
 case class OPMINUS() extends UclidToken

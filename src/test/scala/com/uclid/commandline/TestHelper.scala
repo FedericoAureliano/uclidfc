@@ -1,11 +1,11 @@
 package com.uclid.commandline
 
+import com.uclid.termgraph
+
 import scala.io.Source
 import java.io.File
 
-object TestHelper {
-
-  def readTestFile(file: File): (
+  def readTestFile(file: File): Tuple8[
     String,
     Option[String],
     Option[Boolean],
@@ -14,7 +14,7 @@ object TestHelper {
     Option[Double],
     Option[Double],
     List[String]
-  ) = {
+   ] = {
     val lines = Source.fromFile(file).getLines().mkString("\n")
     val solver = "(?<=Solver=)(.*)".r.findFirstIn(lines) match {
       case Some("z3")   => Some("z3")
@@ -63,7 +63,7 @@ object TestHelper {
     filename: String,
     solver: Option[String],
     rewrites: List[String]
-  ): UclidResult =
+  ): UclidResult = {
     solver match {
       case Some(value) =>
         UclidMain.main(
@@ -74,4 +74,4 @@ object TestHelper {
           UclidMain.parseOptions(Array(filename, "-r", "false") ++ rewrites).get
         )
     }
-}
+  }

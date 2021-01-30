@@ -5,12 +5,80 @@ import com.uclid.uclidlanguage.compiler.{Location, UclidLexerError}
 import scala.util.parsing.combinator.RegexParsers
 
 object UclidLexer extends RegexParsers {
-  override def skipWhitespace = true
-  override val whiteSpace = "[ \t\r\f]+".r
+  override protected val whiteSpace = """\s+""".r
+
+  /** Method called to handle whitespace before parsers.
+    *
+    *  skips anything matching `whiteSpace` starting from the current offset.
+    *
+    *  @param source  The input being parsed.
+    *  @param offset  The offset into `source` from which to match.
+    *  @return        The offset to be used for the next parser.
+    */
+  override protected def handleWhiteSpace(
+    source: java.lang.CharSequence,
+    offset: Int
+  ): Int = {
+    var oldCount = -1
+    var count = 0
+    var inLineComment = false
+    var inLongComment = false
+    while (count > oldCount && offset + count < source.length) {
+      assert(!inLineComment || !inLongComment)
+      oldCount = count
+
+      source.charAt(offset + count) match {
+
+        case '/' => {
+          if (inLineComment || inLongComment) {
+            // if we're in a comment already then just skip
+            count += 1
+          } else {
+            // if we're not in a comment, then should we start a comment?
+            source.charAt(offset + count + 1) match {
+              case '/' => inLineComment = true; count += 2
+              case '*' => inLongComment = true; count += 2
+              case _   => // no we should not
+            }
+          }
+        }
+
+        case '*' => {
+          if (inLongComment) {
+            // if we're in a long comment already then we may want to exit it
+            source.charAt(offset + count + 1) match {
+              case '/' => inLongComment = false; count += 2
+              case _   => count += 1
+            }
+          } else if (inLineComment) {
+            count += 1
+          } else {
+            // we're not in either comment
+          }
+        }
+
+        // if we have a newline, then consume the character and exit line comment mode
+        case '\n' => inLineComment = false; count += 1
+        // if we have a whitespace, then consume the character no matter what
+        case ' ' | '\t' => count += 1
+        case _          =>
+          // if we're in a comment, then consume the character
+          if (inLineComment || inLongComment) {
+            count += 1
+          }
+      }
+    }
+    assert((!inLineComment && !inLongComment) || offset + count == source.length)
+    offset + count
+  }
 
   def apply(code: String): Either[UclidLexerError, List[UclidToken]] =
     parse(tokens, code) match {
       case NoSuccess(msg, next) =>
+        Left(UclidLexerError(Location(next.pos.line, next.pos.column), msg))
+      case Error(msg, next) =>
+        Left(UclidLexerError(Location(next.pos.line, next.pos.column), msg))
+      case Failure(msg, next) =>
         Left(UclidLexerError(Location(next.pos.line, next.pos.column), msg))
       case Success(result, next) => Right(result)
     }
@@ -18,24 +86,33 @@ object UclidLexer extends RegexParsers {
   def tokens: Parser[List[UclidToken]] =
     phrase(
       rep1(
-        identifier |
-          strliteral |
-          intliteral |
+          lparenthesis |
+          rparenthesis |
+          comma |
+          lbracket |
+          rbracket |
+          lbrace |
+          rbrace |
+          semicolon |
+          opBiimpl |
+          opImpl |
+          opEq |
+          opAssign |
+          coloncolon |
+          colon |
+          period |
+          arrow |
           opAnd |
           opOr |
           opAdd |
           opSub |
           opMul |
-          opBiimpl |
-          opImpl |
-          opLy |
-          opGt |
           opLe |
           opGe |
-          opEq |
+          opLt |
+          opGt |
           opNeq |
           opNot |
-          opMinus |
           opPrime |
           kwBoolean |
           kwInteger |
@@ -71,7 +148,11 @@ object UclidLexer extends RegexParsers {
           kwCheck |
           kwTrace |
           kwAxiom |
-          kwLet
+          kwLet |
+          intliteral |
+          strliteral |
+          boolliteral |
+          identifier 
       )
     )
 
@@ -87,27 +168,41 @@ object UclidLexer extends RegexParsers {
   }
 
   def intliteral: Parser[INTLITERAL] = positioned {
-    """"[^"]*"""".r ^^ { str =>
-      val content = str.substring(1, str.length - 1)
-      INTLITERAL(content)
-    }
+    "[0-9]+".r ^^ { str => INTLITERAL(str) }
   }
 
+  def boolliteral: Parser[BOOLLITERAL] = positioned {
+    "true".r ^^ { str => BOOLLITERAL(str) } |
+    "false".r ^^ { str => BOOLLITERAL(str) }
+  }
+
+  def lparenthesis = positioned("(" ^^ (_ => LPARENTHESIS()))
+  def rparenthesis = positioned(")" ^^ (_ => RPARENTHESIS()))
+  def comma = positioned("," ^^ (_ => COMMA()))
+  def lbracket = positioned("[" ^^ (_ => LBRACKET()))
+  def rbracket = positioned("]" ^^ (_ => RBRACKET()))
+  def lbrace = positioned("{" ^^ (_ => LBRACE()))
+  def rbrace = positioned("}" ^^ (_ => RBRACE()))
+  def semicolon = positioned(";" ^^ (_ => SEMICOLON()))
+  def opBiimpl = positioned("<==>" ^^ (_ => OPBIIMPL()))
+  def opImpl = positioned("==>" ^^ (_ => OPIMPL()))
+  def opEq = positioned("==" ^^ (_ => OPEQ()))
+  def opAssign = positioned("=" ^^ (_ => ASSIGN()))
+  def coloncolon = positioned("::" ^^ (_ => COLONCOLON()))
+  def colon = positioned(":" ^^ (_ => COLON()))
+  def period = positioned("." ^^ (_ => PERIOD()))
+  def arrow = positioned("->" ^^ (_ => ARROW()))
   def opAnd = positioned("&&" ^^ (_ => OPAND()))
   def opOr = positioned("||" ^^ (_ => OPOR()))
   def opAdd = positioned("+" ^^ (_ => OPADD()))
   def opSub = positioned("-" ^^ (_ => OPSUB()))
   def opMul = positioned("*" ^^ (_ => OPMUL()))
-  def opBiimpl = positioned("<==>" ^^ (_ => OPBIIMPL()))
-  def opImpl = positioned("==>" ^^ (_ => OPIMPL()))
-  def opLy = positioned("<" ^^ (_ => OPLT()))
-  def opGt = positioned(">" ^^ (_ => OPGT()))
   def opLe = positioned("<=" ^^ (_ => OPLE()))
   def opGe = positioned(">=" ^^ (_ => OPGE()))
-  def opEq = positioned("==" ^^ (_ => OPEQ()))
+  def opLt = positioned("<" ^^ (_ => OPLT()))
+  def opGt = positioned(">" ^^ (_ => OPGT()))
   def opNeq = positioned("!=" ^^ (_ => OPNE()))
   def opNot = positioned("!" ^^ (_ => OPNOT()))
-  def opMinus = positioned("-" ^^ (_ => OPMINUS()))
   def opPrime = positioned("'" ^^ (_ => OPPRIME()))
   def kwBoolean = positioned("boolean" ^^ (_ => KWBOOLEAN()))
   def kwInteger = positioned("integer" ^^ (_ => KWINTEGER()))

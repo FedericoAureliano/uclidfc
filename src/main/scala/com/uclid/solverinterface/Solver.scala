@@ -1,12 +1,12 @@
 package com.uclid.solverinterface
 
 import com.uclid.termgraph
-import com.uclid.error._
+
 
 import sys.process._
 import java.io.{File, PrintWriter}
 
-abstract class Solver() {
+abstract class Solver(ctx: Context) {
 
   def runProcess(in: String): (List[String], List[String], Int, Double) = {
     print("Running solver ... ")
@@ -61,17 +61,17 @@ abstract class Solver() {
     val query = generateQuery()
     val generationDuration = (System.nanoTime - t1) / 1e9d
     println(s"Query generated in ${generationDuration} seconds.")
-    if (termgraph.isSynthesisQuery) {
+    if (ctx.isSynthesisQuery) {
       println("-- Query requires program synthesis.")
     }
-    println(s"-- Logic is ${termgraph.logic}.")
+    println(s"-- Logic is ${ctx.logic}.")
 
-    val suffix = if (termgraph.isSynthesisQuery) { ".sl" }
+    val suffix = if (ctx.isSynthesisQuery) { ".sl" }
     else { ".smt2" }
     val qfile =
       writeQueryToFile(query, outFile, suffix).getAbsolutePath()
 
-    if (!run || (!termgraph.checkQuery && !termgraph.traceQuery)) {
+    if (!run || (!ctx.checkQuery && !ctx.traceQuery)) {
       return (
         new ProofResult(
           None,
@@ -90,13 +90,13 @@ abstract class Solver() {
         )) {
       (new ProofResult(None, answer), generationDuration, result._4)
     } else {
-      if (termgraph.traceQuery) {
+      if (ctx.traceQuery) {
         (new ProofResult(None, answer), generationDuration, result._4)
       } else {
         if ("(\\ssat)".r.findFirstIn(answer).isDefined) {
           (new ProofResult(Some(true), answer), generationDuration, result._4)
         } else {
-          if (termgraph.isSynthesisQuery) {
+          if (ctx.isSynthesisQuery) {
             (
               new ProofResult(Some(false), answer),
               generationDuration,
@@ -112,149 +112,5 @@ abstract class Solver() {
         }
       }
     }
-  }
-}
-
-class CVC4Solver() extends Solver() {
-  def getCommand(): String = "cvc4"
-
-  def generateQuery(): String = {
-    val query = termgraph.programToQuery()
-    query
-  }
-
-  def parseAnswer(answer: String): String =
-    answer
-      .split("\n")
-      .filter(p =>
-        !p.startsWith(
-          "(error \"Cannot get the current model unless immediately preceded by SAT/INVALID or UNKNOWN response.\")"
-        ) && !p.startsWith(
-          "(error \"Cannot get the current assignment unless immediately preceded by SAT/INVALID or UNKNOWN response.\")"
-        ) && !p.startsWith(
-          "(error \"Cannot get value unless immediately preceded by SAT/INVALID or UNKNOWN response.\")"
-        )
-      )
-      .mkString("\n")
-}
-
-class Z3Solver() extends Solver() {
-  def getCommand(): String = "z3"
-
-  def generateQuery(): String = {
-    // get the query but remove the set logic command
-    val query = termgraph
-      .programToQuery()
-      .split("\n")
-      .filter(p => !p.startsWith("(set-logic"))
-      .mkString("\n")
-    if (termgraph.isSynthesisQuery) {
-      throw new SolverMismatchError("Z3 does not support synthesis")
-    }
-    query
-  }
-
-  def parseAnswer(answer: String): String =
-    answer
-      .split("\n")
-      .filter(p =>
-        !p.contains(
-          "model is not available"
-        )
-      )
-      .mkString("\n")
-}
-
-class AltErgoSolver() extends Solver() {
-  def getCommand(): String = "alt-ergo -enable-adts-cs"
-
-  def generateQuery(): String = {
-    // get the query but remove the set logic and set-option commands
-    val query = termgraph
-      .programToQuery()
-      .split("\n")
-      .filter(p =>
-        !(p.startsWith("(set-logic") || p.startsWith("(set-option") || p
-          .startsWith("(get-"))
-      )
-      .mkString("\n")
-    if (termgraph.isSynthesisQuery) {
-      throw new SolverMismatchError("Alt-Ergo does not support synthesis")
-    }
-    query
-  }
-
-  def parseAnswer(answer: String): String =
-    answer
-}
-
-class VampireSolver() extends Solver() {
-
-  val supportedLogics = List(
-    "ALIA",
-    "AUFDTLIA",
-    "AUFDTLIRA",
-    "AUFDTNIRA",
-    "AUFLIA",
-    "AUFLIRA",
-    "AUFNIA",
-    "AUFNIRA",
-    "LIA",
-    "LRA",
-    "NIA",
-    "NRA",
-    "UF",
-    "UFDT",
-    "UFDTLIA",
-    "UFDTLIRA",
-    "UFDTNIA",
-    "UFDTNIRA",
-    "UFIDL",
-    "UFLIA",
-    "UFLRA",
-    "UFNIA"
-  )
-
-  def getCommand(): String =
-    "vampire --mode smtcomp --input_syntax smtlib2 --term_algebra_acyclicity light --term_algebra_rules on --fmb_enumeration_strategy smt"
-
-  def generateQuery(): String = {
-    val query = termgraph.programToQuery()
-
-    // find the set logic command
-    val pattern = "(?<=\\(set-logic )(.*)(?=\\))".r
-    val logic = pattern.findFirstIn(query)
-
-    if (logic.isDefined && !supportedLogics.contains(logic.get)) {
-      throw new SolverMismatchError(s"Vampire does not support ${logic.get}")
-    }
-
-    if (termgraph.isSynthesisQuery) {
-      throw new SolverMismatchError("Vampire does not support synthesis")
-    }
-
-    query
-  }
-
-  def parseAnswer(answer: String): String =
-    answer
-}
-
-class ProofResult(
-  var result: Option[Boolean] = None,
-  var messages: String = ""
-) {
-
-  override def toString(): String = {
-    val extra = "Detailed Output:" + messages
-    val answer = result match {
-      case Some(true)  => "Rejected!"
-      case Some(false) => "Verified!"
-      case None        => "Neither Verified Nor Rejected."
-    }
-    List(
-      s"\n\n${"*" * answer.length()}\n" + answer + s"\n${"*" * answer.length()}\n",
-      extra
-    ).mkString("\n") + "\n"
   }
 }

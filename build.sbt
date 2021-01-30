@@ -16,12 +16,12 @@ lazy val root = project
       "Jacoco Coverage Report",
       Some("shared"),
       JacocoThresholds(
-        instruction = 70,
-        method = 50,
-        branch = 50,
-        complexity = 45,
-        line = 90,
-        clazz = 60
+        instruction = 65,
+        method = 65,
+        branch = 55,
+        complexity = 60,
+        line = 85,
+        clazz = 90
       ),
       Seq(JacocoReportFormats.ScalaHTML),
       "utf-8"
