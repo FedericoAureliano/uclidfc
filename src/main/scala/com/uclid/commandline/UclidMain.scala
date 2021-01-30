@@ -3,7 +3,7 @@ package com.uclid.commandline
 import com.uclid.solverinterface.ProofResult
 import com.uclid.termgraph
 import com.uclid.solverinterface._
-import com.uclid.error._
+
 import com.uclid.uclidlanguage.parser._
 import com.uclid.uclidlanguage.compiler._
 
@@ -99,30 +99,35 @@ object UclidMain {
   def main(config: Config): UclidResult = {
     val errorResult =
       new ProofResult()
-    try {
+      
+    print("\nParsing input ... ")
+    val startParse = System.nanoTime
+    val modules = UclidCompiler.parse(config.files) match {
+      case Right(m) => m
+      case Left(e) => 
+        errorResult.messages = "\n" + e.toString()
+        return UclidResult(errorResult)
+    }
+    val parseDuration = (System.nanoTime - startParse) / 1e9d
+    println(s"Parsing completed in ${parseDuration} seconds.")
 
-      print("\nParsing input ... ")
-      val startParse = System.nanoTime
-      val modules = UclidCompiler.parse(config.files)
-      val parseDuration = (System.nanoTime - startParse) / 1e9d
-      println(s"Parsing completed in ${parseDuration} seconds.")
-      // println(s"Size of parse tree ... ${SizeEstimator.estimate(modules)}")
+    try {
       print("Processing model ... ")
       val startProcess = System.nanoTime
-      val obs = UclidCompiler.process(modules.right.get, Some(config.mainModuleName))
-      termgraph.rewrite(config.blastEnumQuantifierFlag)
+      val ctx = UclidCompiler.process(modules, Some(config.mainModuleName))
+      ctx.termgraph.rewrite(config.blastEnumQuantifierFlag)
       val processDuration = (System.nanoTime - startProcess) / 1e9d
       println(s"Processing completed in ${processDuration} seconds.")
-      println(s"-- Term graph contains ${termgraph.getStmtsSize()} nodes.")
-      println(s"-- Memoization map has ${termgraph.getMemoKeySize()} keys.")
+      println(s"-- Term graph contains ${ctx.termgraph.getStmtsSize()} nodes.")
+      println(s"-- Memoization map has ${ctx.termgraph.getMemoKeySize()} keys.")
       // TODO: When would the number of unique keys not match the number of unique values?
       // println(s"-- Memoization map has ${termgraph.getMemoValueSize()} unique values.")
 
       val solver = config.solver match {
-        case Solvers.alt_ergo => new AltErgoSolver()
-        case Solvers.cvc4     => new CVC4Solver()
-        case Solvers.vampire  => new VampireSolver()
-        case Solvers.z3       => new Z3Solver()
+        case Solvers.alt_ergo => new AltErgo(ctx)
+        case Solvers.cvc4     => new CVC4(ctx)
+        case Solvers.vampire  => new Vampire(ctx)
+        case Solvers.z3       => new Z3(ctx)
       }
 
       val res = solver.solve(config.run, config.outFile)
@@ -131,13 +136,7 @@ object UclidMain {
       case (e: java.io.FileNotFoundException) =>
         errorResult.messages = "\n" + e.toString()
         UclidResult(errorResult)
-      case e: SyntaxError =>
-        errorResult.messages = "\n" + e.toString()
-        UclidResult(errorResult)
       case e: SemanticError =>
-        errorResult.messages = "\n" + e.toString()
-        UclidResult(errorResult)
-      case e: EncodingError =>
         errorResult.messages = "\n" + e.toString()
         UclidResult(errorResult)
       case e: SolverMismatchError =>
@@ -145,23 +144,6 @@ object UclidMain {
         UclidResult(errorResult)
     }
   }
-
-  /** Parse modules, typecheck them, inline procedures, create LTL monitors, etc. */
-  // def compile(
-  //   srcFiles: Seq[java.io.File]
-  // ): List[OuterDecl] = {
-  //   // Helper function to parse a single file.
-  //   def parseFile(srcFile: String): List[OuterDecl] = {
-  //     val text = scala.io.Source.fromFile(srcFile).mkString
-  //     UclidCompiler(text)
-  //   }
-
-  //   val parsedModules = srcFiles.foldLeft(List.empty[OuterDecl]) {
-  //     (acc, srcFile) => acc ++ parseFile(srcFile.getPath())
-  //   }
-
-  //   parsedModules
-  // }
 }
 
 case class UclidResult(

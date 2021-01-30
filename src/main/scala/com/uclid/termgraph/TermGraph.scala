@@ -1,129 +1,153 @@
 package com.uclid.termgraph
 
 import scala.collection.mutable.ArrayBuffer
+import scala.collection.mutable.HashMap
 
-// Essentially an AST node or edge.
-abstract class Instruction
+abstract class AbstractTermGraph() {
+  /**
+    * The actual graph data structure.
+    */
+  val stmts: ArrayBuffer[Instruction] = new ArrayBuffer[Instruction]()
 
-abstract class AbstractDataType extends Instruction {
-  def defaultCtr(): Int
+  /**
+    * Points an instruction to its address in the term graph.
+    */
+  private val memo: HashMap[Instruction, Int] =
+    new HashMap().addAll(stmts.zipWithIndex.map(p => (p._1, p._2)))
+
+  private var uniqueId = 0
+
+  def freshSymbolName(): String = {
+    uniqueId += 1
+    s"fresh!${uniqueId}"
+  }
+
+  def clear() : Unit = {
+    stmts.clear()
+    memo.clear()
+    uniqueId = 0
+  }
+
+
+  def getStmtsSize(): Int = stmts.length
+  def getMemoKeySize(): Int = memo.keys.toList.length
+  def getMemoValueSize(): Int = memo.values.toList.length
+
+  /** Add instruction to stmts if it isn't already there, otherwise return its location.
+    *
+    * If the instruction should be named, then add a reference to it and point to that.
+    *
+    * @param inst instruction to add
+    * @param toName the Option[String] to name the instruction
+    * @return the location of the instruction
+    */
+  def memoAddInstruction(
+    inst: Instruction,
+    toName: Option[String] = None
+  ): Int =
+    inst match {
+      case FunctionParameter(_, _) => {
+        // We never want to memoize variables so that we avoid accidental variable capture.
+        // This would happen a lot in rewrites where updating a variable in some function could mess up some other function.
+        addInstruction(inst)
+      }
+      case _ => {
+        val location = memo.get(inst) match {
+          case Some(loc) => loc
+          case None      => addInstruction(inst)
+        }
+        toName match {
+          case Some(name) => {
+            val newLoc = addInstruction(Ref(location, name))
+            memo.put(inst, newLoc)
+            newLoc
+          }
+          case None => {
+            memo.put(inst, location)
+            location
+          }
+        }
+      }
+    }
+
+  /** Add an instruction to the end of the array buffer representing the term graph WITHOUT ADDING TO MEMO.
+    *
+    * @param inst instruction to add
+    * @return address where the location was added
+    */
+  def addInstruction(inst: Instruction): Int = {
+    val r = stmts.length
+    stmts.addOne(inst)
+    r
+  }
+
+  /** Update an instruction and keep the memo map in sync.
+    *
+    * @param r location we want to update
+    * @param newInstruction new instruction that we will put at that location
+    */
+  def memoUpdateInstruction(
+    r: Int,
+    newInstruction: Instruction
+  ): Unit = {
+    // require that at most one instruction points to this address
+    require(memo.forall(p => p._2 != r || stmts(r) == p._1))
+
+    val old = stmts(r)
+    memo.remove(old)
+
+    // update the address r to contain the new instruction
+    stmts.update(
+      r,
+      newInstruction
+    )
+    // make sure the memo map points to this position
+    memo.put(
+      newInstruction,
+      r
+    )
+  }
+
+  def memoGetInstruction(inst: Instruction): Int =
+    memo(inst)
+
+  def mark(startingPoints: Iterable[Int]): Array[Boolean] = {
+    val marks = Array.fill[Boolean](stmts.length)(false)
+    startingPoints.foreach(r => mark_i(r, marks))
+    marks
+  }
+
+  private def mark_i(position: Int, marks: Array[Boolean]): Unit = {
+    def markParams(params: List[Int]) =
+      params.foreach(p => markInstruction(p))
+
+    def markInstruction(pos: Int): Unit =
+      if (!marks(pos)) {
+        marks(pos) = true
+        stmts(pos) match {
+          case Ref(i, _)               => markInstruction(i)
+          case Numeral(_)              =>
+          case TheorySort(_, p)        => markParams(p)
+          case UserSort(_, _)          =>
+          case FunctionParameter(_, s) => markInstruction(s)
+          case TheoryMacro(_, p)       => markParams(p)
+          case UserMacro(_, s, b, p) =>
+            markInstruction(s); markInstruction(b); markParams(p)
+          case UserFunction(_, s, p) => markInstruction(s); markParams(p)
+          case Synthesis(_, s, p)    => markInstruction(s); markParams(p)
+          case Constructor(_, _, p)  => markParams(p)
+          case Selector(_, s)        => markInstruction(s)
+          case DataType(_, p)        => markParams(p)
+          case Module(_, d, i, x, v) =>
+            markInstruction(i); markInstruction(d); markInstruction(x);
+            markInstruction(v)
+          case Application(caller, args) =>
+            markInstruction(caller); args.foreach(i => markInstruction(i))
+        }
+      }
+
+    markInstruction(position)
+  }
 }
 
-// Points to another position in the array
-case class Ref(loc: Int, named: String) extends Instruction {}
-
-/*
-Numerals are used for e.g. fixed-width bit-vectors
- */
-case class Numeral(value: Int) extends Instruction {}
-
-/*
-Theory sorts are interpreted sorts like "Int." For example, 32-bit bit-vectors are represented by
-
-[tst] BitVec  #1
-[num] 32
-
-The params can point to other sorts or numerals.
- */
-case class TheorySort(name: String, params: List[Int] = List.empty)
-    extends Instruction {}
-
-/*
-User sorts are uninterpreted sorts
- */
-case class UserSort(name: String, arity: Numeral = Numeral(0))
-    extends Instruction {}
-
-/*
-Function parameters, must be arity 0
- */
-case class FunctionParameter(name: String, sort: Int) extends Instruction {}
-
-/*
-Theory macros are interpreted functions, like "+", "1", and "#b11110000".
-Quantifiers are special in that they bind parameters. For example, (forall ((x Int)) (> 0 x)) is
-
-[app] #4      #1
-[app] #2      #3    #5
-[tmo] >
-[tmo] 0
-[tmo] forall  #5
-[fpr] x       #6
-[tst] Int
- */
-case class TheoryMacro(name: String, params: List[Int] = List.empty)
-    extends Instruction {}
-
-/*
-User macros are function definitions like f(x) = x + x, which would be in LIR
-
-[umo] f   #4    #1    #3
-[app] #2  #3    #3
-[tmo] +
-[fpr] x   #4
-[tst] Int
- */
-case class UserMacro(
-  name: String,
-  sort: Int,
-  body: Int,
-  params: List[Int] = List.empty
-) extends Instruction {}
-
-/*
-User functions are uninterpreted functions. For example, f(x : Int) : Int would be
-
-[umo] f   #2    #1
-[fpr] x   #2
-[tst] Int
- */
-case class UserFunction(name: String, sort: Int, params: List[Int] = List.empty)
-    extends Instruction {}
-
-case class Synthesis(
-  name: String,
-  sort: Int,
-  params: List[Int] = List.empty
-) extends Instruction {}
-
-case class Constructor(
-  name: String,
-  sort: Int,
-  selectors: List[Int] = List.empty
-) extends Instruction {}
-
-case class Selector(name: String, sort: Int) extends Instruction {}
-
-/*
-For algebraic datatypes like enums, records, and so on. For example a record R = {x: Int, y: Real} is
-
-[adt] R     #1
-[ctr] r     #0    #2    #3
-[slr] x     #4
-[slr] y     #5
-[tst] Int
-[tst] Real
- */
-case class DataType(name: String, constructors: List[Int])
-    extends AbstractDataType {
-  override def defaultCtr(): Int = constructors.head
-}
-
-/*
-A module is a record with associated init function, next function, and spec function.
- */
-case class Module(name: String, ct: Int, init: Int, next: Int, spec: Int)
-    extends AbstractDataType {
-  override def defaultCtr(): Int = ct
-}
-
-case class Application(caller: Int, args: List[Int]) extends Instruction {}
-
-var uniqueId = 0
-
-protected def freshSymbolName(): String = {
-  uniqueId += 1
-  s"fresh!${uniqueId}"
-}
-
-val stmts: ArrayBuffer[Instruction] = new ArrayBuffer[Instruction]()
+class TermGraph extends AbstractTermGraph with Fuzzable with Rewritable with WellFormed

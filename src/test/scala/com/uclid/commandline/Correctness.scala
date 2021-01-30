@@ -1,7 +1,5 @@
 package com.uclid.commandline
 
-import TestHelper._
-
 import org.junit.Test
 import java.io.File
 
@@ -14,7 +12,7 @@ class Correctness {
       .filter(_.isFile)
       .map(f => readTestFile(f))
     tests.foreach { t =>
-      println("Running:", t._1)
+      println("Running: " + t._1)
       val answer = endToEnd(t._1, t._2, t._8)
       assert(
         t._3 == answer.presult.result,

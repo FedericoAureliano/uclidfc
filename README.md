@@ -64,19 +64,7 @@ uclidfc [options] <file> ...
 uclidfc-live <uclid files to edit> <query file to watch>
 ```
 
-## Web & Docs
-
-```
-uclidfc-web
-```
-
 # Develop
-
-### Check Format
-
-```
-sbt scalafmtSbtCheck scalafmtCheck test:scalafmtCheck
-```
 
 ### Check Coverage
 
@@ -88,17 +76,5 @@ open jvm/target/scala-2.13/jacoco/report/html/index.html
 ### Run JVM
 
 ```
-sbt "uclidJVM/run [options] <file> ..."
+sbt "run [options] <file> ..."
 ```
-
-### Run JS
-
-```
-sbt fullOptJS; cp js/target/scala-2.13/uclidfc-opt.js docs/js/uclidfc-opt.js
-open docs/index.html
-```
-
-### Before Committing
-
-To auto-format your code and run all the CI checks locally, run
-`./beforecommit.sh`.

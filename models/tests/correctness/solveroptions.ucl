@@ -1,5 +1,5 @@
 // UCLID TEST
-// Solver=cvc4
+// Solver=z3
 // Result=Some(true)
 
 module intarray
@@ -22,7 +22,7 @@ module main {
     invariant quant: forall (x: integer, y:integer) :: arr.arr[x] != arr.arr[y];
 
     control {
-        set_solver_option("timeout", "1");
+        set_solver_option("timeout", "1000");
         unroll(2);
         check;
     }

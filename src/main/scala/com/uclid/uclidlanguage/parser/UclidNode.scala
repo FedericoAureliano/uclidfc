@@ -13,14 +13,14 @@ object IdGenerator {
   }
 }
 
-sealed trait UclidAST extends Positional {
+sealed trait UclidNode extends Positional {
   val astNodeId = IdGenerator.newId()
 }
 
 // operators (interpreted symbols), statements, and expressions
-sealed trait TermNode extends UclidAST
+sealed trait TermNode extends UclidNode
 
-sealed trait Command extends UclidAST
+sealed trait Command extends UclidNode
 
 sealed trait Operator extends TermNode {
   val name: String
@@ -155,7 +155,7 @@ case class OperatorApplication(op: Operator, operands: List[Expr])
 //for uninterpreted function symbols
 case class FunctionApplication(e: Expr, args: List[Expr]) extends Expr {}
 
-sealed abstract class Type extends UclidAST {
+sealed abstract class Type extends UclidNode {
   def defaultVal(): Option[Expr];
 }
 
@@ -217,8 +217,8 @@ case class ModuleNextCallStmt(expr: Expr) extends Statement {}
 
 case class LetStatement(id: Identifier, expr: Expr) extends Statement {}
 
-sealed abstract class OuterDecl extends UclidAST {}
-sealed abstract class InnerDecl extends UclidAST {}
+sealed abstract class OuterDecl extends UclidNode {}
+sealed abstract class InnerDecl extends UclidNode {}
 
 case class TypeDecl(id: Identifier, typ: Option[Type]) extends OuterDecl {}
 
@@ -341,4 +341,4 @@ case class ModuleDecl(
   }
 }
 
-case class Model(outers: List[OuterDecl]) extends UclidAST
+case class Model(outers: List[OuterDecl]) extends UclidNode

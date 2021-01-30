@@ -1,7 +1,5 @@
 package com.uclid.commandline
 
-import TestHelper._
-
 import org.junit.Test
 import java.io.File
 
@@ -12,7 +10,7 @@ class Rewrite {
       .filter(_.isFile)
       .map(f => readTestFile(f))
     tests.foreach { t =>
-      println("Running:", t._1)
+      println("Running: " + t._1)
       val answerWithout = endToEnd(t._1, t._2, List.empty)
       val answerWith = endToEnd(t._1, t._2, t._8)
       assert(
