@@ -3,7 +3,7 @@ package com.uclid.uclidlanguage.lexer
 
 import scala.util.parsing.input.Positional
 
-sealed trait UclidToken extends Positional
+trait UclidToken extends Positional
 
 case class IDENTIFIER(str: String) extends UclidToken
 case class BOOLLITERAL(str: String) extends UclidToken

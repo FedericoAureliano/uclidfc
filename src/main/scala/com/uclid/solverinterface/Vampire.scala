@@ -1,7 +1,5 @@
 package com.uclid.solverinterface
 
-
-
 import sys.process._
 import java.io.{File, PrintWriter}
 
@@ -36,7 +34,7 @@ class Vampire(ctx: Context) extends Solver(ctx) {
     "vampire --mode smtcomp --input_syntax smtlib2 --term_algebra_acyclicity light --term_algebra_rules on --fmb_enumeration_strategy smt"
 
   def generateQuery(): String = {
-    val query = ctx.programToQuery()
+    val query = ctx.toQuery()
 
     // find the set logic command
     val pattern = "(?<=\\(set-logic )(.*)(?=\\))".r

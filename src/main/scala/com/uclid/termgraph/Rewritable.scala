@@ -4,6 +4,7 @@ import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.HashMap
 
 trait Rewritable() extends AbstractTermGraph {
+
   /** Entry point to all rewrites. Boolean flags specify choices.
     *
     * @param blastEnumQuantifierFlag rewrite quantifiers over enums to disjunctions/conjunctions
@@ -42,9 +43,9 @@ trait Rewritable() extends AbstractTermGraph {
   private def blastEnumQuantifier(app: Int): Boolean =
     stmts(app) match {
       case Application(quant, body :: Nil)
-          if stmts(quant).isInstanceOf[TheoryMacro] => {
+          if stmts(quant).isInstanceOf[TheoryMacro] =>
         stmts(quant).asInstanceOf[TheoryMacro] match {
-          case TheoryMacro("forall", v :: vs) => {
+          case TheoryMacro("forall", v :: vs) =>
             val copies = blastEnumQuantifier(body, v).getOrElse(
               return false
             )
@@ -58,8 +59,7 @@ trait Rewritable() extends AbstractTermGraph {
               memoUpdateInstruction(body, stmts(new_body))
               return true
             }
-          }
-          case TheoryMacro("exists", v :: vs) => {
+          case TheoryMacro("exists", v :: vs) =>
             val copies = blastEnumQuantifier(body, v).getOrElse(
               return false
             )
@@ -73,10 +73,8 @@ trait Rewritable() extends AbstractTermGraph {
               memoUpdateInstruction(body, stmts(new_body))
               return true
             }
-          }
           case _ => return false
         }
-      }
       case _ => return false
     }
 
@@ -259,12 +257,11 @@ trait Rewritable() extends AbstractTermGraph {
     map: HashMap[Int, Int] = HashMap.empty
   ): HashMap[Int, Int] = {
     stmts(pos) match {
-      case Application(caller, args) => {
+      case Application(caller, args) =>
         val newCaller = copyTermHelper(caller, map).getOrElse(caller, caller)
         val newArgs = args.map(a => copyTermHelper(a, map).getOrElse(a, a))
         val newPos: Int = addInstruction(Application(newCaller, newArgs))
         map.addOne((pos, newPos))
-      }
       case _ =>
     }
     map
@@ -277,7 +274,7 @@ trait Rewritable() extends AbstractTermGraph {
     */
   protected def updateTerm(pos: Int, map: HashMap[Int, Int]): Unit =
     stmts(pos) match {
-      case Application(caller, args) => {
+      case Application(caller, args) =>
         memoUpdateInstruction(
           pos,
           Application(
@@ -287,7 +284,6 @@ trait Rewritable() extends AbstractTermGraph {
         )
         updateTerm(caller, map)
         args.foreach(a => updateTerm(a, map))
-      }
       case _ =>
     }
 }

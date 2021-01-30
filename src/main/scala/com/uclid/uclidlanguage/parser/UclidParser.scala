@@ -1,6 +1,5 @@
 package com.uclid.uclidlanguage.parser
 
-
 import com.uclid.uclidlanguage.compiler.{Location, UclidParserError}
 import com.uclid.uclidlanguage.lexer._
 
@@ -82,16 +81,15 @@ object UclidParser extends PackratParsers {
 
   lazy val polymorphicSelectOpParser: PackratParser[OperatorApplication] =
     positioned {
-      (PERIOD() ~> idParser) ^^ {
-        case id => OperatorApplication(PolymorphicSelect(id), List.empty)
+      (PERIOD() ~> idParser) ^^ { case id =>
+        OperatorApplication(PolymorphicSelect(id), List.empty)
       }
     }
 
   lazy val arraySelectOpParser: PackratParser[OperatorApplication] =
     positioned {
-      (LBRACKET() ~> exprParser <~ RBRACKET()) ^^ {
-        case e =>
-          OperatorApplication(ArraySelect(), List(e))
+      (LBRACKET() ~> exprParser <~ RBRACKET()) ^^ { case e =>
+        OperatorApplication(ArraySelect(), List(e))
       }
     }
 
@@ -110,15 +108,15 @@ object UclidParser extends PackratParsers {
   /* BEGIN Literals. */
   lazy val boolParser: PackratParser[BoolLit] =
     positioned {
-      boolliteral ^^ {
-        case boolLit => BoolLit(boolLit.str.toBoolean)
+      boolliteral ^^ { case boolLit =>
+        BoolLit(boolLit.str.toBoolean)
       }
     }
 
   lazy val integerParser: PackratParser[IntLit] =
     positioned {
-      intliteral ^^ {
-        case intLit => IntLit(BigInt(intLit.str, 10))
+      intliteral ^^ { case intLit =>
+        IntLit(BigInt(intLit.str, 10))
       }
     }
 
@@ -131,14 +129,12 @@ object UclidParser extends PackratParsers {
 
   lazy val e1Parser: PackratParser[Expr] =
     KWFORALL() ~> idTypeListParser ~ (COLONCOLON() ~> e1Parser) ^^ {
-      case ids ~ expr => {
+      case ids ~ expr =>
         OperatorApplication(ForallOp(ids), List(expr))
-      }
     } |
       KWEXISTS() ~> idTypeListParser ~ (COLONCOLON() ~> e1Parser) ^^ {
-        case ids ~ expr => {
+        case ids ~ expr =>
           OperatorApplication(ExistsOp(ids), List(expr))
-        }
       } |
       e3Parser
 
@@ -196,11 +192,11 @@ object UclidParser extends PackratParsers {
   /** e11Parser = UnOp e12Parser | e12Parser * */
   lazy val e11Parser: PackratParser[Expr] =
     positioned {
-      OPSUB() ~> e12Parser ^^ {
-        case e => OperatorApplication(UnaryMinusOp(), List(e))
+      OPSUB() ~> e12Parser ^^ { case e =>
+        OperatorApplication(UnaryMinusOp(), List(e))
       } |
-        OPNOT() ~> e12Parser ^^ {
-          case e => OperatorApplication(NegationOp(), List(e))
+        OPNOT() ~> e12Parser ^^ { case e =>
+          OperatorApplication(NegationOp(), List(e))
         } |
         e12Parser
     }
@@ -214,11 +210,11 @@ object UclidParser extends PackratParsers {
   /** e12Parser = e12Parser (ExprList) | e12Parser ExprSuffix | e15Parser */
   lazy val e12Parser: PackratParser[Expr] =
     positioned {
-      e12Parser ~ exprSuffixParser ^^ {
-        case e ~ es => OperatorApplication(es.op, List(e) ++ es.operands)
+      e12Parser ~ exprSuffixParser ^^ { case e ~ es =>
+        OperatorApplication(es.op, List(e) ++ es.operands)
       } |
-        e12Parser ~ exprListParser ^^ {
-          case e ~ f => FunctionApplication(e, f)
+        e12Parser ~ exprListParser ^^ { case e ~ f =>
+          FunctionApplication(e, f)
         } |
         e15Parser
     }
@@ -238,14 +234,13 @@ object UclidParser extends PackratParsers {
         case expr ~ thenExpr ~ elseExpr =>
           OperatorApplication(ITEOp(), List(expr, thenExpr, elseExpr))
       } |
-      constArrayParser |
-      LPARENTHESIS() ~> exprParser <~ RPARENTHESIS() |
-      literalParser |
-      idParser <~ OPPRIME() ^^ {
-        case id =>
+        constArrayParser |
+        LPARENTHESIS() ~> exprParser <~ RPARENTHESIS() |
+        literalParser |
+        idParser <~ OPPRIME() ^^ { case id =>
           OperatorApplication(GetNextValueOp(), List(id))
-      } |
-      idParser
+        } |
+        idParser
     }
 
   lazy val exprParser: PackratParser[Expr] =
@@ -254,14 +249,16 @@ object UclidParser extends PackratParsers {
     }
 
   lazy val exprListParser: PackratParser[List[Expr]] =
-    (LPARENTHESIS() ~> exprParser ~ rep(COMMA() ~> exprParser) <~ RPARENTHESIS()) ^^ {
-      case e ~ es => e :: es
+    (LPARENTHESIS() ~> exprParser ~ rep(
+      COMMA() ~> exprParser
+    ) <~ RPARENTHESIS()) ^^ { case e ~ es =>
+      e :: es
     } |
       LPARENTHESIS() ~> RPARENTHESIS() ^^ { case _ => List.empty[Expr] }
 
   lazy val primitiveTypeParser: PackratParser[InlineType] =
     positioned {
-      KWBOOLEAN() ^^ { case _   => BooleanType() } |
+      KWBOOLEAN() ^^ { case _ => BooleanType() } |
         KWINTEGER() ^^ { case _ => IntegerType() }
     }
 
@@ -276,8 +273,8 @@ object UclidParser extends PackratParsers {
   // also handles module instance types
   lazy val namedTypeParser: PackratParser[NamedType] =
     positioned {
-      idParser ^^ {
-        case id => NamedType(id)
+      idParser ^^ { case id =>
+        NamedType(id)
       }
     }
 
@@ -292,21 +289,23 @@ object UclidParser extends PackratParsers {
     }
 
   lazy val idTypeListParser: PackratParser[List[(Identifier, InlineType)]] =
-    LPARENTHESIS() ~> idsTypeParser ~ (rep(COMMA() ~> idsTypeParser) <~ RPARENTHESIS()) ^^ {
-      case t ~ ts =>
-        t ++ ts.flatMap(v => v)
+    LPARENTHESIS() ~> idsTypeParser ~ (rep(
+      COMMA() ~> idsTypeParser
+    ) <~ RPARENTHESIS()) ^^ { case t ~ ts =>
+      t ++ ts.flatMap(v => v)
     } |
-      LPARENTHESIS() ~ RPARENTHESIS() ^^ {
-        case _ ~ _ => List.empty[(Identifier, InlineType)]
+      LPARENTHESIS() ~ RPARENTHESIS() ^^ { case _ ~ _ =>
+        List.empty[(Identifier, InlineType)]
       }
 
   lazy val typeListParser: PackratParser[List[InlineType]] =
-    LPARENTHESIS() ~> inlineTypeParser ~ (rep(COMMA() ~> inlineTypeParser) <~ RPARENTHESIS()) ^^ {
-      case t ~ ts =>
-        List(t) ++ ts.flatMap(v => List(v))
+    LPARENTHESIS() ~> inlineTypeParser ~ (rep(
+      COMMA() ~> inlineTypeParser
+    ) <~ RPARENTHESIS()) ^^ { case t ~ ts =>
+      List(t) ++ ts.flatMap(v => List(v))
     } |
-      LPARENTHESIS() ~ RPARENTHESIS() ^^ {
-        case _ ~ _ => List.empty[InlineType]
+      LPARENTHESIS() ~ RPARENTHESIS() ^^ { case _ ~ _ =>
+        List.empty[InlineType]
       }
 
   lazy val lhsParser: PackratParser[Expr] =
@@ -322,12 +321,13 @@ object UclidParser extends PackratParsers {
           case expr =>
             ModuleNextCallStmt(expr)
         }
-      val kwhavoc = KWHAVOC() ~> exprParser <~ SEMICOLON() ^^ {
-        case e => HavocStmt(e)
+      val kwhavoc = KWHAVOC() ~> exprParser <~ SEMICOLON() ^^ { case e =>
+        HavocStmt(e)
       }
-      val kwlet = KWLET() ~> idParser ~ (ASSIGN() ~> exprParser) <~ SEMICOLON() ^^ {
-        case id ~ e => LetStatement(id, e)
-      }
+      val kwlet =
+        KWLET() ~> idParser ~ (ASSIGN() ~> exprParser) <~ SEMICOLON() ^^ {
+          case id ~ e => LetStatement(id, e)
+        }
       val kwif =
         KWIF() ~ LPARENTHESIS() ~> (exprParser <~ RPARENTHESIS()) ~ blkStmtParser ~ (KWELSE() ~> blkStmtParser).? ^^ {
           case e ~ f ~ Some(g) => IfElseStmt(e, f, g)
@@ -340,33 +340,30 @@ object UclidParser extends PackratParsers {
       val lhsparser =
         lhsParser ~ rep(COMMA() ~> lhsParser) ~ (ASSIGN() ~> exprParser) ~ rep(
           COMMA() ~> exprParser
-        ) <~ SEMICOLON() ^^ {
-          case l ~ ls ~ r ~ rs => {
-            val assigns = ls
-              .zip(rs)
-              .foldLeft(List(AssignStmt(l, r)))((acc, p) =>
-                acc ++ List(AssignStmt(p._1, p._2))
-              )
-            BlockStmt(assigns)
-          }
+        ) <~ SEMICOLON() ^^ { case l ~ ls ~ r ~ rs =>
+          val assigns = ls
+            .zip(rs)
+            .foldLeft(List(AssignStmt(l, r)))((acc, p) =>
+              acc ++ List(AssignStmt(p._1, p._2))
+            )
+          BlockStmt(assigns)
         }
 
       kwnext | kwhavoc | kwlet | kwif | kwcase | lhsparser
     }
 
   lazy val caseBlockStmtParser: PackratParser[(Expr, Statement)] =
-    (exprParser ~ COLON() ~ blkStmtParser) ^^ {
-      case e ~ COLON() ~ ss => (e, ss)
+    (exprParser ~ COLON() ~ blkStmtParser) ^^ { case e ~ COLON() ~ ss =>
+      (e, ss)
     } |
-      (KWDEFAULT() ~ COLON() ~> blkStmtParser) ^^ {
-        case ss => (BoolLit(true), ss)
+      (KWDEFAULT() ~ COLON() ~> blkStmtParser) ^^ { case ss =>
+        (BoolLit(true), ss)
       }
 
   lazy val blkStmtParser: PackratParser[BlockStmt] =
     positioned {
-      LBRACE() ~> rep(statementParser) <~ RBRACE() ^^ {
-        case stmts =>
-          BlockStmt(stmts)
+      LBRACE() ~> rep(statementParser) <~ RBRACE() ^^ { case stmts =>
+        BlockStmt(stmts)
       }
     }
 
@@ -374,11 +371,9 @@ object UclidParser extends PackratParsers {
     positioned {
       KWTYPE() ~> idParser ~ (ASSIGN() ~> (KWRECORD() ~> (LBRACE() ~> idsTypeParser))) ~ (rep(
         COMMA() ~> idsTypeParser
-      ) <~ RBRACE()) <~ SEMICOLON() ^^ {
-        case id ~ v1 ~ vs => {
-          val elements: List[(Identifier, InlineType)] = v1 ++ vs.flatten
-          TypeDecl(id, Some(RecordType(elements)))
-        }
+      ) <~ RBRACE()) <~ SEMICOLON() ^^ { case id ~ v1 ~ vs =>
+        val elements: List[(Identifier, InlineType)] = v1 ++ vs.flatten
+        TypeDecl(id, Some(RecordType(elements)))
       }
     }
 
@@ -386,8 +381,8 @@ object UclidParser extends PackratParsers {
     positioned {
       KWTYPE() ~> idParser ~ (ASSIGN() ~> (KWENUM() ~> (LBRACE() ~> idParser))) ~ (rep(
         COMMA() ~> idParser
-      ) <~ RBRACE()) <~ SEMICOLON() ^^ {
-        case id ~ v1 ~ vs => TypeDecl(id, Some(EnumType(List(v1) ++ vs)))
+      ) <~ RBRACE()) <~ SEMICOLON() ^^ { case id ~ v1 ~ vs =>
+        TypeDecl(id, Some(EnumType(List(v1) ++ vs)))
       }
     }
 
@@ -400,9 +395,8 @@ object UclidParser extends PackratParsers {
           case id ~ t =>
             TypeDecl(id, Some(t))
         } |
-        KWTYPE() ~> idParser <~ SEMICOLON() ^^ {
-          case id =>
-            TypeDecl(id, None)
+        KWTYPE() ~> idParser <~ SEMICOLON() ^^ { case id =>
+          TypeDecl(id, None)
         }
     }
 
@@ -454,8 +448,8 @@ object UclidParser extends PackratParsers {
   lazy val outerAxiomParser: PackratParser[OuterAxiom] =
     positioned {
 
-      KWAXIOM() ~> exprParser <~ SEMICOLON() ^^ {
-        case e => OuterAxiom(e)
+      KWAXIOM() ~> exprParser <~ SEMICOLON() ^^ { case e =>
+        OuterAxiom(e)
       }
     }
 
@@ -463,15 +457,17 @@ object UclidParser extends PackratParsers {
     positioned {
 
       KWCONST() ~> idParser ~ (COLON() ~> inlineTypeParser) ~ (ASSIGN() ~> OPSUB()) ~ literalParser <~ SEMICOLON() ^^ {
-        case id ~ typ ~ OPSUB() ~ lit => DefineDecl(id, List.empty, typ, lit.negate())
+        case id ~ typ ~ OPSUB() ~ lit =>
+          DefineDecl(id, List.empty, typ, lit.negate())
       } |
         KWCONST() ~> idParser ~ (COLON() ~> inlineTypeParser) ~ (ASSIGN() ~> OPSUB()) ~ idParser <~ SEMICOLON() ^^ {
-          case id ~ typ ~ OPSUB() ~ lit => DefineDecl(
-                  id,
-                  List.empty,
-                  typ,
-                  OperatorApplication(NegationOp(), List(lit))
-                )
+          case id ~ typ ~ OPSUB() ~ lit =>
+            DefineDecl(
+              id,
+              List.empty,
+              typ,
+              OperatorApplication(NegationOp(), List(lit))
+            )
         } |
         KWCONST() ~> idParser ~ (COLON() ~> inlineTypeParser) ~ (ASSIGN() ~> literalParser) <~ SEMICOLON() ^^ {
           case id ~ typ ~ lit => DefineDecl(id, List.empty, typ, lit)
@@ -565,11 +561,11 @@ object UclidParser extends PackratParsers {
           case id ~ k =>
             ProofCommand(id, k)
         } |
-        KWGETVALUE() ~> exprListParser.? <~ SEMICOLON() ^^ {
-          case ts => GetValue(ts.getOrElse(List.empty))
+        KWGETVALUE() ~> exprListParser.? <~ SEMICOLON() ^^ { case ts =>
+          GetValue(ts.getOrElse(List.empty))
         } |
-        KWCHECK() <~ SEMICOLON() ^^ {
-          case _ => Check()
+        KWCHECK() <~ SEMICOLON() ^^ { case _ =>
+          Check()
         } |
         KWTRACE() ~> LPARENTHESIS() ~> integerParser ~ (COMMA() ~> boolParser).? ~ (COMMA() ~> blkStmtParser).? <~ RPARENTHESIS() <~ SEMICOLON() ^^ {
           case k ~ b ~ e =>
@@ -586,7 +582,9 @@ object UclidParser extends PackratParsers {
 
   lazy val moduleParser: PackratParser[ModuleDecl] =
     positioned {
-      KWMODULE() ~> idParser ~ (LBRACE() ~> rep(innerDeclParser) ~ (cmdBlockParser.?) <~ RBRACE()) ^^ {
+      KWMODULE() ~> idParser ~ (LBRACE() ~> rep(
+        innerDeclParser
+      ) ~ (cmdBlockParser.?) <~ RBRACE()) ^^ {
         case id ~ (decls ~ Some(cs)) =>
           ModuleDecl(id, decls, cs)
         case id ~ (decls ~ None) =>

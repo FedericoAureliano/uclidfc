@@ -13,7 +13,6 @@ object Solvers extends Enumeration {
 }
 
 /** This is the main class for Uclid.
-  *
   */
 object UclidMain {
 
@@ -23,7 +22,7 @@ object UclidMain {
   def main(args: Array[String]): Unit =
     parseOptions(args) match {
       case None => sys.exit(2)
-      case Some(config) => {
+      case Some(config) =>
         val answer = main(config)
         if (config.run) {
           println(answer.presult)
@@ -35,7 +34,6 @@ object UclidMain {
           case Some(true)  => 1
           case None        => 2
         })
-      }
     }
 
   /** Command-line configuration flags for uclid5.
@@ -99,12 +97,12 @@ object UclidMain {
   def main(config: Config): UclidResult = {
     val errorResult =
       new ProofResult()
-      
+
     print("\nParsing input ... ")
     val startParse = System.nanoTime
     val modules = UclidCompiler.parse(config.files) match {
       case Right(m) => m
-      case Left(e) => 
+      case Left(e) =>
         errorResult.messages = "\n" + e.toString()
         return UclidResult(errorResult)
     }
@@ -130,8 +128,17 @@ object UclidMain {
         case Solvers.z3       => new Z3(ctx)
       }
 
-      val res = solver.solve(config.run, config.outFile)
+      val res = {
+        val tmp = solver.solve(config.run, config.outFile)
+        if (ctx.traceQuery) {
+          (ProofResult(None, tmp._1.messages), tmp._2, tmp._3)
+        } else {
+          (tmp._1, tmp._2, tmp._3)
+        }
+      }
+
       UclidResult(res._1, parseDuration, processDuration, res._2, res._3)
+
     } catch {
       case (e: java.io.FileNotFoundException) =>
         errorResult.messages = "\n" + e.toString()

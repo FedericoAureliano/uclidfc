@@ -316,14 +316,12 @@ case class ModuleDecl(
       .flatMap(sVar => sVar.ids.map(id => (id, sVar.typ)))
 
   // module properties.
-  val properties: List[SpecDecl] = decls.collect {
-    case spec: SpecDecl =>
-      spec
+  val properties: List[SpecDecl] = decls.collect { case spec: SpecDecl =>
+    spec
   }
 
-  val axioms: List[InnerAxiom] = decls.collect {
-    case spec: InnerAxiom =>
-      spec
+  val axioms: List[InnerAxiom] = decls.collect { case spec: InnerAxiom =>
+    spec
   }
 
   // the init block.
