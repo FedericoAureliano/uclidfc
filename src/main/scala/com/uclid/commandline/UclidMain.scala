@@ -161,8 +161,10 @@ object UclidMain {
         List.empty
       }
       analysisDuration = (System.nanoTime - startAnalysis) / 1e9d
-      println(s"... Analysis completed in ${analysisDuration} seconds.")
-      println(features.map(f => "-- " + f).mkString("\n"))
+      println(s"Analysis completed in ${analysisDuration} seconds.")
+      if (config.features) {
+        println(features.map(f => "-- " + f).mkString("\n"))
+      }
 
       val solver = config.solver match {
         case Solvers.alt_ergo => new AltErgo(ctx)
