@@ -47,12 +47,15 @@ object SmtCompiler {
           val newEndPos = sexprUntilMatching(pos)
           assert(newEndPos > pos)
           parseAssertion(pos, newEndPos)
-          pos = newEndPos
+          pos = newEndPos + 1
+          assert(tokens(pos - 1) == ")")
         case "(" :: "check-sat" :: ")" :: _ =>
           ctx.checkSat()
           pos += 3
+          assert(tokens(pos - 1) == ")")
         case "(" :: "set-logic" :: logic :: ")" :: _ =>
           print(s"Ignoring (set-logic $logic) command in query ... ")
+          assert(tokens(pos + 3) == ")")
           pos += 4
         case "(" :: "declare-const" :: constName :: sortName :: ")" :: _ =>
           val sortRef = parseAtom(sortName, HashMap.empty)
@@ -60,7 +63,73 @@ object SmtCompiler {
             termgraph.memoAddInstruction(UserFunction(constName, sortRef))
           global(constName) = declRef
           pos += 5
-        case _ => pos += 1
+          assert(tokens(pos - 1) == ")")
+        case "(" :: "declare-fun" :: funName :: "(" :: _ =>
+          val paramsStart = pos + 3
+          val paramsEnd = sexprUntilMatching(paramsStart) + 1
+          val params = splitIntoTerms(paramsStart, paramsEnd).map(p =>
+            parseTerm(p._1, p._2, HashMap.empty)
+          )
+          val sortRef = parseAtom(tokens(paramsEnd), HashMap.empty)
+          val declRef =
+            termgraph.memoAddInstruction(UserFunction(funName, sortRef, params))
+          global(funName) = declRef
+          pos = paramsEnd + 2 //the sort plus the ")"
+          assert(tokens(pos - 1) == ")")
+        case "(" :: "declare-datatypes" :: _ =>
+            val namesStart = pos + 2
+            val namesEnd = sexprUntilMatching(namesStart) + 1
+            val names = splitIntoTerms(namesStart, namesEnd).map(p => {
+                // the arity must always be zero
+                assert(tokens(p._2-2) == "0", "Parametric datatypes not supported!")
+                val name = tokens(p._1+1)
+                val sortRef = termgraph.addInstruction(DataType(name, List.empty)) // placeholder
+                global(name) = sortRef
+                (name, sortRef)
+            })
+
+            val bodiesStart = namesEnd
+            assert(tokens(bodiesStart) == "(")
+            val bodiesEnd = sexprUntilMatching(bodiesStart) + 1
+            val bodies : List[List[(String, List[(String, String)])]] = splitIntoTerms(bodiesStart, bodiesEnd).map((bodyStart, bodyEnd) => {
+                splitIntoTerms(bodyStart, bodyEnd).map((ctrXSelsStart, ctrXSelsEnd) => {
+                    val ctrXSels = splitIntoTerms(ctrXSelsStart, ctrXSelsEnd)
+                    val sels = if (ctrXSels.length > 1) {
+                        ctrXSels.tail.map((selStart, selEnd) => {
+                            val pair = splitIntoTerms(selStart, selEnd).map { x =>
+                            assert(x._1 + 1 == x._2)
+                            tokens(x._1)
+                            }
+                            assert(pair.length == 2)
+                            (pair.head, pair.last)
+                        })
+                    } else {
+                        List.empty
+                    }
+                    (tokens(ctrXSels.head._1), sels)
+                })
+            })
+
+            names.zip(bodies).foreach(dt => {
+                val ctrs = dt._2.map(ctrXsels => {
+                    val sels = ctrXsels._2.map(pair => {
+                        val selRef = termgraph.memoAddInstruction(
+                            Selector(pair._1, parseAtom(pair._2, HashMap.empty))
+                        )
+                        global(pair._1) = selRef
+                        selRef
+                    })
+                    val ctrRef = termgraph.memoAddInstruction(Constructor(ctrXsels._1, dt._1._2, sels))
+                    global(ctrXsels._1) = ctrRef
+                    ctrRef
+                })
+                termgraph.memoUpdateInstruction(dt._1._2, DataType(dt._1._1, ctrs))
+            })
+
+            pos = bodiesEnd + 1
+            assert(tokens(pos - 1) == ")")
+        case c =>
+          throw new SmtParserError("Unexpected character around: " + c.take(if (c.length < 5) then c.length else 5))
       }
 
     def sexprUntilMatching(start: Int): Int = {
@@ -80,9 +149,6 @@ object SmtCompiler {
 
     def splitIntoTerms(startPos: Int, endPos: Int): List[(Int, Int)] = {
       require(startPos < endPos)
-      //   println(
-      //     "SplitIntoTerms: " + tokens.slice(startPos, endPos).mkString(" ")
-      //   )
       val subterms = new ListBuffer[(Int, Int)]()
 
       var pos = startPos + 1
@@ -95,17 +161,11 @@ object SmtCompiler {
           subterms.addOne((pos, pos + 1))
           pos += 1
         }
-
-      //   println("SplitIntoTerms Result:\n" + subterms.map(p => tokens.slice(p._1, p._2).mkString(" ")).mkString("\n"))
-
       subterms.toList
 
     }.ensuring(_.forall(p => p._1 < p._2))
 
     def parseAssertion(startPos: Int, endPos: Int): Unit = {
-      //   println(
-      //     "parseAssertion: " + tokens.slice(startPos, endPos).mkString(" ")
-      //   )
       require(tokens(startPos) == "(")
       require(tokens(startPos + 1) == "assert")
       require(tokens(endPos) == ")")
@@ -119,9 +179,6 @@ object SmtCompiler {
       endPos: Int,
       local: HashMap[String, Int]
     ): Int = {
-      //   println(
-      //     "parseTerm: " + tokens.slice(startPos, endPos).mkString(" ")
-      //   )
       assert(startPos < endPos)
       assert(startPos + 1 == endPos || tokens(startPos) == "(")
 
@@ -129,40 +186,106 @@ object SmtCompiler {
         parseAtom(tokens(startPos), local)
       } else {
         val horizontalPairs = splitIntoTerms(startPos, endPos)
+        val termRefs = new ListBuffer[Int]()
+        var i = 0
+        while (i < horizontalPairs.length) {
+          tokens(horizontalPairs(i)._1) match {
+            case "exists" =>
+              val paramRefs = parseNamedParams(
+                horizontalPairs(i + 1)._1,
+                horizontalPairs(i + 1)._2 - 1
+              )
+              val existsRef = termgraph.memoAddInstruction(
+                TheoryMacro("exists", paramRefs.map(p => p._2))
+              )
+              termRefs.append(existsRef)
+              local ++= paramRefs.toMap
+              i += 1
+            case "forall" =>
+              val paramRefs = parseNamedParams(
+                horizontalPairs(i + 1)._1,
+                horizontalPairs(i + 1)._2 - 1
+              )
+              val forallRef = termgraph.memoAddInstruction(
+                TheoryMacro("forall", paramRefs.map(p => p._2))
+              )
+              termRefs.append(forallRef)
+              local ++= paramRefs.toMap
+              i += 1
+            case _ =>
+              termRefs.append(parseTerm(horizontalPairs(i)._1, horizontalPairs(i)._2, local))
+          }
+          i += 1
+        }
+
         termgraph.memoAddInstruction(
-          Application(
-            parseTerm(horizontalPairs.head._1, horizontalPairs.head._2, local),
-            horizontalPairs.tail.map(t => parseTerm(t._1, t._2, local))
+          Application(termRefs.head, termRefs.tail.toList)
+        )
+      }
+    }
+
+    def parseNamedParams(startPos: Int, endPos: Int): List[(String, Int)] = {
+      require(tokens(startPos) == "(")
+      require(tokens(endPos) == ")")
+      splitIntoTerms(startPos, endPos).map { p =>
+        val pair = splitIntoTerms(p._1, p._2).map { x =>
+          assert(x._1 + 1 == x._2)
+          tokens(x._1)
+        }
+        assert(pair.length == 2)
+        (
+          pair.head,
+          termgraph.memoAddInstruction(
+            FunctionParameter(pair.head, parseAtom(pair.last, HashMap.empty))
           )
         )
       }
     }
 
     def parseAtom(atom: String, local: HashMap[String, Int]): Int =
-      // println(
-      //   "parseAtom: " + tokens(pos)
-      // )
       local.getOrElse(
         atom,
         global.getOrElse(
           atom,
           atom match {
-            case "false" =>
-              termgraph.memoAddInstruction(TheoryMacro("false"))
-            case "true" =>
-              termgraph.memoAddInstruction(TheoryMacro("true"))
-            case "=" =>
-              termgraph.memoAddInstruction(TheoryMacro("="))
             case "+" =>
               termgraph.memoAddInstruction(TheoryMacro("+"))
             case "-" =>
               termgraph.memoAddInstruction(TheoryMacro("-"))
+            case "*" =>
+              termgraph.memoAddInstruction(TheoryMacro("*"))
+
+            case ">" =>
+              termgraph.memoAddInstruction(TheoryMacro(">"))
+            case "<" =>
+              termgraph.memoAddInstruction(TheoryMacro(">"))
+            case ">=" =>
+              termgraph.memoAddInstruction(TheoryMacro(">"))
+            case "<=" =>
+              termgraph.memoAddInstruction(TheoryMacro(">"))
+            case "=" =>
+              termgraph.memoAddInstruction(TheoryMacro("="))
+            case "and" =>
+              termgraph.memoAddInstruction(TheoryMacro("and"))
+            case "or" =>
+              termgraph.memoAddInstruction(TheoryMacro("or"))
+
             case "Int" =>
               termgraph.memoAddInstruction(TheorySort("Int"))
-            case other =>
-              // must be some kind of literal
-              // TODO: fail if not
+            case "Bool" =>
+              termgraph.memoAddInstruction(TheorySort("Bool"))
+            case "String" =>
+              termgraph.memoAddInstruction(TheorySort("String"))
+
+            case "false" =>
+              termgraph.memoAddInstruction(TheoryMacro("false"))
+            case "true" =>
+              termgraph.memoAddInstruction(TheoryMacro("true"))
+            case other if other.startsWith("\"") && other.endsWith("\"") =>
               termgraph.memoAddInstruction(TheoryMacro(other))
+            case other =>
+              // must be an integer (add support for other stuff later)
+              termgraph.memoAddInstruction(TheoryMacro(other.toInt.toString))
           }
         )
       )

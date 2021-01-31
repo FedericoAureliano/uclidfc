@@ -15,7 +15,7 @@ class Z3(ctx: Context) extends Solver(ctx) {
       .split("\n")
       .filter(p => !p.startsWith("(set-logic"))
       .mkString("\n")
-    if (ctx.isSynthesisQuery) {
+    if (ctx.termgraph.isSynthesisQuery) {
       throw new SolverMismatchError("Z3 does not support synthesis")
     }
     query

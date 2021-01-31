@@ -46,7 +46,7 @@ class Vampire(ctx: Context) extends Solver(ctx) {
       throw new SolverMismatchError(s"Vampire does not support ${logic.get}")
     }
 
-    if (ctx.isSynthesisQuery) {
+    if (ctx.termgraph.isSynthesisQuery) {
       throw new SolverMismatchError("Vampire does not support synthesis")
     }
 

@@ -45,6 +45,8 @@ import java.io.File
     }
     val rewrites =
       "(?<=Rewrite=)(.*)".r.findAllIn(lines).map(r => "--" + r).toList
+    val options =
+      "(?<=Option=)(.*)".r.findAllIn(lines).map(r => "--" + r).toList
     (
       (
         file.getAbsolutePath(),
@@ -54,7 +56,7 @@ import java.io.File
         maxProcessTime,
         maxGenerationTime,
         maxSolveTime,
-        rewrites
+        rewrites ++ options
       )
     )
   }
@@ -71,7 +73,7 @@ import java.io.File
         )
       case None =>
         UclidMain.main(
-          UclidMain.parseOptions(Array(filename, "-r", "false") ++ rewrites).get
+          UclidMain.parseOptions(Array(filename, "--skip-solver") ++ rewrites).get
         )
     }
   }

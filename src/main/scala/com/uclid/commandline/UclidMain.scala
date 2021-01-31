@@ -3,7 +3,7 @@ package com.uclid.commandline
 import com.uclid.termgraph
 import com.uclid.context._
 import com.uclid.solverinterface.solver._
-import com.uclid.solverinterface.compiler.SmtCompiler
+import com.uclid.solverinterface.compiler._
 import com.uclid.uclidinterface.compiler.parser._
 import com.uclid.uclidinterface.compiler._
 
@@ -45,6 +45,7 @@ object UclidMain {
     mainModuleName: String = "main",
     solver: Solvers.Value = Solvers.z3,
     run: Boolean = true,
+    features: Boolean = false,
     blastEnumQuantifierFlag: Boolean = false,
     outFile: Option[String] = None,
     files: Seq[java.io.File] = Seq()
@@ -66,20 +67,23 @@ object UclidMain {
           s"Use one of ${Solvers.values.mkString(" or ")}. Solver must be in your path."
         )
 
-      opt[String]('r', "run")
-        .valueName("<boolean>")
-        .action((x, c) => c.copy(run = x.toBoolean))
-        .text("Run the solver?")
-
       opt[String]('o', "out")
         .valueName("<file>")
         .action((x, c) => c.copy(outFile = Some(x)))
         .text("Write query to <file>.")
 
+      opt[Unit]("skip-solver")
+        .action((_, c) => c.copy(run = false))
+        .text("Don't run the solver.")
+
+      opt[Unit]("print-features")
+        .action((_, c) => c.copy(features = true))
+        .text("Print query features.")
+
       opt[Unit]("blast-enum-quantifiers")
         .action((_, c) => c.copy(blastEnumQuantifierFlag = true))
         .text(
-          "rewrite quantifiers over enums to finite disjunctions/conjunctions"
+          "Rewrite quantifiers over enums to finite disjunctions/conjunctions."
         )
 
       arg[java.io.File]("<file> ...")
@@ -117,10 +121,9 @@ object UclidMain {
         ctx.termgraph.rewrite(config.blastEnumQuantifierFlag)
         val processDuration = (System.nanoTime - startProcess) / 1e9d
         println(s"Processing completed in ${processDuration} seconds.")
-        println(s"-- Term graph contains ${ctx.termgraph.getStmtsSize()} nodes.")
-        println(s"-- Memoization map has ${ctx.termgraph.getMemoKeySize()} keys.")
-        // TODO: When would the number of unique keys not match the number of unique values?
-        // println(s"-- Memoization map has ${termgraph.getMemoValueSize()} unique values.")
+        if (config.features) {
+          println(ctx.termgraph.featuresList().map(f => "-- " + f).mkString("\n"))
+        }
   
         val solver = config.solver match {
           case Solvers.alt_ergo => new AltErgo(ctx)
@@ -164,10 +167,9 @@ object UclidMain {
         ctx.termgraph.rewrite(config.blastEnumQuantifierFlag)
         val processDuration = (System.nanoTime - startProcess) / 1e9d
         println(s"Processing completed in ${processDuration} seconds.")
-        println(s"-- Term graph contains ${ctx.termgraph.getStmtsSize()} nodes.")
-        println(s"-- Memoization map has ${ctx.termgraph.getMemoKeySize()} keys.")
-        // TODO: When would the number of unique keys not match the number of unique values?
-        // println(s"-- Memoization map has ${termgraph.getMemoValueSize()} unique values.")
+        if (config.features) {
+          println(ctx.termgraph.featuresList().map(f => "-- " + f).mkString("\n"))
+        }
   
         val solver = config.solver match {
           case Solvers.alt_ergo => new AltErgo(ctx)
@@ -187,6 +189,9 @@ object UclidMain {
           errorResult.messages = "\n" + e.toString()
           UclidResult(errorResult)
         case e: SolverMismatchError =>
+          errorResult.messages = "\n" + e.toString()
+          UclidResult(errorResult)
+        case e: SmtParserError =>
           errorResult.messages = "\n" + e.toString()
           UclidResult(errorResult)
       }

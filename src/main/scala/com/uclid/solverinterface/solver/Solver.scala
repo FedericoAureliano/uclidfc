@@ -58,12 +58,8 @@ abstract class Solver(ctx: Context) {
     val query = generateQuery()
     val generationDuration = (System.nanoTime - t1) / 1e9d
     println(s"Query generated in ${generationDuration} seconds.")
-    if (ctx.isSynthesisQuery) {
-      println("-- Query requires program synthesis.")
-    }
-    println(s"-- Logic is ${ctx.getLogic()}.")
 
-    val suffix = if (ctx.isSynthesisQuery) { ".sl" }
+    val suffix = if (ctx.termgraph.isSynthesisQuery) { ".sl" }
     else { ".smt2" }
     val qfile =
       writeQueryToFile(query, outFile, suffix).getAbsolutePath()
@@ -92,7 +88,7 @@ abstract class Solver(ctx: Context) {
       if ("(\\ssat)".r.findFirstIn(answer).isDefined) {
         (new ProofResult(Some(true), answer), generationDuration, result._4)
       } else {
-        if (ctx.isSynthesisQuery) {
+        if (ctx.termgraph.isSynthesisQuery) {
           (
             new ProofResult(Some(false), answer),
             generationDuration,

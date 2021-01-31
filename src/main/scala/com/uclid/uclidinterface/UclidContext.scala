@@ -21,7 +21,7 @@ class UclidContext(termgraph: TermGraph) extends SyMTContext(termgraph) {
 
   override def toQuery(): String = {
     alreadyDeclared.clear()
-    val logic = getLogic()
+    val logic = termgraph.queryLogic()
     val logicString = s"(set-logic ${logic})"
     val opts = options.map(o => s"(set-option :${o._1} ${o._2})").mkString("\n")
 
@@ -42,7 +42,7 @@ class UclidContext(termgraph: TermGraph) extends SyMTContext(termgraph) {
     }
 
     val body: String = if (spec != "") {
-      if (isSynthesisQuery) {
+      if (termgraph.isSynthesisQuery) {
         programToQueryCtx() + "\n(constraint (not " + spec + "))"
       } else {
         programToQueryCtx() + "\n(assert " + spec + ")"
@@ -73,7 +73,7 @@ class UclidContext(termgraph: TermGraph) extends SyMTContext(termgraph) {
         ""
       }
 
-      if (isSynthesisQuery) {
+      if (termgraph.isSynthesisQuery) {
         "\n\n(check-synth)"
       } else {
         "\n\n(check-sat)\n(echo \"\")\n" + proofStatus + "\n(echo \"\")\n" + model
