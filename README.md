@@ -36,8 +36,8 @@ paper](https://arxiv.org/abs/2007.06760).
 - Install at least one of
   - [Alt-Ergo](https://alt-ergo.ocamlpro.com/)
   - [CVC4](https://github.com/CVC4/CVC4) (REQUIRED FOR SYNTHESIS)
-  - [Z3](https://github.com/Z3Prover/z3) (DEFAULT)
   - [Vampire](https://github.com/vprover/vampire)
+  - [Z3](https://github.com/Z3Prover/z3) (DEFAULT)
 
 ## Compile
 

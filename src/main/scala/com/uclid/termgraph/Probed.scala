@@ -4,20 +4,20 @@ import scala.collection.mutable.ArrayBuffer
 
 trait Probed() extends AbstractTermGraph {
 
-  def featuresList() : List[String] = {
+  def featuresList(entryPoints: List[Int]) : List[String] = {
     List(
-      "Query logic: " + queryLogic(),
+      "Query logic: " + queryLogic(entryPoints),
       "Requires synthesis: " + isSynthesisQuery,
       "Term graph size: " + numberOfNodes().toString,
       "Memoization map size: " + numberOfMemoEntries().toString,
-      "Largest integer literal: " + largestIntegerLiteral().toString
+      "Largest integer literal: " + largestIntegerLiteral(entryPoints).toString
     )
   }
 
   def numberOfNodes(): Int = stmts.length
   def numberOfMemoEntries(): Int = memo.keys.toList.length
 
-  def largestIntegerLiteral(): Option[Int] = {
+  def largestIntegerLiteral(entryPoints: List[Int]): Option[Int] = {
     var max : Option[Int] = None 
     stmts
       .foreach(inst =>
@@ -36,7 +36,7 @@ trait Probed() extends AbstractTermGraph {
     max
   }
 
-  def queryLogic(): String = {
+  def queryLogic(entryPoints: List[Int]): String = {
     var uf = false
     var a = false
     var dt = false
@@ -44,36 +44,40 @@ trait Probed() extends AbstractTermGraph {
     var linear = true
     var qf = true
 
-    stmts
-      .foreach(inst =>
-        inst match {
-          case _: AbstractDataType => dt = true
-          case Application(caller, args) =>
-            stmts(caller) match {
-              case TheoryMacro("*", _) =>
-                if (
-                  args.filter { a =>
-                    stmts(a) match {
-                      case TheoryMacro(name, _) =>
-                        name.toIntOption.isDefined
-                      case _ => false
-                    }
-                  }.length < args.length - 1
-                ) {
-                  linear = false
-                }
-              case _ =>
-            }
-          case TheoryMacro("exists", _) => qf = false
-          case TheoryMacro("forall", _) => qf = false
-          case TheoryMacro(name, _) =>
-            if (name.toIntOption.isDefined) { i = true }
-          case UserFunction(_, _, params) =>
-            if (params.length > 0) { uf = true }
-          case TheorySort("Array", _) => a = true
-          case TheorySort("Int", _)   => i = true
-          case Synthesis(_, _, _)     => isSynthesisQuery = true
-          case _                      =>
+    val marks = mark(entryPoints)
+
+    marks.zip(stmts)
+      .foreach((marked, inst) =>
+        if(marked) {
+          inst match {
+            case _: AbstractDataType => dt = true
+            case Application(caller, args) =>
+              stmts(caller) match {
+                case TheoryMacro("*", _) =>
+                  if (
+                    args.filter { a =>
+                      stmts(a) match {
+                        case TheoryMacro(name, _) =>
+                          name.toIntOption.isDefined
+                        case _ => false
+                      }
+                    }.length < args.length - 1
+                  ) {
+                    linear = false
+                  }
+                case _ =>
+              }
+            case TheoryMacro("exists", _) => qf = false
+            case TheoryMacro("forall", _) => qf = false
+            case TheoryMacro(name, _) =>
+              if (name.toIntOption.isDefined) { i = true }
+            case UserFunction(_, _, params) =>
+              if (params.length > 0) { uf = true }
+            case TheorySort("Array", _) => a = true
+            case TheorySort("Int", _)   => i = true
+            case Synthesis(_, _, _)     => isSynthesisQuery = true
+            case _                      =>
+          }
         }
       )
 

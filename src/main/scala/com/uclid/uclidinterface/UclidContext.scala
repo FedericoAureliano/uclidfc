@@ -19,9 +19,13 @@ class UclidContext(termgraph: TermGraph) extends SyMTContext(termgraph) {
   var checkQuery = false
   var traceQuery = false
 
+  override def ignoreResult() = traceQuery
+
+  override def entryPoints() = assertionRefs.toList ++ axiomRefs ++ getValues.getOrElse(List.empty)
+
   override def toQuery(): String = {
     alreadyDeclared.clear()
-    val logic = termgraph.queryLogic()
+    val logic = termgraph.queryLogic(entryPoints())
     val logicString = s"(set-logic ${logic})"
     val opts = options.map(o => s"(set-option :${o._1} ${o._2})").mkString("\n")
 

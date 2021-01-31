@@ -102,102 +102,95 @@ object UclidMain {
     val errorResult =
       new ProofResult()
 
-    if (config.files.forall(f => f.getName.endsWith(".ucl"))) {
-      print("\nParsing input ... ")
-      val startParse = System.nanoTime
-      val modules = UclidCompiler.parse(config.files) match {
-        case Right(m) => m
-        case Left(e) =>
-          errorResult.messages = "\n" + e.toString()
-          return UclidResult(errorResult)
-      }
-      val parseDuration = (System.nanoTime - startParse) / 1e9d
-      println(s"Parsing completed in ${parseDuration} seconds.")
-  
-      try {
+    val inputLanguage = if (config.files.forall(f => f.getName.endsWith(".ucl"))) {
+      "UCLID"
+    } else if (config.files.forall(f => f.getName.endsWith(".smt2"))) {
+      "SMT"
+    } else {
+      errorResult.messages = "\nAll files must be Uclid5 queries (.ucl) or SMT2 queries (.smt2)!"
+      return UclidResult(errorResult)
+    }
+
+    var parseDuration = 0.0
+    var processDuration = 0.0
+    var analysisDuration = 0.0
+
+    try {
+      val ctx = if (inputLanguage == "UCLID") {
+        print("\nParsing input ... ")
+        val startParse = System.nanoTime
+        val modules = UclidCompiler.parse(config.files) match {
+          case Right(m) => m
+          case Left(e) =>
+            errorResult.messages = "\n" + e.toString()
+            return UclidResult(errorResult)
+        }
+        parseDuration = (System.nanoTime - startParse) / 1e9d
+        println(s"Parsing completed in ${parseDuration} seconds.")
+
         print("Processing model ... ")
         val startProcess = System.nanoTime
         val ctx = UclidCompiler.process(modules, Some(config.mainModuleName))
         ctx.termgraph.rewrite(config.blastEnumQuantifierFlag)
-        val processDuration = (System.nanoTime - startProcess) / 1e9d
+        processDuration = (System.nanoTime - startProcess) / 1e9d
         println(s"Processing completed in ${processDuration} seconds.")
-        if (config.features) {
-          println(ctx.termgraph.featuresList().map(f => "-- " + f).mkString("\n"))
-        }
-  
-        val solver = config.solver match {
-          case Solvers.alt_ergo => new AltErgo(ctx)
-          case Solvers.cvc4     => new CVC4(ctx)
-          case Solvers.vampire  => new Vampire(ctx)
-          case Solvers.z3       => new Z3(ctx)
-        }
-  
-        val res = {
-          val tmp = solver.solve(config.run, config.outFile)
-          if (ctx.traceQuery) {
-            (ProofResult(None, tmp._1.messages), tmp._2, tmp._3)
-          } else {
-            (tmp._1, tmp._2, tmp._3)
-          }
-        }
-  
-        UclidResult(res._1, parseDuration, processDuration, res._2, res._3)
-  
-      } catch {
-        case (e: java.io.FileNotFoundException) =>
-          errorResult.messages = "\n" + e.toString()
-          UclidResult(errorResult)
-        case e: SemanticError =>
-          errorResult.messages = "\n" + e.toString()
-          UclidResult(errorResult)
-        case e: SolverMismatchError =>
-          errorResult.messages = "\n" + e.toString()
-          UclidResult(errorResult)
-      }
-    } else if (config.files.forall(f => f.getName.endsWith(".smt2"))) {
-      try {
+
+        ctx
+      } else {
+        // Must be SMT Language
         print("\nParsing input ... ")
         val startParse = System.nanoTime
         val ctx = SmtCompiler.compile(config.files.foldLeft("")((acc, f) => acc ++ scala.io.Source.fromFile(f)))
-        val parseDuration = (System.nanoTime - startParse) / 1e9d
+        parseDuration = (System.nanoTime - startParse) / 1e9d
         println(s"Parsing completed in ${parseDuration} seconds.")
 
         print("Processing model ... ")
         val startProcess = System.nanoTime
         ctx.termgraph.rewrite(config.blastEnumQuantifierFlag)
-        val processDuration = (System.nanoTime - startProcess) / 1e9d
+        processDuration = (System.nanoTime - startProcess) / 1e9d
         println(s"Processing completed in ${processDuration} seconds.")
-        if (config.features) {
-          println(ctx.termgraph.featuresList().map(f => "-- " + f).mkString("\n"))
-        }
-  
-        val solver = config.solver match {
-          case Solvers.alt_ergo => new AltErgo(ctx)
-          case Solvers.cvc4     => new CVC4(ctx)
-          case Solvers.vampire  => new Vampire(ctx)
-          case Solvers.z3       => new Z3(ctx)
-        }
-  
-        val res = solver.solve(config.run, config.outFile)
-        UclidResult(res._1, parseDuration, processDuration, res._2, res._3)
-  
-      } catch {
-        case (e: java.io.FileNotFoundException) =>
-          errorResult.messages = "\n" + e.toString()
-          UclidResult(errorResult)
-        case e: SemanticError =>
-          errorResult.messages = "\n" + e.toString()
-          UclidResult(errorResult)
-        case e: SolverMismatchError =>
-          errorResult.messages = "\n" + e.toString()
-          UclidResult(errorResult)
-        case e: SmtParserError =>
-          errorResult.messages = "\n" + e.toString()
-          UclidResult(errorResult)
+
+        ctx
       }
-    } else {
-      errorResult.messages = "\nAll files must be Uclid5 queries (.ucl) or SMT2 queries (.smt2)!"
-      UclidResult(errorResult)
+
+      print("Analyzing model ... ")
+      val startAnalysis = System.nanoTime
+      val features = if (config.features) {
+        ctx.termgraph.featuresList(ctx.entryPoints())
+      } else {
+        List.empty
+      }
+      analysisDuration = (System.nanoTime - startAnalysis) / 1e9d
+      println(s"... Analysis completed in ${analysisDuration} seconds.")
+      println(features.map(f => "-- " + f).mkString("\n"))
+
+      val solver = config.solver match {
+        case Solvers.alt_ergo => new AltErgo(ctx)
+        case Solvers.cvc4     => new CVC4(ctx)
+        case Solvers.vampire  => new Vampire(ctx)
+        case Solvers.z3       => new Z3(ctx)
+      }
+
+      val res = solver.solve(config.run, config.outFile)
+      if (ctx.ignoreResult()) {
+        UclidResult(ProofResult(None, res._1.messages), parseDuration, processDuration, analysisDuration, res._2, res._3)
+      } else {
+        UclidResult(res._1, parseDuration, processDuration, analysisDuration, res._2, res._3)
+      }
+
+    } catch {
+      case (e: java.io.FileNotFoundException) =>
+        errorResult.messages = "\n" + e.toString()
+        UclidResult(errorResult)
+      case e: SemanticError =>
+        errorResult.messages = "\n" + e.toString()
+        UclidResult(errorResult)
+      case e: SolverMismatchError =>
+        errorResult.messages = "\n" + e.toString()
+        UclidResult(errorResult)
+      case e: SmtParserError =>
+        errorResult.messages = "\n" + e.toString()
+        UclidResult(errorResult)
     }
   }
 }
@@ -206,6 +199,7 @@ case class UclidResult(
   presult: ProofResult,
   parseTime: Double = 0,
   processTime: Double = 0,
+  analysisTime: Double = 0,
   generationTime: Double = 0,
   solveTime: Double = 0
 )
