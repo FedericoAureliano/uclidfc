@@ -1,4 +1,4 @@
-name: Tests, Coverage, and Formatting
+name: Build, Tests, and Check Coverage
 
 on:
   push:
@@ -77,9 +77,6 @@ jobs:
         path: ~/.sbt
         key: ${{ runner.os }}-sbt-${{ hashFiles('**/build.sbt') }}
 
-    - name: CompileJS
-      run: sbt fullOptJS
-
     - name: CompileJVM
       run: sbt assembly
 
@@ -88,6 +85,3 @@ jobs:
 
     - name: Coverage
       run: sbt jacoco
-
-    - name: Formatting
-      run: sbt scalafmtSbtCheck scalafmtCheck test:scalafmtCheck
