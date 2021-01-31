@@ -1,16 +1,16 @@
-package com.uclid.uclidlanguage.compiler
+package com.uclid.uclidinterface.compiler
 
-import com.uclid.solverinterface.Context
+import com.uclid.solverinterface.SyMTContext
 import com.uclid.termgraph.TermGraph
 
 import scala.collection.mutable.ListBuffer
 
-class UclidContext(termgraph: TermGraph) extends Context(termgraph) {
+class UclidContext(termgraph: TermGraph) extends SyMTContext(termgraph) {
   protected val assertionRefs = new ListBuffer[Int]()
   protected val axiomRefs = new ListBuffer[Int]()
   var getValues: Option[List[Int]] = None
 
-  def addAssertion(ass: Int): Unit =
+  override def addAssertion(ass: Int): Unit =
     assertionRefs.addOne(ass)
 
   def addAxiom(ax: Int): Unit =
@@ -19,7 +19,7 @@ class UclidContext(termgraph: TermGraph) extends Context(termgraph) {
   var checkQuery = false
   var traceQuery = false
 
-  def toQuery(): String = {
+  override def toQuery(): String = {
     alreadyDeclared.clear()
     val logic = getLogic()
     val logicString = s"(set-logic ${logic})"

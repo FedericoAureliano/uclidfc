@@ -1,11 +1,11 @@
 package com.uclid.commandline
 
-import com.uclid.solverinterface.ProofResult
 import com.uclid.termgraph
-import com.uclid.solverinterface._
-
-import com.uclid.uclidlanguage.parser._
-import com.uclid.uclidlanguage.compiler._
+import com.uclid.context._
+import com.uclid.solverinterface.solver._
+import com.uclid.solverinterface.compiler.SmtCompiler
+import com.uclid.uclidinterface.compiler.parser._
+import com.uclid.uclidinterface.compiler._
 
 object Solvers extends Enumeration {
   type Solvers = Value
@@ -98,57 +98,101 @@ object UclidMain {
     val errorResult =
       new ProofResult()
 
-    print("\nParsing input ... ")
-    val startParse = System.nanoTime
-    val modules = UclidCompiler.parse(config.files) match {
-      case Right(m) => m
-      case Left(e) =>
-        errorResult.messages = "\n" + e.toString()
-        return UclidResult(errorResult)
-    }
-    val parseDuration = (System.nanoTime - startParse) / 1e9d
-    println(s"Parsing completed in ${parseDuration} seconds.")
-
-    try {
-      print("Processing model ... ")
-      val startProcess = System.nanoTime
-      val ctx = UclidCompiler.process(modules, Some(config.mainModuleName))
-      ctx.termgraph.rewrite(config.blastEnumQuantifierFlag)
-      val processDuration = (System.nanoTime - startProcess) / 1e9d
-      println(s"Processing completed in ${processDuration} seconds.")
-      println(s"-- Term graph contains ${ctx.termgraph.getStmtsSize()} nodes.")
-      println(s"-- Memoization map has ${ctx.termgraph.getMemoKeySize()} keys.")
-      // TODO: When would the number of unique keys not match the number of unique values?
-      // println(s"-- Memoization map has ${termgraph.getMemoValueSize()} unique values.")
-
-      val solver = config.solver match {
-        case Solvers.alt_ergo => new AltErgo(ctx)
-        case Solvers.cvc4     => new CVC4(ctx)
-        case Solvers.vampire  => new Vampire(ctx)
-        case Solvers.z3       => new Z3(ctx)
+    if (config.files.forall(f => f.getName.endsWith(".ucl"))) {
+      print("\nParsing input ... ")
+      val startParse = System.nanoTime
+      val modules = UclidCompiler.parse(config.files) match {
+        case Right(m) => m
+        case Left(e) =>
+          errorResult.messages = "\n" + e.toString()
+          return UclidResult(errorResult)
       }
-
-      val res = {
-        val tmp = solver.solve(config.run, config.outFile)
-        if (ctx.traceQuery) {
-          (ProofResult(None, tmp._1.messages), tmp._2, tmp._3)
-        } else {
-          (tmp._1, tmp._2, tmp._3)
+      val parseDuration = (System.nanoTime - startParse) / 1e9d
+      println(s"Parsing completed in ${parseDuration} seconds.")
+  
+      try {
+        print("Processing model ... ")
+        val startProcess = System.nanoTime
+        val ctx = UclidCompiler.process(modules, Some(config.mainModuleName))
+        ctx.termgraph.rewrite(config.blastEnumQuantifierFlag)
+        val processDuration = (System.nanoTime - startProcess) / 1e9d
+        println(s"Processing completed in ${processDuration} seconds.")
+        println(s"-- Term graph contains ${ctx.termgraph.getStmtsSize()} nodes.")
+        println(s"-- Memoization map has ${ctx.termgraph.getMemoKeySize()} keys.")
+        // TODO: When would the number of unique keys not match the number of unique values?
+        // println(s"-- Memoization map has ${termgraph.getMemoValueSize()} unique values.")
+  
+        val solver = config.solver match {
+          case Solvers.alt_ergo => new AltErgo(ctx)
+          case Solvers.cvc4     => new CVC4(ctx)
+          case Solvers.vampire  => new Vampire(ctx)
+          case Solvers.z3       => new Z3(ctx)
         }
+  
+        val res = {
+          val tmp = solver.solve(config.run, config.outFile)
+          if (ctx.traceQuery) {
+            (ProofResult(None, tmp._1.messages), tmp._2, tmp._3)
+          } else {
+            (tmp._1, tmp._2, tmp._3)
+          }
+        }
+  
+        UclidResult(res._1, parseDuration, processDuration, res._2, res._3)
+  
+      } catch {
+        case (e: java.io.FileNotFoundException) =>
+          errorResult.messages = "\n" + e.toString()
+          UclidResult(errorResult)
+        case e: SemanticError =>
+          errorResult.messages = "\n" + e.toString()
+          UclidResult(errorResult)
+        case e: SolverMismatchError =>
+          errorResult.messages = "\n" + e.toString()
+          UclidResult(errorResult)
       }
+    } else if (config.files.forall(f => f.getName.endsWith(".smt2"))) {
+      try {
+        print("\nParsing input ... ")
+        val startParse = System.nanoTime
+        val ctx = SmtCompiler.compile(config.files.foldLeft("")((acc, f) => acc ++ scala.io.Source.fromFile(f)))
+        val parseDuration = (System.nanoTime - startParse) / 1e9d
+        println(s"Parsing completed in ${parseDuration} seconds.")
 
-      UclidResult(res._1, parseDuration, processDuration, res._2, res._3)
-
-    } catch {
-      case (e: java.io.FileNotFoundException) =>
-        errorResult.messages = "\n" + e.toString()
-        UclidResult(errorResult)
-      case e: SemanticError =>
-        errorResult.messages = "\n" + e.toString()
-        UclidResult(errorResult)
-      case e: SolverMismatchError =>
-        errorResult.messages = "\n" + e.toString()
-        UclidResult(errorResult)
+        print("Processing model ... ")
+        val startProcess = System.nanoTime
+        ctx.termgraph.rewrite(config.blastEnumQuantifierFlag)
+        val processDuration = (System.nanoTime - startProcess) / 1e9d
+        println(s"Processing completed in ${processDuration} seconds.")
+        println(s"-- Term graph contains ${ctx.termgraph.getStmtsSize()} nodes.")
+        println(s"-- Memoization map has ${ctx.termgraph.getMemoKeySize()} keys.")
+        // TODO: When would the number of unique keys not match the number of unique values?
+        // println(s"-- Memoization map has ${termgraph.getMemoValueSize()} unique values.")
+  
+        val solver = config.solver match {
+          case Solvers.alt_ergo => new AltErgo(ctx)
+          case Solvers.cvc4     => new CVC4(ctx)
+          case Solvers.vampire  => new Vampire(ctx)
+          case Solvers.z3       => new Z3(ctx)
+        }
+  
+        val res = solver.solve(config.run, config.outFile)
+        UclidResult(res._1, parseDuration, processDuration, res._2, res._3)
+  
+      } catch {
+        case (e: java.io.FileNotFoundException) =>
+          errorResult.messages = "\n" + e.toString()
+          UclidResult(errorResult)
+        case e: SemanticError =>
+          errorResult.messages = "\n" + e.toString()
+          UclidResult(errorResult)
+        case e: SolverMismatchError =>
+          errorResult.messages = "\n" + e.toString()
+          UclidResult(errorResult)
+      }
+    } else {
+      errorResult.messages = "\nAll files must be Uclid5 queries (.ucl) or SMT2 queries (.smt2)!"
+      UclidResult(errorResult)
     }
   }
 }

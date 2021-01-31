@@ -7,7 +7,16 @@ lazy val root = project
     version := "1.0",
 
     scalaVersion := scala3Version,
-    scalacOptions ++= Seq("-unchecked", "-deprecation", "-feature"),
+    scalacOptions ++= Seq(
+      "-encoding", "utf8", // Option and arguments on same line
+      "-Xfatal-warnings",  // New lines for each options
+      "-deprecation",
+      "-unchecked",
+      "-language:implicitConversions",
+      "-language:higherKinds",
+      "-language:existentials",
+      "-language:postfixOps"
+    ),
 
     libraryDependencies += ("org.scala-lang.modules" %% "scala-parser-combinators" % "1.2.0-M1"),
     libraryDependencies += ("com.novocode" % "junit-interface" % "0.11" % "test"),
@@ -25,5 +34,6 @@ lazy val root = project
       ),
       Seq(JacocoReportFormats.ScalaHTML),
       "utf-8"
-    )
+    ),
+    test in assembly := {}
   )

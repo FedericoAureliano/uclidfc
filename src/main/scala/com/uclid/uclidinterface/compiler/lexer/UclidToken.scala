@@ -1,4 +1,4 @@
-package com.uclid.uclidlanguage.lexer
+package com.uclid.uclidinterface.compiler.lexer
 
 
 import scala.util.parsing.input.Positional

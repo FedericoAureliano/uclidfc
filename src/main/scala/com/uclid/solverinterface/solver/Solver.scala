@@ -1,6 +1,8 @@
-package com.uclid.solverinterface
+package com.uclid.solverinterface.solver
 
 import com.uclid.termgraph
+import com.uclid.solverinterface.solver.ProofResult
+import com.uclid.context.Context
 
 import sys.process._
 import java.io.{File, PrintWriter}

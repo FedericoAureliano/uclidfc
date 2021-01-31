@@ -1,11 +1,11 @@
-package com.uclid.uclidlanguage.compiler
+package com.uclid.uclidinterface.compiler
 
-import com.uclid.uclidlanguage.parser._
+import com.uclid.uclidinterface.compiler.parser._
 import com.uclid.termgraph._
-import com.uclid.uclidlanguage.lexer.UclidLexer
-import com.uclid.uclidlanguage.parser.{Model, UclidParser}
-import com.uclid.solverinterface.Context
-import com.uclid.solverinterface.SemanticError
+import com.uclid.uclidinterface.compiler.lexer.UclidLexer
+import com.uclid.uclidinterface.compiler.parser.{Model, UclidParser}
+import com.uclid.context.Context
+import com.uclid.context.SemanticError
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.ListBuffer
 

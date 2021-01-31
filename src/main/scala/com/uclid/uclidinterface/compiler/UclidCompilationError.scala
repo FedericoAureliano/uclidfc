@@ -1,4 +1,4 @@
-package com.uclid.uclidlanguage.compiler
+package com.uclid.uclidinterface.compiler
 
 sealed trait UclidCompilationError
 

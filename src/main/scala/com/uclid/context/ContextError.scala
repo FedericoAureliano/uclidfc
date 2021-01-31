@@ -1,4 +1,4 @@
-package com.uclid.solverinterface
+package com.uclid.context
 
 sealed trait ContextError extends Throwable
 
