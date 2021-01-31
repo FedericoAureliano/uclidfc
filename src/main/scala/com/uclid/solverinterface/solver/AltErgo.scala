@@ -18,7 +18,7 @@ class AltErgo(ctx: Context) extends Solver(ctx) {
           .startsWith("(get-"))
       )
       .mkString("\n")
-    if (ctx.isSynthesisQuery) {
+    if (ctx.termgraph.isSynthesisQuery) {
       throw new SolverMismatchError("Alt-Ergo does not support synthesis")
     }
     query

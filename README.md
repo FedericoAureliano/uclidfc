@@ -50,11 +50,13 @@ make changes to its source code. To recompile, run `sbt assembly`.
 ```
 uclidfc [options] <file> ...
 
-  -m, --main <module>    Name of the main module.
-  -s, --solver <solver>  Use one of alt_ergo or cvc4 or vampire or z3. Solver must be in your path.
-  -r, --run <boolean>    Run the solver?
-  -o, --out <file>       Write query to <file>.
-  <file> ...             List of files to analyze.
+  -m, --main <module>         Name of the main module.
+  -s, --solver <solver>       Use one of alt_ergo or cvc4 or vampire or z3. Solver must be in your path.
+  -o, --out <file>            Write query to <file>.
+  --skip-solver               Don't run the solver.
+  --print-features            Print query features.
+  --blast-enum-quantifiers    Rewrite quantifiers over enums to finite disjunctions/conjunctions.
+  <file> ...                  List of files to analyze.
 ```
 
 ## Live Edit

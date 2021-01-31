@@ -6,4 +6,6 @@ case class SmtLexerError(msg: String)
     extends SmtCompilationError
 
 case class SmtParserError(msg: String)
-    extends SmtCompilationError
+    extends SmtCompilationError {
+        override def toString() = msg
+    }

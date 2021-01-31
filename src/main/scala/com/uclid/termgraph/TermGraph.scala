@@ -11,8 +11,10 @@ abstract class AbstractTermGraph() {
 
   /** Points an instruction to its address in the term graph.
     */
-  private val memo: HashMap[Instruction, Int] =
+  protected val memo: HashMap[Instruction, Int] =
     new HashMap().addAll(stmts.zipWithIndex.map(p => (p._1, p._2)))
+
+  var isSynthesisQuery = false
 
   private var uniqueId = 0
 
@@ -26,10 +28,6 @@ abstract class AbstractTermGraph() {
     memo.clear()
     uniqueId = 0
   }
-
-  def getStmtsSize(): Int = stmts.length
-  def getMemoKeySize(): Int = memo.keys.toList.length
-  def getMemoValueSize(): Int = memo.values.toList.length
 
   /** Add instruction to stmts if it isn't already there, otherwise return its location.
     *
@@ -149,3 +147,4 @@ class TermGraph
     with Fuzzable
     with Rewritable
     with WellFormed
+    with Probed
