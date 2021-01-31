@@ -1,7 +1,7 @@
-package com.uclid.uclidlanguage.parser
+package com.uclid.uclidinterface.compiler.parser
 
-import com.uclid.uclidlanguage.compiler.{Location, UclidParserError}
-import com.uclid.uclidlanguage.lexer._
+import com.uclid.uclidinterface.compiler.{Location, UclidParserError}
+import com.uclid.uclidinterface.compiler.lexer._
 
 import scala.util.parsing.combinator.PackratParsers
 import scala.util.parsing.input.{NoPosition, Position, Reader}

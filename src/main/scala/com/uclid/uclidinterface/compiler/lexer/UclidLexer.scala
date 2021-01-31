@@ -1,6 +1,6 @@
-package com.uclid.uclidlanguage.lexer
+package com.uclid.uclidinterface.compiler.lexer
 
-import com.uclid.uclidlanguage.compiler.{Location, UclidLexerError}
+import com.uclid.uclidinterface.compiler.{Location, UclidLexerError}
 
 import scala.util.parsing.combinator.RegexParsers
 

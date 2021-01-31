@@ -1,4 +1,4 @@
-package com.uclid.solverinterface
+package com.uclid.solverinterface.solver
 
 sealed trait SolverError extends Throwable
 

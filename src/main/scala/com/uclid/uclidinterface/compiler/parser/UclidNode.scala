@@ -1,4 +1,4 @@
-package com.uclid.uclidlanguage.parser
+package com.uclid.uclidinterface.compiler.parser
 
 import scala.util.parsing.input.Positional
 

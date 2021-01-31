@@ -1,7 +1,7 @@
 package com.uclid.solverinterface
 
-import com.uclid.uclidlanguage.parser._
-
+import com.uclid.uclidinterface.compiler.parser._
+import com.uclid.context._
 import com.uclid.termgraph._
 
 import scala.collection.mutable.HashSet
@@ -11,71 +11,43 @@ import scala.collection.mutable.HashMap
 import scala.collection.mutable.Stack
 import scala.collection.immutable.Nil
 
-abstract class Context(val termgraph: TermGraph) {
+sealed trait Command
+case class Assert(t: Int) extends Command
+case class Check() extends Command
+
+class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
+
+  private val script: ListBuffer[Command] = new ListBuffer()
+
+  def addAssertion(r: Int): Unit =
+    script.addOne(Assert(r))
+
+  def checkSat(): Unit =
+    script.addOne(Check())
+
+  def toQuery(): String = {
+    val logic = s"(set-logic ${getLogic()})"
+    val ctx = programToQueryCtx()
+    val body = script
+      .map { c =>
+        c match {
+          case Assert(t) => s"(assert ${programPointToQueryTerm(t)})"
+          case Check()   => "(check-sat)"
+        }
+      }
+      .mkString("\n")
+
+    logic + "\n" + ctx + "\n" + body
+  }
 
   protected val options: ListBuffer[(String, String)] =
     ListBuffer(("produce-assignments", "true"))
-  var isSynthesisQuery = false
 
   def addOption(option: String, value: String): Unit =
     options.addOne((option, value))
 
   protected val alreadyDeclared = new HashSet[Int]()
-
-  def toQuery(): String
-
   protected val TAB = "  "
-
-  def getLogic(): String = {
-    var uf = false
-    var a = false
-    var dt = false
-    var i = false
-    var linear = true
-    var qf = true
-
-    termgraph.stmts
-      .foreach(inst =>
-        inst match {
-          case _: AbstractDataType => dt = true
-          case Application(caller, args) =>
-            termgraph.stmts(caller) match {
-              case TheoryMacro("*", _) =>
-                if (
-                  args.filter { a =>
-                    termgraph.stmts(a) match {
-                      case TheoryMacro(name, _) =>
-                        name.toIntOption.isDefined
-                      case _ => false
-                    }
-                  }.length < args.length - 1
-                ) {
-                  linear = false
-                }
-              case _ =>
-            }
-          case TheoryMacro("exists", _) => qf = false
-          case TheoryMacro("forall", _) => qf = false
-          case TheoryMacro(name, _) =>
-            if (name.toIntOption.isDefined) { i = true }
-          case UserFunction(_, _, params) =>
-            if (params.length > 0) { uf = true }
-          case TheorySort("Array", _) => a = true
-          case TheorySort("Int", _)   => i = true
-          case Synthesis(_, _, _)     => isSynthesisQuery = true
-          case _                      =>
-        }
-      )
-
-    s"${if (qf && !isSynthesisQuery) { "QF_" }
-    else { "" }}${if (uf) { "UF" }
-    else { "" }}${if (a) { "A" }
-    else { "" }}${if (dt) { "DT" }
-    else { "" }}${if (linear && i) { "L" }
-    else if (!linear && i) { "N" }
-    else { "" }}${if (i) { "IA" }
-    else { "" }}"
-  }
 
   protected def programPointToQueryTerm(
     point: Int,
@@ -253,7 +225,7 @@ abstract class Context(val termgraph: TermGraph) {
         indent -= 1
         tmp ++= ")"
       }
-      tmp ++= ")))\n"
+      tmp ++= ")))"
       indent -= 1
 
       tmp.toString()
@@ -277,7 +249,7 @@ abstract class Context(val termgraph: TermGraph) {
           tmp ++= s"${TAB * indent}(declare-const ${u.name} "
         }
       }
-      tmp ++= s"${programPointToQueryTerm(u.sort, indent)})\n"
+      tmp ++= s"${programPointToQueryTerm(u.sort, indent)})"
 
       tmp.toString()
     }
@@ -293,7 +265,7 @@ abstract class Context(val termgraph: TermGraph) {
 
       tmp ++= s"${programPointToQueryTerm(u.sort, indent)}\n"
       indent += 1
-      tmp ++= s"${TAB * indent}${programPointToQueryTerm(u.body, indent)})\n"
+      tmp ++= s"${TAB * indent}${programPointToQueryTerm(u.body, indent)})"
       indent -= 1
 
       tmp.toString()

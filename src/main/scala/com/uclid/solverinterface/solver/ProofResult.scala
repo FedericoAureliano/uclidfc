@@ -1,4 +1,4 @@
-package com.uclid.solverinterface
+package com.uclid.solverinterface.solver
 
 import sys.process._
 import java.io.{File, PrintWriter}
