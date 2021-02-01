@@ -42,6 +42,13 @@ object SmtCompiler {
 
     var pos = 0
     while (pos < tokens.length)
+      pos = parseCommand(pos)
+
+    /** Parse a top-level smt-lib command
+      * @param start the position of the opening parenthesis "(" of the command
+      * @return the position of the closing parenthesis ")" of the command
+      */ 
+    def parseCommand(start: Int): Int = {
       tokens.drop(pos) match {
         case "(" :: "assert" :: _ =>
           val newEndPos = sexprUntilMatching(pos)
@@ -49,14 +56,17 @@ object SmtCompiler {
           parseAssertion(pos, newEndPos)
           pos = newEndPos + 1
           assert(tokens(pos - 1) == ")")
+          pos
         case "(" :: "check-sat" :: ")" :: _ =>
           ctx.checkSat()
           pos += 3
           assert(tokens(pos - 1) == ")")
+          pos
         case "(" :: "set-logic" :: logic :: ")" :: _ =>
           print(s"Ignoring (set-logic $logic) command in query ... ")
-          assert(tokens(pos + 3) == ")")
           pos += 4
+          assert(tokens(pos - 1) == ")")
+          pos
         case "(" :: "declare-const" :: constName :: sortName :: ")" :: _ =>
           val sortRef = parseAtom(sortName, HashMap.empty)
           val declRef =
@@ -64,6 +74,7 @@ object SmtCompiler {
           global(constName) = declRef
           pos += 5
           assert(tokens(pos - 1) == ")")
+          pos
         case "(" :: "declare-fun" :: funName :: "(" :: _ =>
           val paramsStart = pos + 3
           val paramsEnd = sexprUntilMatching(paramsStart) + 1
@@ -76,6 +87,7 @@ object SmtCompiler {
           global(funName) = declRef
           pos = paramsEnd + 2 //the sort plus the ")"
           assert(tokens(pos - 1) == ")")
+          pos
         case "(" :: "declare-datatypes" :: _ =>
             val namesStart = pos + 2
             val namesEnd = sexprUntilMatching(namesStart) + 1
@@ -128,9 +140,11 @@ object SmtCompiler {
 
             pos = bodiesEnd + 1
             assert(tokens(pos - 1) == ")")
+            pos
         case c =>
           throw new SmtParserError("Unexpected character around: " + c.take(if (c.length < 5) then c.length else 5))
       }
+    }
 
     def sexprUntilMatching(start: Int): Int = {
       require(tokens(start) == "(")
