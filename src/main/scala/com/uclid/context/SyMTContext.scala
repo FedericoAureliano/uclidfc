@@ -1,7 +1,5 @@
-package com.uclid.solverinterface
+package com.uclid.context
 
-import com.uclid.uclidinterface.compiler.parser._
-import com.uclid.context._
 import com.uclid.termgraph._
 
 import scala.collection.mutable.HashSet

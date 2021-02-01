@@ -43,7 +43,7 @@ object UclidMain {
     */
   case class Config(
     mainModuleName: String = "main",
-    solver: Solvers.Value = Solvers.z3,
+    solvers: List[Solvers.Value] = List.empty,
     run: Boolean = true,
     features: Boolean = false,
     blastEnumQuantifierFlag: Boolean = false,
@@ -54,6 +54,10 @@ object UclidMain {
   def parseOptions(args: Array[String]): Option[Config] = {
     val parser = new scopt.OptionParser[Config]("uclidfc") {
       head("uclidfc", "1.0")
+      
+      help("help").text("prints this usage text")
+
+      note(sys.props("line.separator") + "Basic Usage")
 
       opt[String]('m', "main")
         .valueName("<module>")
@@ -62,9 +66,11 @@ object UclidMain {
 
       opt[Solvers.Value]('s', "solver")
         .valueName("<solver>")
-        .action((x, c) => c.copy(solver = x))
+        .action((x, c) => c.copy(solvers = x :: c.solvers))
+        .minOccurs(0)
+        .maxOccurs(Solvers.values.size)
         .text(
-          s"Use one of ${Solvers.values.mkString(" or ")}. Solver must be in your path."
+          s"Solver to use (${Solvers.values.mkString(" or ")}). Solver must be in your path."
         )
 
       opt[String]('o', "out")
@@ -76,21 +82,25 @@ object UclidMain {
         .action((_, c) => c.copy(run = false))
         .text("Don't run the solver.")
 
+      arg[java.io.File]("<file> ...")
+        .unbounded()
+        .required()
+        .action((x, c) => c.copy(files = c.files :+ x))
+        .text("List of files to analyze.")
+
+      note(sys.props("line.separator") + "Analysis")
+
       opt[Unit]("print-features")
         .action((_, c) => c.copy(features = true))
         .text("Print query features.")
+
+      note(sys.props("line.separator") + "Rewrites")
 
       opt[Unit]("blast-enum-quantifiers")
         .action((_, c) => c.copy(blastEnumQuantifierFlag = true))
         .text(
           "Rewrite quantifiers over enums to finite disjunctions/conjunctions."
         )
-
-      arg[java.io.File]("<file> ...")
-        .unbounded()
-        .required()
-        .action((x, c) => c.copy(files = c.files :+ x))
-        .text("List of files to analyze.")
 
     }
     parser.parse(args, Config())
@@ -166,11 +176,19 @@ object UclidMain {
         println(features.map(f => "-- " + f).mkString("\n"))
       }
 
-      val solver = config.solver match {
+      val solvers = config.solvers.map(solver => solver match {
         case Solvers.alt_ergo => new AltErgo(ctx)
         case Solvers.cvc4     => new CVC4(ctx)
         case Solvers.vampire  => new Vampire(ctx)
         case Solvers.z3       => new Z3(ctx)
+      })
+
+      val solver = if (solvers.length == 0) {
+        Z3(ctx)
+      } else if (solvers.length == 1) {
+        solvers.head
+      } else {
+        Medley(ctx, solvers)
       }
 
       val res = solver.solve(config.run, config.outFile)

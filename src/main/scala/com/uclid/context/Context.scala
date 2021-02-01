@@ -1,6 +1,6 @@
 package com.uclid.context
 
-import com.uclid.termgraph._
+import com.uclid.termgraph.TermGraph
 
 abstract class Context(val termgraph: TermGraph) {
   def toQuery(): String

@@ -1,6 +1,6 @@
 package com.uclid.solverinterface.compiler
 
-import com.uclid.solverinterface.SyMTContext
+import com.uclid.context.SyMTContext
 import com.uclid.termgraph._
 
 import scala.collection.mutable.ListBuffer
