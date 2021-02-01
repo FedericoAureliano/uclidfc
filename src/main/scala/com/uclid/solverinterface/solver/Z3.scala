@@ -5,10 +5,10 @@ import com.uclid.context.Context
 import sys.process._
 import java.io.{File, PrintWriter}
 
-class Z3(ctx: Context) extends Solver(ctx) {
+class Z3() extends Solver() {
   def getCommand(): String = "z3"
 
-  def generateQuery(): String = {
+  def generateQuery(ctx: Context): String = {
     // get the query but remove the set logic command
     val query = ctx
       .toQuery()

@@ -45,7 +45,7 @@ Just add the bin folder to your path: uclidfc will automatically compile the
 first time you run it. Note, uclidfc will not automatically recompile if you
 make changes to its source code. To recompile, run `sbt assembly`.
 
-## Run on JVM
+## Run
 
 ```
 uclidfc [options] <file> ...
@@ -57,6 +57,20 @@ uclidfc [options] <file> ...
   --print-features            Print query features.
   --blast-enum-quantifiers    Rewrite quantifiers over enums to finite disjunctions/conjunctions.
   <file> ...                  List of files to analyze.
+```
+
+If you use multiple solvers, uclidfc will automatically select the solver to
+use per query.
+
+In SMT mode (when you call uclidfc on .smt2 files) uclidfc will iterate over
+the files instead of parsing them together, like in UCLID mode (when you call
+uclidfc on .ucl files).
+
+So the following command will, for each query in `models/tests/smt2/`, print
+the query features, and use either z3 or cvc4 to solve the query.
+
+```
+uclidfc models/tests/smt2/* --print-features -s cvc4 -s z3
 ```
 
 ## Live Edit

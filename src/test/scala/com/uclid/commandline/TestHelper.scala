@@ -66,7 +66,7 @@ def endToEnd(
   filename: String,
   solvers: List[String],
   rewrites: List[String]
-): UclidResult = {
+): List[UclidResult] = {
   solvers match {
     case Nil =>
       UclidMain.main(

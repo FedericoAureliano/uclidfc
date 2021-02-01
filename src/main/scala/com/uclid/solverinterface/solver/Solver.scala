@@ -7,7 +7,7 @@ import com.uclid.context.Context
 import sys.process._
 import java.io.{File, PrintWriter}
 
-abstract class Solver(ctx: Context) {
+abstract class Solver() {
 
   def runProcess(in: String): (List[String], List[String], Int, Double) = {
     print("Running solver ... ")
@@ -43,19 +43,20 @@ abstract class Solver(ctx: Context) {
     f
   }
 
-  def generateQuery(): String
+  def generateQuery(ctx: Context): String
   def getCommand(): String
   def parseAnswer(answer: String): String
 
   def solve(
     run: Boolean,
+    ctx: Context,
     outFile: Option[String]
   ): (ProofResult, Double, Double) = {
 
     // need to call this first before checking if it is a synthesis query
     print("Generating query ... ")
     val t1 = System.nanoTime
-    val query = generateQuery()
+    val query = generateQuery(ctx)
     val generationDuration = (System.nanoTime - t1) / 1e9d
     println(s"Query generated in ${generationDuration} seconds.")
 

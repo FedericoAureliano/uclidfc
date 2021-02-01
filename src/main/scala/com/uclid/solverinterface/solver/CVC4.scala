@@ -5,10 +5,10 @@ import com.uclid.context.Context
 import sys.process._
 import java.io.{File, PrintWriter}
 
-class CVC4(ctx: Context) extends Solver(ctx) {
+class CVC4() extends Solver() {
   def getCommand(): String = "cvc4"
 
-  def generateQuery(): String = {
+  def generateQuery(ctx: Context): String = {
     val query = ctx.toQuery()
     query
   }

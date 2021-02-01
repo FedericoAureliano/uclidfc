@@ -5,10 +5,10 @@ import com.uclid.context.Context
 import sys.process._
 import java.io.{File, PrintWriter}
 
-class AltErgo(ctx: Context) extends Solver(ctx) {
+class AltErgo() extends Solver() {
   def getCommand(): String = "alt-ergo -enable-adts-cs"
 
-  def generateQuery(): String = {
+  def generateQuery(ctx: Context): String = {
     // get the query but remove the set logic and set-option commands
     val query = ctx
       .toQuery()

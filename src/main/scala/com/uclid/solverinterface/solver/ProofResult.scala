@@ -11,13 +11,13 @@ class ProofResult(
   override def toString(): String = {
     val extra = "Detailed Output:" + messages
     val answer = result match {
-      case Some(true)  => "Rejected!"
+      case Some(true)  => "Counterexample!"
       case Some(false) => "Verified!"
       case None        => "Neither Verified Nor Rejected."
     }
     List(
-      s"\n\n${"*" * answer.length()}\n" + answer + s"\n${"*" * answer.length()}\n",
+      s"\n${"*" * answer.length()}\n" + answer + s"\n${"*" * answer.length()}\n",
       extra
-    ).mkString("\n") + "\n"
+    ).mkString("\n") + "\n\n"
   }
 }

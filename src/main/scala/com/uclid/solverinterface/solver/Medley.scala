@@ -6,14 +6,23 @@ import sys.process._
 import java.io.{File, PrintWriter}
 import scala.util.Random
 
-class Medley(ctx: Context, choices: List[Solver]) extends Solver(ctx) {
+class Medley(choices: List[Solver]) extends Solver() {
   val random = Random
 
-  val solver = choices(
+  var solver = choices(
       random.nextInt(choices.length)
   )
 
   def getCommand(): String = solver.getCommand()
-  def generateQuery(): String = solver.generateQuery()
-  def parseAnswer(answer: String): String = solver.parseAnswer(answer)
+  def generateQuery(ctx: Context): String = solver.generateQuery(ctx)
+  def parseAnswer(answer: String): String = {
+    val parsed = solver.parseAnswer(answer)
+
+    // update the solver for the next round
+    solver = choices(
+          random.nextInt(choices.length)
+      )
+
+    parsed
+  }
 }

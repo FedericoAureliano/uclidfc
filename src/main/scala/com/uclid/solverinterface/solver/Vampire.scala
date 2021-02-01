@@ -5,7 +5,7 @@ import com.uclid.context.Context
 import sys.process._
 import java.io.{File, PrintWriter}
 
-class Vampire(ctx: Context) extends Solver(ctx) {
+class Vampire() extends Solver() {
 
   val supportedLogics = List(
     "ALIA",
@@ -35,7 +35,7 @@ class Vampire(ctx: Context) extends Solver(ctx) {
   def getCommand(): String =
     "vampire --mode smtcomp --input_syntax smtlib2 --term_algebra_acyclicity light --term_algebra_rules on --fmb_enumeration_strategy smt"
 
-  def generateQuery(): String = {
+  def generateQuery(ctx: Context): String = {
     val query = ctx.toQuery()
 
     // find the set logic command
