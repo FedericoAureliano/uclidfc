@@ -50,24 +50,26 @@ make changes to its source code. To recompile, run `sbt assembly`.
 ```
 uclidfc [options] <file> ...
 
-  -m, --main <module>         Name of the main module.
-  -s, --solver <solver>       Use one of alt_ergo or cvc4 or vampire or z3. Solver must be in your path.
-  -o, --out <file>            Write query to <file>.
-  --skip-solver               Don't run the solver.
-  --print-features            Print query features.
-  --blast-enum-quantifiers    Rewrite quantifiers over enums to finite disjunctions/conjunctions.
-  <file> ...                  List of files to analyze.
+Basic Usage
+  -m, --main <module>        Name of the main module.
+  -s, --solver <solver>      Solver to use (alt_ergo or cvc4 or vampire or z3). Solver must be in your path.
+  -o, --out <file>           Write query to <file>.
+  --skip-solver              Don't run the solver.
+  <file> ...                 List of files to analyze.
+
+Analysis
+  --print-features           Print query features.
+
+Rewrites
+  --blast-enum-quantifiers   Rewrite quantifiers over enums to finite disjunctions/conjunctions.
 ```
 
-If you use multiple solvers, uclidfc will automatically select the solver to
-use per query.
-
 In SMT mode (when you call uclidfc on .smt2 files) uclidfc will iterate over
-the files instead of parsing them together, like in UCLID mode (when you call
-uclidfc on .ucl files).
-
-So the following command will, for each query in `models/tests/smt2/`, print
-the query features, and use either z3 or cvc4 to solve the query.
+the files instead of combining them, like it does when in UCLID mode (when you
+call uclidfc on .ucl files). If you give uclidfc multiple solver arguments,
+uclidfc will automatically select the solver to use. So, the following command
+will, for each query in `models/tests/smt2/`, print the query features, and use
+either z3 or cvc4 to solve the query.
 
 ```
 uclidfc models/tests/smt2/* --print-features -s cvc4 -s z3
