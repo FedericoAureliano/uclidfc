@@ -75,7 +75,7 @@ object UclidMain {
         .unbounded()
         .required()
         .action((x, c) => c.copy(files = c.files :+ x))
-        .text("List of files to analyze.")
+        .text("List of input files.")
 
       note(sys.props("line.separator") + "Analysis")
 

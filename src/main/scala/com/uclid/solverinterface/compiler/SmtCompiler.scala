@@ -44,49 +44,112 @@ object SmtCompiler {
     while (pos < tokens.length)
       pos = parseCommand(pos)
 
+    /** Helper to get the position of the matching closing parenthesis
+      * @param start the position of the opening parenthesis "(" 
+      * @return the position of the matching closing parenthesis ")"
+      */ 
+    def sexprUntilMatching(start: Int): Int = {
+      require(tokens(start) == "(")
+      var count = 1
+      var endpos = start + 1
+      while (count != 0) {
+        tokens(endpos) match {
+          case "(" => count += 1
+          case ")" => count -= 1
+          case _   =>
+        }
+        endpos += 1
+      }
+      endpos - 1
+    }.ensuring(endPos => tokens(endPos) == ")" && endPos > start)
+
+    /** Helper to split (A1 A2 ... An) into a list [A1, A2, ..., An], where Ai is a complete term (either an atom or a complete sexpr)
+      * @param start the position of the opening parenthesis "(" 
+      * @param end the position of the matching closing parenthesis "(" 
+      * @return A list of start and end points [(First(A1), Last(A1)), ..., (First(An), Last(An))]
+      */ 
+    def splitIntoTerms(startPos: Int, endPos: Int): List[(Int, Int)] = {
+      require(startPos < endPos)
+      val subterms = new ListBuffer[(Int, Int)]()
+
+      var pos = startPos + 1
+      while (pos < endPos - 1)
+        if (tokens(pos) == "(") {
+          val endpos = sexprUntilMatching(pos)
+          subterms.addOne((pos, endpos + 1))
+          pos = endpos + 1
+        } else {
+          subterms.addOne((pos, pos + 1))
+          pos += 1
+        }
+      subterms.toList
+
+    }.ensuring(_.forall(p => p._1 < p._2))
+
+    /** Helper to parse ((name1 sort1) (name2 sort2) .. (namen sortn))
+      * @param start the position of the opening parenthesis "(" 
+      * @return A list of name sort pairs, where sort has been internalized [(name1, IndexInTermGraph(sort1)), ..., (namen, IndexInTermGraph(sortn))]
+      */ 
+    def parseNamedParams(startPos: Int, endPos: Int): List[(String, Int)] = {
+      require(tokens(startPos) == "(")
+      require(tokens(endPos) == ")")
+      splitIntoTerms(startPos, endPos).map { p =>
+        val pair = splitIntoTerms(p._1, p._2).map { x =>
+          assert(x._1 + 1 == x._2)
+          tokens(x._1)
+        }
+        assert(pair.length == 2)
+        (
+          pair.head,
+          termgraph.memoAddInstruction(
+            FunctionParameter(pair.head, parseSort(pair.last))
+          )
+        )
+      }
+    }
+
     /** Parse a top-level smt-lib command
       * @param start the position of the opening parenthesis "(" of the command
-      * @return the position of the closing parenthesis ")" of the command
+      * @return the position of the closing parenthesis ")" of the command plus 1
       */ 
     def parseCommand(start: Int): Int = {
+      require(tokens(start) == "(")
       tokens.drop(pos) match {
         case "(" :: "assert" :: _ =>
           val newEndPos = sexprUntilMatching(pos)
           assert(newEndPos > pos)
-          parseAssertion(pos, newEndPos)
+          // get rid of "(" and "assert" and ")"
+          val term = parseTerm(pos + 2, newEndPos, new HashMap[String, Int]())
+          ctx.addAssertion(term)
           pos = newEndPos + 1
-          assert(tokens(pos - 1) == ")")
           pos
         case "(" :: "check-sat" :: ")" :: _ =>
           ctx.checkSat()
           pos += 3
-          assert(tokens(pos - 1) == ")")
           pos
         case "(" :: "set-logic" :: logic :: ")" :: _ =>
           print(s"Ignoring (set-logic $logic) command in query ... ")
           pos += 4
-          assert(tokens(pos - 1) == ")")
           pos
         case "(" :: "declare-const" :: constName :: sortName :: ")" :: _ =>
-          val sortRef = parseAtom(sortName, HashMap.empty)
+          val sortRef = parseSort(sortName)
           val declRef =
             termgraph.memoAddInstruction(UserFunction(constName, sortRef))
           global(constName) = declRef
           pos += 5
-          assert(tokens(pos - 1) == ")")
           pos
         case "(" :: "declare-fun" :: funName :: "(" :: _ =>
           val paramsStart = pos + 3
           val paramsEnd = sexprUntilMatching(paramsStart) + 1
-          val params = splitIntoTerms(paramsStart, paramsEnd).map(p =>
-            parseTerm(p._1, p._2, HashMap.empty)
-          )
-          val sortRef = parseAtom(tokens(paramsEnd), HashMap.empty)
+          val params = splitIntoTerms(paramsStart, paramsEnd).map(p => {
+            assert(p._1 + 1 == p._2, "TODO support more complicated sorts!")
+            parseSort(tokens(p._1))
+          })
+          val sortRef = parseSort(tokens(paramsEnd))
           val declRef =
             termgraph.memoAddInstruction(UserFunction(funName, sortRef, params))
           global(funName) = declRef
           pos = paramsEnd + 2 //the sort plus the ")"
-          assert(tokens(pos - 1) == ")")
           pos
         case "(" :: "declare-datatypes" :: _ =>
             val namesStart = pos + 2
@@ -126,7 +189,7 @@ object SmtCompiler {
                 val ctrs = dt._2.map(ctrXsels => {
                     val sels = ctrXsels._2.map(pair => {
                         val selRef = termgraph.memoAddInstruction(
-                            Selector(pair._1, parseAtom(pair._2, HashMap.empty))
+                            Selector(pair._1, parseSort(pair._2))
                         )
                         global(pair._1) = selRef
                         selRef
@@ -139,55 +202,13 @@ object SmtCompiler {
             })
 
             pos = bodiesEnd + 1
-            assert(tokens(pos - 1) == ")")
             pos
         case c =>
           throw new SmtParserError("Unexpected character around: " + c.take(if (c.length < 5) then c.length else 5))
       }
-    }
+    }.ensuring(pos => tokens(pos - 1) == ")")
 
-    def sexprUntilMatching(start: Int): Int = {
-      require(tokens(start) == "(")
-      var count = 1
-      var endpos = start + 1
-      while (count != 0) {
-        tokens(endpos) match {
-          case "(" => count += 1
-          case ")" => count -= 1
-          case _   =>
-        }
-        endpos += 1
-      }
-      endpos - 1
-    }.ensuring(endPos => tokens(endPos) == ")" && endPos > start)
-
-    def splitIntoTerms(startPos: Int, endPos: Int): List[(Int, Int)] = {
-      require(startPos < endPos)
-      val subterms = new ListBuffer[(Int, Int)]()
-
-      var pos = startPos + 1
-      while (pos < endPos - 1)
-        if (tokens(pos) == "(") {
-          val endpos = sexprUntilMatching(pos)
-          subterms.addOne((pos, endpos + 1))
-          pos = endpos + 1
-        } else {
-          subterms.addOne((pos, pos + 1))
-          pos += 1
-        }
-      subterms.toList
-
-    }.ensuring(_.forall(p => p._1 < p._2))
-
-    def parseAssertion(startPos: Int, endPos: Int): Unit = {
-      require(tokens(startPos) == "(")
-      require(tokens(startPos + 1) == "assert")
-      require(tokens(endPos) == ")")
-      // get rid of "(" and "assert" and ")"
-      val term = parseTerm(startPos + 2, endPos, new HashMap[String, Int]())
-      ctx.addAssertion(term)
-    }
-
+    // TODO: split up into parse operator and parse operand
     def parseTerm(
       startPos: Int,
       endPos: Int,
@@ -197,7 +218,7 @@ object SmtCompiler {
       assert(startPos + 1 == endPos || tokens(startPos) == "(")
 
       if (startPos + 1 == endPos) {
-        parseAtom(tokens(startPos), local)
+        parseSymbol(tokens(startPos), local)
       } else {
         val horizontalPairs = splitIntoTerms(startPos, endPos)
         val termRefs = new ListBuffer[Int]()
@@ -238,25 +259,33 @@ object SmtCompiler {
       }
     }
 
-    def parseNamedParams(startPos: Int, endPos: Int): List[(String, Int)] = {
-      require(tokens(startPos) == "(")
-      require(tokens(endPos) == ")")
-      splitIntoTerms(startPos, endPos).map { p =>
-        val pair = splitIntoTerms(p._1, p._2).map { x =>
-          assert(x._1 + 1 == x._2)
-          tokens(x._1)
+    /** Interpreted sorts, declared sorts, and datatypes
+      * 
+      * TODO: will need to generalize to take a list of strings for stuff like bitvectors 
+      * 
+      * @param sort the symbol to parse
+      * @return the termgraph reference to the parsed sort
+      */ 
+    def parseSort(sort: String): Int =
+      global.getOrElse(
+        sort,
+        sort match {
+          case "Int" =>
+            termgraph.memoAddInstruction(TheorySort("Int"))
+          case "Bool" =>
+            termgraph.memoAddInstruction(TheorySort("Bool"))
+          case "String" =>
+            termgraph.memoAddInstruction(TheorySort("String"))
+          case _ => throw new SmtParserError("Expected a sort but got " + sort)
         }
-        assert(pair.length == 2)
-        (
-          pair.head,
-          termgraph.memoAddInstruction(
-            FunctionParameter(pair.head, parseAtom(pair.last, HashMap.empty))
-          )
-        )
-      }
-    }
+      )
 
-    def parseAtom(atom: String, local: HashMap[String, Int]): Int =
+    /** Interpreted symbols, globally declared functions, bound variables, ...
+      * @param atom the symbol to parse
+      * @param local the local bindings for bound variables
+      * @return the termgraph reference to the parsed symbol
+      */ 
+    def parseSymbol(atom: String, local: HashMap[String, Int]): Int =
       local.getOrElse(
         atom,
         global.getOrElse(
@@ -283,13 +312,6 @@ object SmtCompiler {
               termgraph.memoAddInstruction(TheoryMacro("and"))
             case "or" =>
               termgraph.memoAddInstruction(TheoryMacro("or"))
-
-            case "Int" =>
-              termgraph.memoAddInstruction(TheorySort("Int"))
-            case "Bool" =>
-              termgraph.memoAddInstruction(TheorySort("Bool"))
-            case "String" =>
-              termgraph.memoAddInstruction(TheorySort("String"))
 
             case "false" =>
               termgraph.memoAddInstruction(TheoryMacro("false"))

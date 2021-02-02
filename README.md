@@ -55,7 +55,7 @@ Basic Usage
   -s, --solver <solver>      Solver to use (alt_ergo or cvc4 or vampire or z3). Solver must be in your path.
   -o, --out <file>           Write query to <file>.
   --skip-solver              Don't run the solver.
-  <file> ...                 List of files to analyze.
+  <file> ...                 List of input files.
 
 Analysis
   --print-features           Print query features.
