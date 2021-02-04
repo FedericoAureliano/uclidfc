@@ -8,11 +8,6 @@ import scala.collection.mutable.HashMap
 
 object SmtCompiler {
 
-  var tokens : List[String] = List.empty
-  val global: HashMap[String, Int] = new HashMap()
-  var termgraph = new TermGraph()
-  var ctx = new SyMTContext(termgraph)
-
   def removeComments(script: String): String = {
     val clean = new StringBuffer()
 
@@ -37,26 +32,32 @@ object SmtCompiler {
       .split("\\s+")
       .toList
 
+  /** Translate smtlib string to termgraph in SMT context
+    * 
+    */
   def compile(script: String): SyMTContext = {
-    tokens = tokenize(removeComments(script))
-    global.clear()
-    termgraph = new TermGraph()
-    ctx = new SyMTContext(termgraph)
+    var tokens : List[String] = tokenize(removeComments(script))
+    val global: HashMap[List[String], Int] = new HashMap()
+    var termgraph = new TermGraph()
+    var ctx = new SyMTContext(termgraph)
 
     var pos = 0
-    while (pos < tokens.length)
-      pos = parseCommand(pos)
+    while (pos < tokens.length) {
+      val command = sexprUntilMatching(tokens.drop(pos))
+      parseCommand(command, ctx, global)
+      pos += command.length
+    }
     ctx
   }
 
   /** Helper to get the position of the matching closing parenthesis
-    * @param start the position of the opening parenthesis "(" 
-    * @return the position of the matching closing parenthesis ")"
+    * @param tokens list of tokens starting with "(" 
+    * @return the sexpr that ends with the matching ")"
     */ 
-  def sexprUntilMatching(start: Int): Int = {
-    require(tokens(start) == "(")
+  def sexprUntilMatching(tokens: List[String]): List[String] = {
+    require(tokens.head == "(")
     var count = 1
-    var endpos = start + 1
+    var endpos = 1
     while (count != 0) {
       tokens(endpos) match {
         case "(" => count += 1
@@ -65,204 +66,177 @@ object SmtCompiler {
       }
       endpos += 1
     }
-    endpos - 1
-  }.ensuring(endPos => tokens(endPos) == ")" && endPos > start)
+    tokens.slice(0, endpos)
+  }.ensuring(sexpr => sexpr.last == ")" && sexpr.length > 0)
 
   /** Helper to split (A1 A2 ... An) into a list [A1, A2, ..., An], where Ai is a complete term (either an atom or a complete sexpr)
-    * @param start the position of the opening parenthesis "(" 
-    * @param end the position of the matching closing parenthesis "(" 
-    * @return A list of start and end points [(First(A1), Last(A1)), ..., (First(An), Last(An))]
+    * @param tokens list of tokens starting with "(" and ending in the matching closing parenthesis ")" 
+    * @return A list of subterms [A1, A2, ..., An]
     */ 
-  def splitIntoTerms(startPos: Int, endPos: Int): List[(Int, Int)] = {
-    require(startPos < endPos)
-    val subterms = new ListBuffer[(Int, Int)]()
+  def splitIntoTerms(tokens: List[String]): List[List[String]] = {
+    require(tokens.head == "(")
+    require(tokens.last == ")")
 
-    var pos = startPos + 1
-    while (pos < endPos - 1)
+    val subterms = new ListBuffer[List[String]]()
+
+    var pos = 1
+    while (pos < tokens.length)
       if (tokens(pos) == "(") {
-        val endpos = sexprUntilMatching(pos)
-        subterms.addOne((pos, endpos + 1))
-        pos = endpos + 1
+        val subterm = sexprUntilMatching(tokens.drop(pos))
+        subterms.addOne(subterm)
+        pos += subterm.length
+      } else if (tokens(pos) == ")") {
+        pos += 1
       } else {
-        subterms.addOne((pos, pos + 1))
+        subterms.addOne(List(tokens(pos)))
         pos += 1
       }
+
     subterms.toList
 
-  }.ensuring(_.forall(p => p._1 < p._2))
+  }.ensuring(_.forall(p => p.length > 0))
 
   /** Helper to parse ((name1 sort1) (name2 sort2) .. (namen sortn))
-    * @param start the position of the opening parenthesis "(" 
+    * @param tokens list of tokens starting with "(" and ending in the matching closing parenthesis ")" 
     * @return A list of name sort pairs, where sort has been internalized [(name1, IndexInTermGraph(sort1)), ..., (namen, IndexInTermGraph(sortn))]
     */ 
-  def parseNamedParams(startPos: Int, endPos: Int): List[(String, Int)] = {
-    require(tokens(startPos) == "(")
-    require(tokens(endPos) == ")")
-    splitIntoTerms(startPos, endPos).map { p =>
-      val pair = splitIntoTerms(p._1, p._2).map { x =>
-        assert(x._1 + 1 == x._2)
-        tokens(x._1)
-      }
+  def parseNamedParams(tokens : List[String]): List[(String, List[String])] = {
+    require(tokens.head == "(")
+    require(tokens.last == ")")
+
+    splitIntoTerms(tokens).map { param =>
+      val pair = splitIntoTerms(param)
       assert(pair.length == 2)
-      (
-        pair.head,
-        termgraph.memoAddInstruction(
-          FunctionParameter(pair.head, parseSort(pair.last))
-        )
-      )
+      (pair.head.head, pair.last)
     }
   }
 
   /** Parse a top-level smt-lib command
-    * @param start the position of the opening parenthesis "(" of the command
-    * @return the position of the closing parenthesis ")" of the command plus 1
+    * @param tokens list of tokens starting with "(" and ending in the matching closing parenthesis ")" 
     */ 
-  def parseCommand(start: Int): Int = {
-    require(tokens(start) == "(")
-    var pos = start
-    tokens.drop(pos) match {
-      case "(" :: "assert" :: _ =>
-        val newEndPos = sexprUntilMatching(pos)
-        assert(newEndPos > pos)
-        // get rid of "(" and "assert" and ")"
-        val term = parseTerm(pos + 2, newEndPos, new HashMap[String, Int]())
+  def parseCommand(tokens : List[String], ctx: SyMTContext, global: HashMap[List[String], Int]): Unit = {
+    require(tokens.head == "(")
+    require(tokens.last == ")")
+
+    tokens match {
+      case "(" :: "assert" :: rest =>
+        val term = parseTerm(rest.take(rest.length - 1), new HashMap[String, Int](), ctx, global)
         ctx.addAssertion(term)
-        pos = newEndPos + 1
-        pos
-      case "(" :: "check-sat" :: ")" :: _ =>
+      case "(" :: "check-sat" :: ")" :: Nil =>
         ctx.checkSat()
-        pos += 3
-        pos
-      case "(" :: "set-logic" :: logic :: ")" :: _ =>
+      case "(" :: "set-logic" :: logic :: ")" :: Nil =>
         print(s"Ignoring (set-logic $logic) command in query ... ")
-        pos += 4
-        pos
-      case "(" :: "declare-const" :: constName :: sortName :: ")" :: _ =>
-        val sortRef = parseSort(sortName)
-        val declRef =
-          termgraph.memoAddInstruction(UserFunction(constName, sortRef))
-        global(constName) = declRef
-        pos += 5
-        pos
-      case "(" :: "declare-fun" :: funName :: "(" :: _ =>
-        val paramsStart = pos + 3
-        val paramsEnd = sexprUntilMatching(paramsStart) + 1
-        val params = splitIntoTerms(paramsStart, paramsEnd).map(p => {
-          assert(p._1 + 1 == p._2, "TODO support more complicated sorts!")
-          parseSort(tokens(p._1))
+      case "(" :: "declare-const" :: rest =>
+        val constName = rest.head
+        val sortList = if (rest.tail.length == 2) then List(rest.tail.head) else sexprUntilMatching(rest.tail)
+        val sortRef = parseSort(sortList, ctx, global)
+        val declRef = ctx.termgraph.memoAddInstruction(UserFunction(constName, sortRef))
+        global(List(constName)) = declRef
+      case "(" :: "declare-fun" :: funName :: rest =>
+        val paramsTerm = sexprUntilMatching(rest)
+        val params = splitIntoTerms(paramsTerm).map(p => {
+          parseSort(p, ctx, global)
         })
-        val sortRef = parseSort(tokens(paramsEnd))
-        val declRef =
-          termgraph.memoAddInstruction(UserFunction(funName, sortRef, params))
-        global(funName) = declRef
-        pos = paramsEnd + 2 //the sort plus the ")"
-        pos
-      case "(" :: "declare-datatypes" :: _ =>
-          val namesStart = pos + 2
-          val namesEnd = sexprUntilMatching(namesStart) + 1
-          val names = splitIntoTerms(namesStart, namesEnd).map(p => {
+
+        val sortList = rest.drop(paramsTerm.length)
+        val sortTerm = if (sortList.head == "(") then sexprUntilMatching(sortList) else List(sortList.head)
+        val sortRef = parseSort(sortTerm, ctx, global)
+
+        val declRef = ctx.termgraph.memoAddInstruction(UserFunction(funName, sortRef, params))
+        global(List(funName)) = declRef
+      case "(" :: "declare-datatypes" :: rest =>
+          val namesTerm = sexprUntilMatching(rest)
+          val names = splitIntoTerms(namesTerm).map(p => {
               // the arity must always be zero
-              assert(tokens(p._2-2) == "0", "Parametric datatypes not supported!")
-              val name = tokens(p._1+1)
-              val sortRef = termgraph.addInstruction(DataType(name, List.empty)) // placeholder
-              global(name) = sortRef
+              assert(p(2) == "0", "Parametric datatypes not supported!")
+              val name = p(1)
+              val sortRef = ctx.termgraph.addInstruction(DataType(name, List.empty)) // placeholder
+              global(List(name)) = sortRef
               (name, sortRef)
           })
 
-          val bodiesStart = namesEnd
-          assert(tokens(bodiesStart) == "(")
-          val bodiesEnd = sexprUntilMatching(bodiesStart) + 1
-          val bodies : List[List[(String, List[(String, String)])]] = splitIntoTerms(bodiesStart, bodiesEnd).map((bodyStart, bodyEnd) => {
-              splitIntoTerms(bodyStart, bodyEnd).map((ctrXSelsStart, ctrXSelsEnd) => {
-                  val ctrXSels = splitIntoTerms(ctrXSelsStart, ctrXSelsEnd)
-                  val sels = if (ctrXSels.length > 1) {
-                      ctrXSels.tail.map((selStart, selEnd) => {
-                          val pair = splitIntoTerms(selStart, selEnd).map { x =>
-                          assert(x._1 + 1 == x._2)
-                          tokens(x._1)
-                          }
-                          assert(pair.length == 2)
-                          (pair.head, pair.last)
-                      })
-                  } else {
-                      List.empty
-                  }
-                  (tokens(ctrXSels.head._1), sels)
+          val bodiesTerm = sexprUntilMatching(rest.drop(namesTerm.length))
+          val bodies : List[List[(String, List[(String, List[String])])]] = splitIntoTerms(bodiesTerm).map(body => {
+              splitIntoTerms(body).map(ctrXsels => {
+                val ctr :: sels = splitIntoTerms(ctrXsels)
+                assert(ctr.length == 1)
+                (ctr(0), sels.map(s => {
+                  val name :: sort = splitIntoTerms(s)
+                  assert(name.length == 1)
+                  assert(sort.length == 1)
+                  (name(0), sort(0))
+                }))
               })
           })
 
           names.zip(bodies).foreach(dt => {
               val ctrs = dt._2.map(ctrXsels => {
                   val sels = ctrXsels._2.map(pair => {
-                      val selRef = termgraph.memoAddInstruction(
-                          Selector(pair._1, parseSort(pair._2))
+                      val selRef = ctx.termgraph.memoAddInstruction(
+                          Selector(pair._1, parseSort(pair._2, ctx, global))
                       )
-                      global(pair._1) = selRef
+                      global(List(pair._1)) = selRef
                       selRef
                   })
-                  val ctrRef = termgraph.memoAddInstruction(Constructor(ctrXsels._1, dt._1._2, sels))
-                  global(ctrXsels._1) = ctrRef
+                  val ctrRef = ctx.termgraph.memoAddInstruction(Constructor(ctrXsels._1, dt._1._2, sels))
+                  global(List(ctrXsels._1)) = ctrRef
                   ctrRef
               })
-              termgraph.memoUpdateInstruction(dt._1._2, DataType(dt._1._1, ctrs))
+              ctx.termgraph.memoUpdateInstruction(dt._1._2, DataType(dt._1._1, ctrs))
           })
-
-          pos = bodiesEnd + 1
-          pos
       case c =>
         throw new SmtParserError("Unexpected character around: " + c.take(if (c.length < 5) then c.length else 5))
     }
-  }.ensuring(pos => tokens(pos - 1) == ")")
+  }
 
-  // TODO: split up into parse operator and parse operand
   def parseTerm(
-    startPos: Int,
-    endPos: Int,
-    local: HashMap[String, Int]
+    tokens : List[String],
+    local: HashMap[String, Int],
+    ctx: SyMTContext, 
+    global: HashMap[List[String], Int]
   ): Int = {
-    assert(startPos < endPos)
-    assert(startPos + 1 == endPos || tokens(startPos) == "(")
+    require(tokens.length == 1 || tokens.head == "(")
 
-    if (startPos + 1 == endPos) {
-      parseSymbol(tokens(startPos), local)
-    } else {
-      val horizontalPairs = splitIntoTerms(startPos, endPos)
-      val termRefs = new ListBuffer[Int]()
-      var i = 0
-      while (i < horizontalPairs.length) {
-        tokens(horizontalPairs(i)._1) match {
-          case "exists" =>
-            val paramRefs = parseNamedParams(
-              horizontalPairs(i + 1)._1,
-              horizontalPairs(i + 1)._2 - 1
-            )
-            val existsRef = termgraph.memoAddInstruction(
-              TheoryMacro("exists", paramRefs.map(p => p._2))
-            )
-            termRefs.append(existsRef)
-            local ++= paramRefs.toMap
-            i += 1
-          case "forall" =>
-            val paramRefs = parseNamedParams(
-              horizontalPairs(i + 1)._1,
-              horizontalPairs(i + 1)._2 - 1
-            )
-            val forallRef = termgraph.memoAddInstruction(
-              TheoryMacro("forall", paramRefs.map(p => p._2))
-            )
-            termRefs.append(forallRef)
-            local ++= paramRefs.toMap
-            i += 1
-          case _ =>
-            termRefs.append(parseTerm(horizontalPairs(i)._1, horizontalPairs(i)._2, local))
-        }
-        i += 1
+    tokens match {
+      case "(" :: "exists" :: rest =>
+        val paramsTerm = sexprUntilMatching(rest)
+        val paramRefs = parseNamedParams(paramsTerm).map(p => (p._1, ctx.termgraph.memoAddInstruction(FunctionParameter(p._1, parseSort(p._2, ctx, global)))))
+        val existsRef = ctx.termgraph.memoAddInstruction(
+          TheoryMacro("exists", paramRefs.map(p => p._2))
+        )
+        local ++= paramRefs.toMap
+        val operandTokens = sexprUntilMatching(tokens.drop(paramsTerm.length + 2))
+        val operandTerm = parseTerm(operandTokens, local, ctx, global)
+        ctx.termgraph.memoAddInstruction(Application(existsRef, List(operandTerm)))
+      case "(" :: "forall" :: rest =>
+        val paramsTerm = sexprUntilMatching(rest)
+        val paramRefs = parseNamedParams(paramsTerm).map(p => (p._1, ctx.termgraph.memoAddInstruction(FunctionParameter(p._1, parseSort(p._2, ctx, global)))))
+        val forallRef = ctx.termgraph.memoAddInstruction(
+          TheoryMacro("forall", paramRefs.map(p => p._2))
+        )
+        local ++= paramRefs.toMap
+        val operandTokens = sexprUntilMatching(tokens.drop(paramsTerm.length + 2))
+        val operandTerm = parseTerm(operandTokens, local, ctx, global)
+        ctx.termgraph.memoAddInstruction(Application(forallRef, List(operandTerm)))
+      case atom :: Nil =>
+        parseSymbol(atom, local, ctx, global)
+      case _ => {
+        val operator :: operands = splitIntoTerms(tokens)
+        ctx.termgraph.memoAddInstruction(
+          Application(parseOperator(operator, local, ctx, global), operands.map(o => parseTerm(o, local, ctx, global)))
+        )
       }
-
-      termgraph.memoAddInstruction(
-        Application(termRefs.head, termRefs.tail.toList)
-      )
     }
+  }
+
+  def parseOperator(
+    tokens : List[String],
+    local: HashMap[String, Int],
+    ctx: SyMTContext, 
+    global: HashMap[List[String], Int]
+  ): Int = {
+    assert(tokens.length == 1, "TODO: handle more complicated ops (like as const)")
+    parseSymbol(tokens.head, local, ctx, global)
   }
 
   /** Interpreted sorts, declared sorts, and datatypes
@@ -272,16 +246,16 @@ object SmtCompiler {
     * @param sort the symbol to parse
     * @return the termgraph reference to the parsed sort
     */ 
-  def parseSort(sort: String): Int =
+  def parseSort(sort: List[String], ctx: SyMTContext, global: HashMap[List[String], Int]): Int =
     global.getOrElse(
       sort,
       sort match {
-        case "Int" =>
-          termgraph.memoAddInstruction(TheorySort("Int"))
-        case "Bool" =>
-          termgraph.memoAddInstruction(TheorySort("Bool"))
-        case "String" =>
-          termgraph.memoAddInstruction(TheorySort("String"))
+        case "Int" :: Nil =>
+          ctx.termgraph.memoAddInstruction(TheorySort("Int"))
+        case "Bool" :: Nil =>
+          ctx.termgraph.memoAddInstruction(TheorySort("Bool"))
+        case "String" :: Nil =>
+          ctx.termgraph.memoAddInstruction(TheorySort("String"))
         case _ => throw new SmtParserError("Expected a sort but got " + sort)
       }
     )
@@ -291,43 +265,43 @@ object SmtCompiler {
     * @param local the local bindings for bound variables
     * @return the termgraph reference to the parsed symbol
     */ 
-  def parseSymbol(atom: String, local: HashMap[String, Int]): Int =
+  def parseSymbol(atom: String, local: HashMap[String, Int], ctx: SyMTContext, global: HashMap[List[String], Int]): Int =
     local.getOrElse(
       atom,
       global.getOrElse(
-        atom,
+        List(atom),
         atom match {
           case "+" =>
-            termgraph.memoAddInstruction(TheoryMacro("+"))
+            ctx.termgraph.memoAddInstruction(TheoryMacro("+"))
           case "-" =>
-            termgraph.memoAddInstruction(TheoryMacro("-"))
+            ctx.termgraph.memoAddInstruction(TheoryMacro("-"))
           case "*" =>
-            termgraph.memoAddInstruction(TheoryMacro("*"))
+            ctx.termgraph.memoAddInstruction(TheoryMacro("*"))
 
           case ">" =>
-            termgraph.memoAddInstruction(TheoryMacro(">"))
+            ctx.termgraph.memoAddInstruction(TheoryMacro(">"))
           case "<" =>
-            termgraph.memoAddInstruction(TheoryMacro(">"))
+            ctx.termgraph.memoAddInstruction(TheoryMacro(">"))
           case ">=" =>
-            termgraph.memoAddInstruction(TheoryMacro(">"))
+            ctx.termgraph.memoAddInstruction(TheoryMacro(">"))
           case "<=" =>
-            termgraph.memoAddInstruction(TheoryMacro(">"))
+            ctx.termgraph.memoAddInstruction(TheoryMacro(">"))
           case "=" =>
-            termgraph.memoAddInstruction(TheoryMacro("="))
+            ctx.termgraph.memoAddInstruction(TheoryMacro("="))
           case "and" =>
-            termgraph.memoAddInstruction(TheoryMacro("and"))
+            ctx.termgraph.memoAddInstruction(TheoryMacro("and"))
           case "or" =>
-            termgraph.memoAddInstruction(TheoryMacro("or"))
+            ctx.termgraph.memoAddInstruction(TheoryMacro("or"))
 
           case "false" =>
-            termgraph.memoAddInstruction(TheoryMacro("false"))
+            ctx.termgraph.memoAddInstruction(TheoryMacro("false"))
           case "true" =>
-            termgraph.memoAddInstruction(TheoryMacro("true"))
+            ctx.termgraph.memoAddInstruction(TheoryMacro("true"))
           case other if other.startsWith("\"") && other.endsWith("\"") =>
-            termgraph.memoAddInstruction(TheoryMacro(other))
+            ctx.termgraph.memoAddInstruction(TheoryMacro(other))
           case other =>
             // must be an integer (add support for other stuff later)
-            termgraph.memoAddInstruction(TheoryMacro(other.toInt.toString))
+            ctx.termgraph.memoAddInstruction(TheoryMacro(other.toInt.toString))
         }
       )
     )
