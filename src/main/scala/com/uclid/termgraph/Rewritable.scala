@@ -8,6 +8,62 @@ import scala.collection.mutable.HashMap
 
 trait Rewritable() extends AbstractTermGraph {
 
+  def plusMinusZero() : Unit = {
+    (0 to stmts.length - 1).foreach { p =>
+      stmts(p) match {
+        case Application(plus, args)  if stmts(plus) == TheoryMacro("+", List.empty) => {
+          val newArgs : List[Int] = args.foldLeft(List.empty)((acc, a) => {
+            stmts(a) match {
+              case TheoryMacro("0", _) => acc
+              case _ => acc ++ List(a)
+            }
+          })
+          if (newArgs.length == 0) {
+            memoUpdateInstruction(p, TheoryMacro("0", List.empty))
+          } else {
+            memoUpdateInstruction(p, Application(plus, newArgs))
+          }
+        }
+        case Application(minus, x::y::Nil)  if stmts(minus) == TheoryMacro("-", List.empty) => {
+          if (stmts(x) == TheoryMacro("0", List.empty)) {
+            memoUpdateInstruction(p, Application(minus, y :: Nil))
+          } else if (stmts(y) == TheoryMacro("0", List.empty)) {
+            memoUpdateInstruction(p, stmts(x))
+          }
+        }
+        case _ =>
+      }
+    }
+  }
+
+  def indexOfGteZeroGadget() : Unit = {
+    (0 to stmts.length - 1).foreach { p =>
+      stmts(p) match {
+        case Application(gte, t::zero::Nil) if stmts(zero) == TheoryMacro("0", List.empty) => {
+          stmts(gte) match {
+            case TheoryMacro(">=", _) => {
+              stmts(t) match {
+                case Application(indexof, x::needle::offset::Nil) if offset == zero => {
+                  stmts(indexof) match {
+                    case TheoryMacro("str.indexof", _) => {
+                      val contains = memoAddInstruction(TheoryMacro("str.contains", List.empty))
+                      memoUpdateInstruction(p, Application(contains, x::needle::Nil))
+                    }
+                    case _ =>
+                  }
+                }
+                case _ =>
+              }
+            }
+            case _ =>
+          }
+        }
+        case _ =>
+      }
+    }
+  }
+
+
   def assertionOverConjunction(assertion: Assert) : List[Command] = {
     var changeHappened = true
     var newCommands : List[Command] = List(assertion)

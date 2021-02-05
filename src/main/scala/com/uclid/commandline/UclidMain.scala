@@ -38,12 +38,14 @@ object UclidMain {
     solvers: List[Solvers.Value] = List.empty,
     run: Boolean = true,
     features: Boolean = false,
+    plusMinusZero: Boolean = false,
     blastEnumQuantifierFlag: Boolean = false,
     assertionOverConjunction: Boolean = false,
     containsOverConcat: Boolean = false,
     containsOverReplace: Boolean = false,
     lengthOverSubstring: Boolean = false,
     indexOfSubstringGadget: Boolean = false,
+    indexOfGteZeroGadget: Boolean = false,
     outFile: Option[String] = None,
     prettyPrint: Boolean = false,
     files: Seq[java.io.File] = Seq()
@@ -98,6 +100,12 @@ object UclidMain {
 
       note(sys.props("line.separator") + "Rewrites")
 
+      opt[Unit]("plus-minus-zero")
+        .action((_, c) => c.copy(plusMinusZero = true))
+        .text(
+          "Rewrite \"(+ a b ... 0 ... z)\" to \"(+ a b ... z)\""
+        )
+
       opt[Unit]("blast-enum-quantifiers")
         .action((_, c) => c.copy(blastEnumQuantifierFlag = true))
         .text(
@@ -132,6 +140,12 @@ object UclidMain {
         .action((_, c) => c.copy(indexOfSubstringGadget = true))
         .text(
           "Rewrite \"index of c in x[k:len(x)-k]\" to \"index of c in z\" where x = yz and len(y) = k."
+        )
+
+      opt[Unit]("indexof-gte-zero-gadget")
+        .action((_, c) => c.copy(indexOfGteZeroGadget = true))
+        .text(
+          "Rewrite \"index of c in x >= 0\" to \"x contains c\""
         )
     }
     parser.parse(args, Config())
@@ -187,6 +201,9 @@ object UclidMain {
         print("Processing model ... ")
         val startProcess = System.nanoTime
         val ctx = UclidCompiler.process(modules, Some(config.mainModuleName))
+        if (config.plusMinusZero) {
+          ctx.termgraph.plusMinusZero()
+        }
         if (config.blastEnumQuantifierFlag) {
           ctx.termgraph.blastEnumQuantifier()
         }
@@ -201,6 +218,9 @@ object UclidMain {
         }
         if (config.indexOfSubstringGadget) {
           ctx.script = ctx.termgraph.indexOfSubstringGadget() ++ ctx.script
+        }
+        if (config.indexOfGteZeroGadget) {
+          ctx.termgraph.indexOfGteZeroGadget()
         }
         if (config.assertionOverConjunction) {
           throw new SemanticError("Flatten Assertions Not Yet Supported In UCLID Mode")
@@ -246,6 +266,9 @@ object UclidMain {
   
           print("Processing query ... ")
           val startProcess = System.nanoTime
+          if (config.plusMinusZero) {
+            ctx.termgraph.plusMinusZero()
+          }
           if (config.blastEnumQuantifierFlag) {
             ctx.termgraph.blastEnumQuantifier()
           }
@@ -260,6 +283,9 @@ object UclidMain {
           }
           if (config.indexOfSubstringGadget) {
             ctx.script = ctx.termgraph.indexOfSubstringGadget() ++ ctx.script
+          }
+          if (config.indexOfGteZeroGadget) {
+            ctx.termgraph.indexOfGteZeroGadget()
           }
           if (config.assertionOverConjunction) {
             ctx.script = ctx.script.foldLeft(List.empty)((acc, c) => {
