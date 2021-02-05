@@ -1,18 +1,70 @@
 package com.uclid.termgraph
 
+import com.uclid.context._
+
 import scala.collection.mutable.ArrayBuffer
+import scala.collection.mutable.ListBuffer
 import scala.collection.mutable.HashMap
 
 trait Rewritable() extends AbstractTermGraph {
 
-  /** Entry point to all rewrites. Boolean flags specify choices.
-    *
-    * @param blastEnumQuantifierFlag rewrite quantifiers over enums to disjunctions/conjunctions
-    */
-  def rewrite(blastEnumQuantifierFlag: Boolean): Unit =
-    if (blastEnumQuantifierFlag) {
-      blastEnumQuantifier()
+  def flattenAssertion(assertion: Assert) : List[Command] = {
+    var changeHappened = true
+    var newCommands : List[Command] = List(assertion)
+    while (changeHappened) {
+      changeHappened = false
+      newCommands = newCommands.foldLeft(List.empty)((acc1, c) => 
+        c match {
+          case ass : Assert => {
+            stmts(ass.t) match {
+              case Application(op, operands) => {
+                stmts(op) match {
+                  case TheoryMacro("and", _) => {
+                    changeHappened = true
+                    acc1 ++ operands.foldLeft(List.empty)((acc2, o) => Assert(o) :: acc2)
+                  }
+                  case _ => acc1 ++ List(c)
+                }
+              }
+              case _ => acc1 ++ List(c)
+            }
+          }
+          case _ => acc1 ++ List(c)
+        })
     }
+    newCommands
+  }
+
+  def distributeContainsChar() : Unit = {
+    (0 to stmts.length - 1).foreach { p =>
+      stmts(p) match {
+        case Application(contains, haystack::needle::Nil) if stmts(needle).isInstanceOf[TheoryMacro] && stmts(needle).asInstanceOf[TheoryMacro].name.length == 3 => {
+          stmts(contains) match {
+            case TheoryMacro("str.contains", _) => {
+              stmts(haystack) match {
+                case Application(concat, strings) => {
+                  stmts(concat) match {
+                    case TheoryMacro("str.++", _) => {
+                      // we have a contains over a concat. Make it a disjunction
+                      val orRef = memoAddInstruction(TheoryMacro("or"))
+                      val components = strings.map(s => {
+                        memoAddInstruction(Application(contains, List(s, needle)))
+                      })
+                      memoUpdateInstruction(p, Application(orRef, components))
+                    }
+                    case _ =>
+                  }
+                }
+                case _ =>
+              }
+            }
+            case _ =>
+          }
+        }
+        case _ =>
+      }
+    }
+  }
 
   /** Rewrite quantifiers over enums to disjunctions/conjunctions
     *
@@ -22,7 +74,7 @@ trait Rewritable() extends AbstractTermGraph {
     * where x_i are the elements of [some enum]. If the resulting quantifier is empty,
     * then it is eliminated.
     */
-  private def blastEnumQuantifier(): Unit = {
+  def blastEnumQuantifier(): Unit = {
     var changeHappened = true
     while (changeHappened) {
       changeHappened = false

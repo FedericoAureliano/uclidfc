@@ -45,6 +45,7 @@ trait Probed() extends AbstractTermGraph {
     var dt = 0
     var lia = 0
     var nia = 0
+    var s = 0
 
     val marks = mark(entryPoints)
 
@@ -70,6 +71,15 @@ trait Probed() extends AbstractTermGraph {
                     } else {
                       lia += 1
                     }
+                  case TheoryMacro("str.++", _) => s += 1
+                  case TheoryMacro("str.indexof", _) => s += 1
+                  case TheoryMacro("str.substr", _) => s += 1
+                  case TheoryMacro("str.len", _) => s += 1
+                  case TheoryMacro("str.contains", _) => s += 1
+                  case TheoryMacro("str.prefixof", _) => s += 1
+                  case TheoryMacro("str.suffixof", _) => s += 1
+                  case TheoryMacro("str.replace", _) => s += 1
+                  case TheoryMacro("str.at", _) => s += 1
                   case TheoryMacro("+", _) => lia += 1
                   case TheoryMacro("-", _) => lia += 1
                   case TheoryMacro("forall", _) => q += 1
@@ -93,7 +103,8 @@ trait Probed() extends AbstractTermGraph {
       ("A", a),
       ("DT", dt),
       ("LIA", lia),
-      ("NIA", nia)
+      ("NIA", nia),
+      ("S", s)
     )
   }
 
@@ -104,6 +115,7 @@ trait Probed() extends AbstractTermGraph {
     var i = false
     var linear = true
     var qf = true
+    var s = false
 
     val marks = mark(entryPoints)
 
@@ -137,6 +149,7 @@ trait Probed() extends AbstractTermGraph {
               if (params.length > 0) { uf = true }
             case TheorySort("Array", _) => a = true
             case TheorySort("Int", _)   => i = true
+            case TheorySort("String", _)   => s = true
             case Synthesis(_, _, _)     => isSynthesisQuery = true
             case _                      =>
           }
@@ -145,6 +158,7 @@ trait Probed() extends AbstractTermGraph {
 
     s"${if (qf && !isSynthesisQuery) { "QF_" }
     else { "" }}${if (uf) { "UF" }
+    else { "" }}${if (s) { "S" }
     else { "" }}${if (a) { "A" }
     else { "" }}${if (dt) { "DT" }
     else { "" }}${if (linear && i) { "L" }

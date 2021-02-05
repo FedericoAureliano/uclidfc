@@ -15,7 +15,7 @@ case class Check() extends Command
 
 class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
   override def ignoreResult() = false
-  private val script: ListBuffer[Command] = new ListBuffer()
+  var script: List[Command] = List.empty
 
   override def entryPoints() = script.foldLeft(List.empty)((acc, c) => {
     c match {
@@ -25,11 +25,11 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
   })
 
   def addAssertion(r: Int): Unit =
-    script.addOne(Assert(r))
+    script = script ++ List(Assert(r))
 
   def checkSat(): Unit =
-    script.addOne(Check())
-
+    script = script ++ List(Check()
+)
   def toQuery(): String = {
     val logic = s"(set-logic ${termgraph.queryLogic(entryPoints())})"
     val ctx = programToQueryCtx()
