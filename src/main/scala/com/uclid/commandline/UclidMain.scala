@@ -2,10 +2,13 @@ package com.uclid.commandline
 
 import com.uclid.termgraph
 import com.uclid.context._
+import com.uclid.context.{Command, Check}
 import com.uclid.solverinterface.solver._
 import com.uclid.solverinterface.compiler._
 import com.uclid.uclidinterface.compiler.parser._
 import com.uclid.uclidinterface.compiler._
+
+import scala.collection.mutable.ListBuffer
 
 object Solvers extends Enumeration {
   type Solvers = Value
@@ -36,6 +39,8 @@ object UclidMain {
     run: Boolean = true,
     features: Boolean = false,
     blastEnumQuantifierFlag: Boolean = false,
+    flattenAssertionConjucntion: Boolean = false,
+    distributeContainsOverConcat: Boolean = false,
     outFile: Option[String] = None,
     files: Seq[java.io.File] = Seq()
   )
@@ -89,6 +94,18 @@ object UclidMain {
         .action((_, c) => c.copy(blastEnumQuantifierFlag = true))
         .text(
           "Rewrite quantifiers over enums to finite disjunctions/conjunctions."
+        )
+
+      opt[Unit]("flatten-assertion-conjunction")
+        .action((_, c) => c.copy(flattenAssertionConjucntion = true))
+        .text(
+          "Rewrite asserted conjunction to repeated assertion."
+        )
+
+      opt[Unit]("distribute-contains-over-concat")
+        .action((_, c) => c.copy(distributeContainsOverConcat = true))
+        .text(
+          "Rewrite \"xy contains c\" as \"x contains c or y contains c\"."
         )
 
     }
@@ -145,7 +162,15 @@ object UclidMain {
         print("Processing model ... ")
         val startProcess = System.nanoTime
         val ctx = UclidCompiler.process(modules, Some(config.mainModuleName))
-        ctx.termgraph.rewrite(config.blastEnumQuantifierFlag)
+        if (config.blastEnumQuantifierFlag) {
+          ctx.termgraph.blastEnumQuantifier()
+        }
+        if (config.distributeContainsOverConcat) {
+          ctx.termgraph.distributeContainsChar()
+        }
+        if (config.flattenAssertionConjucntion) {
+          throw new SemanticError("Flatten Assertions Not Yet Supported In UCLID Mode")
+        }
         processDuration = (System.nanoTime - startProcess) / 1e9d
         println(s"Processing completed in ${processDuration} seconds.")
 
@@ -187,7 +212,22 @@ object UclidMain {
   
           print("Processing query ... ")
           val startProcess = System.nanoTime
-          ctx.termgraph.rewrite(config.blastEnumQuantifierFlag)
+          if (config.blastEnumQuantifierFlag) {
+            ctx.termgraph.blastEnumQuantifier()
+          }
+          if (config.distributeContainsOverConcat) {
+            ctx.termgraph.distributeContainsChar()
+          }
+          if (config.flattenAssertionConjucntion) {
+            ctx.script = ctx.script.foldLeft(List.empty)((acc, c) => {
+              c match {
+                case a : Assert => {
+                  acc ++ ctx.termgraph.flattenAssertion(a)
+                }
+                case _ => acc ++ List(c)
+              }
+            })
+          }
           processDuration = (System.nanoTime - startProcess) / 1e9d
           println(s"Processing completed in ${processDuration} seconds.")
   
@@ -224,15 +264,19 @@ object UclidMain {
     } catch {
       case (e: java.io.FileNotFoundException) =>
         errorResult.messages = "\n" + e.toString()
+        println("\n"+errorResult)
         List(UclidResult(errorResult))
       case e: SemanticError =>
-        errorResult.messages = "\n" + e.toString()
+        errorResult.messages = "\n" + e.msg
+        println("\n"+errorResult)
         List(UclidResult(errorResult))
       case e: SolverMismatchError =>
-        errorResult.messages = "\n" + e.toString()
+        errorResult.messages = "\n" + e.msg
+        println("\n"+errorResult)
         List(UclidResult(errorResult))
       case e: SmtParserError =>
-        errorResult.messages = "\n" + e.toString()
+        errorResult.messages = "\n" + e.msg
+        println("\n"+errorResult)
         List(UclidResult(errorResult))
     }
   }

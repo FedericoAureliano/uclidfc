@@ -6,7 +6,7 @@ import sys.process._
 import java.io.{File, PrintWriter}
 
 class CVC4() extends Solver() {
-  def getCommand(): String = "cvc4"
+  def getCommand(): String = "cvc4 --strings-exp --incremental"
 
   def generateQuery(ctx: Context): String = {
     val query = ctx.toQuery()
