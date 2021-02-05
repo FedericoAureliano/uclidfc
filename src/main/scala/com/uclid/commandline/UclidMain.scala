@@ -43,6 +43,7 @@ object UclidMain {
     containsOverConcat: Boolean = false,
     containsOverReplace: Boolean = false,
     lengthOverSubstring: Boolean = false,
+    indexOfSubstringGadget: Boolean = false,
     outFile: Option[String] = None,
     prettyPrint: Boolean = false,
     files: Seq[java.io.File] = Seq()
@@ -126,6 +127,12 @@ object UclidMain {
         .text(
           "Rewrite \"len(x[n:m])\" as \"ite(len(x) - n - (len(x) - m) < 0, 0, len(x) - n - (len(x) - m))\"."
         )
+
+      opt[Unit]("indexof-substring-gadget")
+        .action((_, c) => c.copy(indexOfSubstringGadget = true))
+        .text(
+          "Rewrite \"index of c in x[k:len(x)-k]\" to \"index of c in z\" where x = yz and len(y) = k."
+        )
     }
     parser.parse(args, Config())
   }
@@ -192,6 +199,9 @@ object UclidMain {
         if (config.lengthOverSubstring) {
           ctx.termgraph.lengthOverSubstring()
         }
+        if (config.indexOfSubstringGadget) {
+          ctx.script = ctx.termgraph.indexOfSubstringGadget() ++ ctx.script
+        }
         if (config.assertionOverConjunction) {
           throw new SemanticError("Flatten Assertions Not Yet Supported In UCLID Mode")
         }
@@ -247,6 +257,9 @@ object UclidMain {
           }
           if (config.lengthOverSubstring) {
             ctx.termgraph.lengthOverSubstring()
+          }
+          if (config.indexOfSubstringGadget) {
+            ctx.script = ctx.termgraph.indexOfSubstringGadget() ++ ctx.script
           }
           if (config.assertionOverConjunction) {
             ctx.script = ctx.script.foldLeft(List.empty)((acc, c) => {

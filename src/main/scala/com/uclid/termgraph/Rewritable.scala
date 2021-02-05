@@ -139,6 +139,68 @@ trait Rewritable() extends AbstractTermGraph {
     }
   }
 
+  // returns auxiliary assertions
+  def indexOfSubstringGadget() : List[Assert] = {
+    (0 to stmts.length - 1).foldLeft(List.empty) { (acc, p) =>
+      stmts(p) match {
+        case Application(indexof, t :: c :: offset :: Nil) => {
+          stmts(indexof) match {
+            case TheoryMacro("str.indexof", _) => {
+              stmts(t) match {
+                case Application(substr, x::k::lenMinusK::Nil) => {
+                  stmts(substr) match {
+                    case TheoryMacro("str.substr", _) => {
+                      stmts(lenMinusK) match {
+                        case Application(minus, lenx :: j :: Nil) if j == k && stmts(minus) == TheoryMacro("-", List.empty) => {
+                          stmts(lenx) match {
+                            case Application(len, r::Nil) if r == x => {
+                              stmts(len) match {
+                                case TheoryMacro("str.len", _) => {
+                                  val stringSort = memoAddInstruction(TheorySort("String"))
+                                  val gte = memoAddInstruction(TheoryMacro(">="))
+                                  val implies = memoAddInstruction(TheoryMacro("=>"))
+                                  val and = memoAddInstruction(TheoryMacro("and"))
+                                  val eq = memoAddInstruction(TheoryMacro("="))
+                                  val concat = memoAddInstruction(TheoryMacro("str.++"))
+
+                                  val y = memoAddInstruction(UserFunction(freshSymbolName(), stringSort))
+                                  memoUpdateInstruction(t, UserFunction(freshSymbolName(), stringSort)) // this is z
+                                  val yz = memoAddInstruction(Application(concat, List(y, t)))
+                                  val xeqyz = memoAddInstruction(Application(eq, List(x, yz)))
+                                  
+                                  val leny = memoAddInstruction(Application(len, List(y)))
+                                  val lenx = memoAddInstruction(Application(len, List(x)))
+                                  val lenyeqk = memoAddInstruction(Application(eq, List(leny, k)))
+                                  
+                                  val rhs = memoAddInstruction(Application(and, List(xeqyz, lenyeqk)))
+                                  val lhs = memoAddInstruction(Application(gte, List(lenx, k)))
+                                  val aux = memoAddInstruction(Application(implies, List(lhs, rhs)))
+
+                                  Assert(aux) :: acc
+                                }
+                                case _ => acc
+                              }
+                            }
+                            case _ => acc
+                          }
+                        }
+                        case _ => acc
+                      }
+                    }
+                    case _ => acc
+                  }
+                }
+                case _ => acc
+              }
+            }
+            case _ => acc
+          }
+        }
+        case _ => acc
+      }
+    }
+  }
+
   /** Rewrite quantifiers over enums to disjunctions/conjunctions
     *
     * This function rewrites
