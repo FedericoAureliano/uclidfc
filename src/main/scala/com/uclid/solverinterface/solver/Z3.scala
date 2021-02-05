@@ -8,10 +8,10 @@ import java.io.{File, PrintWriter}
 class Z3() extends Solver() {
   def getCommand(): String = "z3"
 
-  def generateQuery(ctx: Context): String = {
+  def generateQuery(ctx: Context, prettyPrint: Boolean): String = {
     // get the query but remove the set logic command
     val query = ctx
-      .toQuery()
+      .toQuery(prettyPrint)
       .split("\n")
       .filter(p => !p.startsWith("(set-logic"))
       .mkString("\n")

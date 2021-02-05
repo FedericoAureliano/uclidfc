@@ -8,7 +8,7 @@ import scala.collection.mutable.HashMap
 
 trait Rewritable() extends AbstractTermGraph {
 
-  def flattenAssertion(assertion: Assert) : List[Command] = {
+  def assertionOverConjunction(assertion: Assert) : List[Command] = {
     var changeHappened = true
     var newCommands : List[Command] = List(assertion)
     while (changeHappened) {
@@ -35,7 +35,7 @@ trait Rewritable() extends AbstractTermGraph {
     newCommands
   }
 
-  def distributeContainsChar() : Unit = {
+  def containsOverConcat() : Unit = {
     (0 to stmts.length - 1).foreach { p =>
       stmts(p) match {
         case Application(contains, haystack::needle::Nil) if stmts(needle).isInstanceOf[TheoryMacro] && stmts(needle).asInstanceOf[TheoryMacro].name.length == 3 => {
@@ -51,6 +51,79 @@ trait Rewritable() extends AbstractTermGraph {
                         memoAddInstruction(Application(contains, List(s, needle)))
                       })
                       memoUpdateInstruction(p, Application(orRef, components))
+                    }
+                    case _ =>
+                  }
+                }
+                case _ =>
+              }
+            }
+            case _ =>
+          }
+        }
+        case _ =>
+      }
+    }
+  }
+
+  def containsOverReplace() : Unit = {
+    (0 to stmts.length - 1).foreach { p =>
+      stmts(p) match {
+        case Application(contains, haystack::needle::Nil) if stmts(needle).isInstanceOf[TheoryMacro] && stmts(needle).asInstanceOf[TheoryMacro].name.length == 3 => {
+          stmts(contains) match {
+            case TheoryMacro("str.contains", _) => {
+              stmts(haystack) match {
+                case Application(replace, x::oldChar::newChar::Nil) if stmts(oldChar).isInstanceOf[TheoryMacro] && stmts(oldChar).asInstanceOf[TheoryMacro].name.length == 3 && stmts(newChar).isInstanceOf[TheoryMacro] && stmts(newChar).asInstanceOf[TheoryMacro].name.length == 3 => {
+                  stmts(replace) match {
+                    case TheoryMacro("str.replace", _) => {
+                      if (oldChar == needle && newChar != needle) {
+                        memoUpdateInstruction(p, TheoryMacro("false", List.empty))
+                      } else if (oldChar == needle && newChar == needle) {
+                        memoUpdateInstruction(p, Application(contains, List(x, needle)))
+                      } else if (oldChar != needle && newChar == needle) {
+                        val orRef = memoAddInstruction(TheoryMacro("or"))
+                        memoUpdateInstruction(p, Application(orRef, List(memoAddInstruction(Application(contains, List(x, needle))), memoAddInstruction(Application(contains, List(x, oldChar))))))
+                      } else {
+                        // they are both not equal so just ingore them altogether
+                        memoUpdateInstruction(p, Application(contains, List(x, needle)))
+                      }
+                    }
+                    case _ =>
+                  }
+                }
+                case _ =>
+              }
+            }
+            case _ =>
+          }
+        }
+        case _ =>
+      }
+    }
+  }
+
+  def lengthOverSubstring() : Unit = {
+    (0 to stmts.length - 1).foreach { p =>
+      stmts(p) match {
+        case Application(length, t :: Nil) => {
+          stmts(length) match {
+            case TheoryMacro("str.len", _) => {
+              stmts(t) match {
+                case Application(substr, x::start::finish::Nil) => {
+                  stmts(substr) match {
+                    case TheoryMacro("str.substr", _) => {
+                      val sub = memoAddInstruction(TheoryMacro("-"))
+                      val zero = memoAddInstruction(TheoryMacro("0"))
+                      val lt = memoAddInstruction(TheoryMacro("<"))
+                      val ite = memoAddInstruction(TheoryMacro("ite"))
+
+                      val lenX = memoAddInstruction(Application(length, List(x)))
+                      val trimStart = memoAddInstruction(Application(sub, List(lenX, start)))
+                      val trimEnd = memoAddInstruction(Application(sub, List(finish, lenX)))
+                      val total = memoAddInstruction(Application(sub, List(trimStart, trimEnd)))
+
+                      val condition = memoAddInstruction(Application(lt, List(total, zero)))
+                      memoUpdateInstruction(p, Application(ite, List(condition, zero, total)))
                     }
                     case _ =>
                   }

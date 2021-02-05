@@ -43,20 +43,21 @@ abstract class Solver() {
     f
   }
 
-  def generateQuery(ctx: Context): String
+  def generateQuery(ctx: Context, prettyPrint: Boolean): String
   def getCommand(): String
   def parseAnswer(answer: String): String
 
   def solve(
     run: Boolean,
     ctx: Context,
-    outFile: Option[String]
+    outFile: Option[String],
+    prettyPrint: Boolean
   ): (ProofResult, Double, Double) = {
 
     // need to call this first before checking if it is a synthesis query
     print("Generating query ... ")
     val t1 = System.nanoTime
-    val query = generateQuery(ctx)
+    val query = generateQuery(ctx, prettyPrint)
     val generationDuration = (System.nanoTime - t1) / 1e9d
     println(s"Query generated in ${generationDuration} seconds.")
 

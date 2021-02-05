@@ -8,10 +8,10 @@ import java.io.{File, PrintWriter}
 class AltErgo() extends Solver() {
   def getCommand(): String = "alt-ergo -enable-adts-cs"
 
-  def generateQuery(ctx: Context): String = {
+  def generateQuery(ctx: Context, prettyPrint: Boolean): String = {
     // get the query but remove the set logic and set-option commands
     val query = ctx
-      .toQuery()
+      .toQuery(prettyPrint)
       .split("\n")
       .filter(p =>
         !(p.startsWith("(set-logic") || p.startsWith("(set-option") || p

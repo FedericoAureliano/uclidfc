@@ -39,9 +39,12 @@ object UclidMain {
     run: Boolean = true,
     features: Boolean = false,
     blastEnumQuantifierFlag: Boolean = false,
-    flattenAssertionConjucntion: Boolean = false,
-    distributeContainsOverConcat: Boolean = false,
+    assertionOverConjunction: Boolean = false,
+    containsOverConcat: Boolean = false,
+    containsOverReplace: Boolean = false,
+    lengthOverSubstring: Boolean = false,
     outFile: Option[String] = None,
+    prettyPrint: Boolean = false,
     files: Seq[java.io.File] = Seq()
   )
 
@@ -72,6 +75,10 @@ object UclidMain {
         .action((x, c) => c.copy(outFile = Some(x)))
         .text("Write query to <file>.")
 
+      opt[Unit]("pretty-print")
+        .action((_, c) => c.copy(prettyPrint = true))
+        .text("Try to make output queries human readable.")
+
       opt[Unit]("skip-solver")
         .action((_, c) => c.copy(run = false))
         .text("Don't run the solver.")
@@ -96,18 +103,29 @@ object UclidMain {
           "Rewrite quantifiers over enums to finite disjunctions/conjunctions."
         )
 
-      opt[Unit]("flatten-assertion-conjunction")
-        .action((_, c) => c.copy(flattenAssertionConjucntion = true))
+      opt[Unit]("assertion-over-conjunction")
+        .action((_, c) => c.copy(assertionOverConjunction = true))
         .text(
-          "Rewrite asserted conjunction to repeated assertion."
+          "Rewrite asserted conjunctions to repeated assertion."
         )
 
-      opt[Unit]("distribute-contains-over-concat")
-        .action((_, c) => c.copy(distributeContainsOverConcat = true))
+      opt[Unit]("contains-over-concat")
+        .action((_, c) => c.copy(containsOverConcat = true))
         .text(
           "Rewrite \"xy contains c\" as \"x contains c or y contains c\"."
         )
 
+      opt[Unit]("contains-over-replace")
+        .action((_, c) => c.copy(containsOverReplace = true))
+        .text(
+          "Rewrite \"(replace c1 with c2 in x) contains c3\" as \"x contains c3\" if c1 = c3 and c2 = c3; as \"false\" if c1 = c3 and c2 != c3; as \"x contains c3\" if c1 != c3 and c2 != c3; and \"x contains c3 or x contains c1\" if c1 != c3 and c2 == c3."
+        )
+
+      opt[Unit]("length-over-substring")
+        .action((_, c) => c.copy(lengthOverSubstring = true))
+        .text(
+          "Rewrite \"len(x[n:m])\" as \"ite(len(x) - n - (len(x) - m) < 0, 0, len(x) - n - (len(x) - m))\"."
+        )
     }
     parser.parse(args, Config())
   }
@@ -165,10 +183,16 @@ object UclidMain {
         if (config.blastEnumQuantifierFlag) {
           ctx.termgraph.blastEnumQuantifier()
         }
-        if (config.distributeContainsOverConcat) {
-          ctx.termgraph.distributeContainsChar()
+        if (config.containsOverConcat) {
+          ctx.termgraph.containsOverConcat()
         }
-        if (config.flattenAssertionConjucntion) {
+        if (config.containsOverReplace) {
+          ctx.termgraph.containsOverReplace()
+        }
+        if (config.lengthOverSubstring) {
+          ctx.termgraph.lengthOverSubstring()
+        }
+        if (config.assertionOverConjunction) {
           throw new SemanticError("Flatten Assertions Not Yet Supported In UCLID Mode")
         }
         processDuration = (System.nanoTime - startProcess) / 1e9d
@@ -187,7 +211,7 @@ object UclidMain {
           println(features.map(f => "-- " + f).mkString("\n"))
         }
   
-        val res = solver.solve(config.run, ctx, config.outFile)
+        val res = solver.solve(config.run, ctx, config.outFile, config.prettyPrint)
         val ret = if (ctx.ignoreResult()) {
           List(UclidResult(ProofResult(None, res._1.messages), parseDuration, processDuration, analysisDuration, res._2, res._3))
         } else {
@@ -215,14 +239,20 @@ object UclidMain {
           if (config.blastEnumQuantifierFlag) {
             ctx.termgraph.blastEnumQuantifier()
           }
-          if (config.distributeContainsOverConcat) {
-            ctx.termgraph.distributeContainsChar()
+          if (config.containsOverConcat) {
+            ctx.termgraph.containsOverConcat()
           }
-          if (config.flattenAssertionConjucntion) {
+          if (config.containsOverReplace) {
+            ctx.termgraph.containsOverReplace()
+          }
+          if (config.lengthOverSubstring) {
+            ctx.termgraph.lengthOverSubstring()
+          }
+          if (config.assertionOverConjunction) {
             ctx.script = ctx.script.foldLeft(List.empty)((acc, c) => {
               c match {
                 case a : Assert => {
-                  acc ++ ctx.termgraph.flattenAssertion(a)
+                  acc ++ ctx.termgraph.assertionOverConjunction(a)
                 }
                 case _ => acc ++ List(c)
               }
@@ -244,7 +274,7 @@ object UclidMain {
             println(features.map(f => "-- " + f).mkString("\n"))
           }
     
-          val res = solver.solve(config.run, ctx, config.outFile)
+          val res = solver.solve(config.run, ctx, config.outFile, config.prettyPrint)
           val ret = if (ctx.ignoreResult()) {
             UclidResult(ProofResult(None, res._1.messages), parseDuration, processDuration, analysisDuration, res._2, res._3)
           } else {

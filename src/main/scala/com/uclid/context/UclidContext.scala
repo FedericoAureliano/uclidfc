@@ -22,7 +22,11 @@ class UclidContext(termgraph: TermGraph) extends SyMTContext(termgraph) {
 
   override def entryPoints() = assertionRefs.toList ++ axiomRefs ++ getValues.getOrElse(List.empty)
 
-  override def toQuery(): String = {
+  override def toQuery(prettyPrint: Boolean): String = {
+    if (!prettyPrint) {
+      TAB = ""
+      NEWLINE = " "
+    }
     alreadyDeclared.clear()
     val logic = termgraph.queryLogic(entryPoints())
     val logicString = s"(set-logic ${logic})"
