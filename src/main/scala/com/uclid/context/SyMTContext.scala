@@ -30,7 +30,11 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
   def checkSat(): Unit =
     script = script ++ List(Check()
 )
-  def toQuery(): String = {
+  def toQuery(prettyPrint: Boolean): String = {
+    if (!prettyPrint) {
+      TAB = ""
+      NEWLINE = " "
+    }
     val logic = s"(set-logic ${termgraph.queryLogic(entryPoints())})"
     val ctx = programToQueryCtx()
     val body = script
@@ -40,7 +44,7 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
           case Check()   => "(check-sat)"
         }
       }
-      .mkString("\n")
+      .mkString(s"$NEWLINE")
 
     logic + "\n" + ctx + "\n" + body
   }
@@ -52,7 +56,8 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
     options.addOne((option, value))
 
   protected val alreadyDeclared = new HashSet[Int]()
-  protected val TAB = "  "
+  protected var TAB = "  "
+  protected var NEWLINE = "\n"
 
   protected def programPointToQueryTerm(
     point: Int,
@@ -108,8 +113,8 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
               }
 
             }
-            .mkString(s"\n${TAB * indent}")
-        val result = s"(${dispatch(a.caller)}\n${TAB * indent}${args})"
+            .mkString(s"$NEWLINE${TAB * indent}")
+        val result = s"(${dispatch(a.caller)}$NEWLINE${TAB * indent}${args})"
         indent -= 1
         result
       } else {
@@ -191,7 +196,7 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
             val dispatched =
               List(dispatch(u.body), Some(usermacroToQueryCtx(u))).flatten
             if (dispatched.length > 0) {
-              Some(dispatched.mkString("\n"))
+              Some(dispatched.mkString(s"$NEWLINE"))
             } else {
               None
             }
@@ -201,7 +206,7 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
             val dispatched =
               (List(a.caller) ++ a.args).map(a => dispatch(a)).flatten
             if (dispatched.length > 0) {
-              Some(dispatched.mkString("\n"))
+              Some(dispatched.mkString(s"$NEWLINE"))
             } else {
               None
             }
@@ -223,7 +228,7 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
         tmp ++= s"(${ctr.name}"
         indent += 1
         ctr.selectors.foreach { s =>
-          tmp ++= "\n"
+          tmp ++= s"$NEWLINE"
           val sel = termgraph.stmts(s).asInstanceOf[Selector]
           tmp ++= s"${TAB * indent}(${sel.name} ${programPointToQueryTerm(sel.sort, indent)})"
         }
@@ -268,7 +273,7 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
         }
         .mkString(" ")}) "
 
-      tmp ++= s"${programPointToQueryTerm(u.sort, indent)}\n"
+      tmp ++= s"${programPointToQueryTerm(u.sort, indent)}$NEWLINE"
       indent += 1
       tmp ++= s"${TAB * indent}${programPointToQueryTerm(u.body, indent)})"
       indent -= 1
@@ -288,7 +293,7 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
         }
         .mkString(" ")}) "
 
-      tmp ++= s"${programPointToQueryTerm(u.sort, indent)})\n"
+      tmp ++= s"${programPointToQueryTerm(u.sort, indent)})$NEWLINE"
 
       tmp.toString()
     }
@@ -299,22 +304,22 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
     def moduleToQueryCtx(m: Module): String = {
       val tmp = new StringBuilder()
       val ctr = termgraph.stmts(m.ct).asInstanceOf[Constructor]
-      tmp ++= s"${TAB * indent}; declaring module ${m.name} \n"
+      tmp ++= s"${TAB * indent}; declaring module ${m.name}\n"
       indent += 1
       tmp ++= s"${TAB * indent}(declare-datatypes ((${m.name} 0)) (((${ctr.name}"
       indent += 1
       ctr.selectors.foreach { s =>
-        tmp ++= "\n"
+        tmp ++= s"$NEWLINE"
         val sel = termgraph.stmts(s).asInstanceOf[Selector]
         tmp ++= s"${TAB * indent}(${sel.name} ${programPointToQueryTerm(sel.sort, indent)})"
       }
-      tmp ++= "))))\n\n"
+      tmp ++= s"))))$NEWLINE$NEWLINE"
       indent -= 1
       val init = dispatch(m.init)
       val next = dispatch(m.next)
       val spec = dispatch(m.spec)
 
-      tmp ++= List(init, next, spec).flatten.mkString("\n")
+      tmp ++= List(init, next, spec).flatten.mkString(s"$NEWLINE")
       indent -= 1
       tmp ++= s"${TAB * indent}; done declaring module ${m.name}\n"
 
@@ -324,6 +329,6 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
     termgraph.stmts.zipWithIndex
       .map(p => dispatch(p._2))
       .flatten
-      .mkString("\n")
+      .mkString(s"$NEWLINE")
   }
 }

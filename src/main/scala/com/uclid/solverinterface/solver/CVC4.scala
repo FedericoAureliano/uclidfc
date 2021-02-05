@@ -8,8 +8,8 @@ import java.io.{File, PrintWriter}
 class CVC4() extends Solver() {
   def getCommand(): String = "cvc4 --strings-exp --incremental"
 
-  def generateQuery(ctx: Context): String = {
-    val query = ctx.toQuery()
+  def generateQuery(ctx: Context, prettyPrint: Boolean): String = {
+    val query = ctx.toQuery(prettyPrint)
     query
   }
 

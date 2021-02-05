@@ -2,8 +2,10 @@
 ; Solver=cvc4
 ; Result=Some(true)
 ; Option=print-features
-; Rewrite=flatten-assertion-conjunction
-; Rewrite=distribute-contains-over-concat
+; Rewrite=assertion-over-conjunction
+; Rewrite=contains-over-concat
+; Rewrite=contains-over-replace
+; Rewrite=length-over-substring
 
 (declare-fun uri () String)
 
