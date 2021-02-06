@@ -65,119 +65,151 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
   ): String = {
     var indent = indentInput
 
-    def dispatch(position: Int): String =
-      termgraph.stmts(position) match {
-        case a: Application       => applicationToQueryTerm(a)
-        case c: Constructor       => constructorToQueryTerm(c)
-        case d: DataType          => datatypeToQueryTerm(d)
-        case f: FunctionParameter => functionparameterToQueryTerm(f)
-        case s: Selector          => selectorToQueryTerm(s)
-        case n: Numeral           => numeralToQueryTerm(n)
-        case r: Ref =>
-          if (!termgraph.isSynthesisQuery && !alreadyDeclared.contains(r.loc)) {
-            alreadyDeclared.add(r.loc)
-            s"(! ${dispatch(r.loc)} :named ${r.named})"
-          } else if (!termgraph.isSynthesisQuery && alreadyDeclared.contains(r.loc)) {
-            r.named
-          } else {
-            dispatch(r.loc)
+    val out = new StringBuilder()
+    val stack = new Stack[Either[Int, String]]()
+
+    stack.push(Left(point))
+
+    while (!stack.isEmpty) {
+      stack.pop() match {
+        case Left(position) => {
+          termgraph.stmts(position) match {
+            case a: Application       => applicationToQueryTerm(a)
+            case c: Constructor       => constructorToQueryTerm(c)
+            case d: DataType          => datatypeToQueryTerm(d)
+            case f: FunctionParameter => functionparameterToQueryTerm(f)
+            case s: Selector          => selectorToQueryTerm(s)
+            case n: Numeral           => numeralToQueryTerm(n)
+            case r: Ref =>
+              if (!termgraph.isSynthesisQuery && !alreadyDeclared.contains(r.loc)) {
+                alreadyDeclared.add(r.loc)
+                stack.push(Right(s" :named ${r.named})"))
+                stack.push(Left(r.loc))
+                stack.push(Right("(! "))
+              } else if (!termgraph.isSynthesisQuery && alreadyDeclared.contains(r.loc)) {
+                stack.push(Right(r.named))
+              } else {
+                stack.push(Left(r.loc))
+              }
+            case t: TheoryMacro  => theorymacroToQueryTerm(t)
+            case t: TheorySort   => theorysortToQueryTerm(t)
+            case u: UserFunction => userfunctionToQueryTerm(u)
+            case s: Synthesis    => synthesisToQueryTerm(s)
+            case u: UserMacro    => usermacroToQueryTerm(u)
+            case u: UserSort     => usersortToQueryTerm(u)
+            case m: Module       => moduleToQueryTerm(m)
           }
-        case t: TheoryMacro  => theorymacroToQueryTerm(t)
-        case t: TheorySort   => theorysortToQueryTerm(t)
-        case u: UserFunction => userfunctionToQueryTerm(u)
-        case s: Synthesis    => synthesisToQueryTerm(s)
-        case u: UserMacro    => usermacroToQueryTerm(u)
-        case u: UserSort     => usersortToQueryTerm(u)
-        case m: Module       => moduleToQueryTerm(m)
+        }
+        case Right(str) => {
+          out.addAll(str)
+          if (str == "\n") {
+            out.addAll(s"${TAB * indent}")
+          } else if (str == "(") {
+            indent += 1
+          } else if (str == ")") {
+            indent -= 1
+          }
+        }
       }
+    }
+
 
     // Helper functions that deal with each case
 
-    def applicationToQueryTerm(a: Application): String =
+    def applicationToQueryTerm(a: Application): Unit =
       if (a.args.length > 1) {
-        indent += 1
-        val args =
-          a.args.zipWithIndex
-            .map { p =>
-              val t = dispatch(p._1)
-
-              // if we have a constructor lets label the arguments
-              if (termgraph.stmts(a.caller).isInstanceOf[Constructor]) {
-                //get the ith selector
-                val ctr = termgraph.stmts(a.caller).asInstanceOf[Constructor]
-                val comment =
-                  s"; assigning to ${dispatch(ctr.selectors(p._2))}\n${TAB * indent}"
-                comment + t
-              } else {
-                t
-              }
-
+        stack.push(Right(")"))
+        a.args.reverse.zipWithIndex
+          .foreach { p =>
+            if (p._2 != 0) {
+              stack.push(Right(s"$NEWLINE"))
             }
-            .mkString(s"$NEWLINE${TAB * indent}")
-        val result = s"(${dispatch(a.caller)}$NEWLINE${TAB * indent}${args})"
-        indent -= 1
-        result
+            // if we have a constructor lets label the arguments
+            if (termgraph.stmts(a.caller).isInstanceOf[Constructor]) {
+              //get the ith selector
+              val ctr = termgraph.stmts(a.caller).asInstanceOf[Constructor]
+              stack.push(Left(p._1))
+              stack.push(Right(s"\n"))
+              stack.push(Left(ctr.selectors(p._2)))
+              stack.push(Right("; assigning to "))
+            } else {
+              stack.push(Left(p._1))
+            }
+          }
+        stack.push(Right(s"$NEWLINE"))
+        stack.push(Left(a.caller))
+        stack.push(Right("("))
       } else {
         if (a.args.length == 1) {
-          s"(${dispatch(a.caller)} ${dispatch(a.args(0))})"
+          stack.push(Right(")"))
+          stack.push(Left(a.args(0)))
+          stack.push(Right(" "))
+          stack.push(Left(a.caller))
+          stack.push(Right("("))
         } else {
-          dispatch(a.caller)
+          stack.push(Left(a.caller))
         }
       }
 
-    def constructorToQueryTerm(c: Constructor): String =
-      c.name
+    def constructorToQueryTerm(c: Constructor): Unit =
+      stack.push(Right(c.name))
 
-    def datatypeToQueryTerm(d: DataType): String =
-      d.name
+    def datatypeToQueryTerm(d: DataType): Unit =
+      stack.push(Right(d.name))
 
-    def functionparameterToQueryTerm(f: FunctionParameter): String =
-      f.name
+    def functionparameterToQueryTerm(f: FunctionParameter): Unit =
+      stack.push(Right(f.name))
 
-    def selectorToQueryTerm(s: Selector): String =
-      s.name
+    def selectorToQueryTerm(s: Selector): Unit =
+      stack.push(Right(s.name))
 
-    def numeralToQueryTerm(n: Numeral): String =
-      n.value.toString()
+    def numeralToQueryTerm(n: Numeral): Unit =
+      stack.push(Right(n.value.toString()))
 
-    def theorymacroToQueryTerm(t: TheoryMacro): String =
+    def theorymacroToQueryTerm(t: TheoryMacro): Unit =
       if (t.params.length > 0) {
-        val args = t.params.map { s =>
+        stack.push(Right(")"))
+        t.params.reverse.foreach { s =>
           val sel = termgraph.stmts(s).asInstanceOf[FunctionParameter]
-          s"(${sel.name} ${programPointToQueryTerm(sel.sort, 0)})"
+          stack.push(Right(s"(${sel.name} ${programPointToQueryTerm(sel.sort, 0)})"))
         }
-        s"${t.name} (${args.mkString(" ")})"
+        stack.push(Right(s"${t.name} ("))
       } else {
-        t.name
+        stack.push(Right(t.name))
       }
 
-    def theorysortToQueryTerm(t: TheorySort): String =
+    def theorysortToQueryTerm(t: TheorySort): Unit =
       if (t.params.length > 0) {
-        s"(${t.name} ${t.params.map(p => dispatch(p)).mkString(" ")})"
+        stack.push(Right(")"))
+        t.params.reverse.foreach(p => {
+          stack.push(Left(p))
+          stack.push(Right(" "))
+        })
+        stack.push(Right(s"(${t.name} "))
       } else {
-        t.name
+        stack.push(Right(t.name))
       }
 
-    def userfunctionToQueryTerm(u: UserFunction): String =
-      u.name
+    def userfunctionToQueryTerm(u: UserFunction): Unit =
+      stack.push(Right(u.name))
 
-    def usermacroToQueryTerm(u: UserMacro): String =
-      u.name
+    def usermacroToQueryTerm(u: UserMacro): Unit =
+      stack.push(Right(u.name))
 
-    def synthesisToQueryTerm(s: Synthesis): String = {
+    def synthesisToQueryTerm(s: Synthesis): Unit = {
       if (!termgraph.isSynthesisQuery) {
         throw new SemanticError("Must be a synthesis query!")
       }
-      s.name
+      stack.push(Right(s.name))
     }
 
-    def usersortToQueryTerm(u: UserSort): String =
-      u.name
+    def usersortToQueryTerm(u: UserSort): Unit =
+      stack.push(Right(u.name))
 
-    def moduleToQueryTerm(m: Module): String =
-      m.name
+    def moduleToQueryTerm(m: Module): Unit =
+      stack.push(Right(m.name))
 
-    dispatch(point)
+    out.toString()
   }
 
   def programToQueryCtx(): String = {
@@ -321,7 +353,7 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
 
       tmp ++= List(init, next, spec).flatten.mkString(s"$NEWLINE")
       indent -= 1
-      tmp ++= s"${TAB * indent}; done declaring module ${m.name}\n"
+      tmp ++= s"${TAB * indent}\n; done declaring module ${m.name}\n"
 
       tmp.toString()
     }
