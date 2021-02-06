@@ -4,23 +4,34 @@ import com.uclid.termgraph
 import com.uclid.solverinterface.solver.ProofResult
 import com.uclid.context.Context
 
-import sys.process._
+import scala.concurrent._
+import ExecutionContext.Implicits.global
+import scala.sys.process._
 import java.io.{File, PrintWriter}
 
 abstract class Solver() {
 
-  def runProcess(in: String): (List[String], List[String], Int, Double) = {
+  def runProcess(in: String, timeout: Int): (List[String], List[String], Int, Double) = {
     print("Running solver ... ")
     val qb = Process(in)
     var out = List[String]()
     var err = List[String]()
 
     val t1 = System.nanoTime
-    val exit = qb ! ProcessLogger(s => out ::= s, s => err ::= s)
-    val duration = (System.nanoTime - t1) / 1e9d
-    println(s"Solver terminated in ${duration} seconds.")
+    val exit = qb.run(ProcessLogger(s => out ::= s, s => err ::= s))
 
-    (out.reverse, err.reverse, exit, duration)
+    val f = Future(blocking(exit.exitValue())) // wrap in Future
+    try {
+      Await.result(f, duration.Duration(timeout, "sec"))
+    } catch {
+      case e: TimeoutException => 
+      exit.destroy() // kill the process, but then propagate the error so that UclidMain knows about it
+      throw e
+    }
+    val timetaken = (System.nanoTime - t1) / 1e9d
+    println(s"Solver terminated in ${timetaken} seconds.")
+
+    (out.reverse, err.reverse, exit.exitValue(), timetaken)
   }
 
   def writeQueryToFile(
@@ -49,6 +60,7 @@ abstract class Solver() {
 
   def solve(
     run: Boolean,
+    timeout: Int,
     ctx: Context,
     outFile: Option[String],
     prettyPrint: Boolean
@@ -77,7 +89,7 @@ abstract class Solver() {
       )
     }
 
-    val result = runProcess(s"${getCommand()} ${qfile}")
+    val result = runProcess(s"${getCommand()} ${qfile}", timeout)
     val answer = parseAnswer(" " + (result._1 ++ result._2).mkString("\n"))
 
     if (

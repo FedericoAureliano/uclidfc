@@ -8,6 +8,9 @@ import com.uclid.solverinterface.compiler._
 import com.uclid.uclidinterface.compiler.parser._
 import com.uclid.uclidinterface.compiler._
 
+import scala.concurrent._
+import ExecutionContext.Implicits.global
+import scala.sys.process._
 import scala.collection.mutable.ListBuffer
 
 object Solvers extends Enumeration {
@@ -37,15 +40,14 @@ object UclidMain {
     mainModuleName: String = "main",
     solvers: List[Solvers.Value] = List.empty,
     run: Boolean = true,
+    timeout: Int = Int.MaxValue,
     features: Boolean = false,
     plusMinusZero: Boolean = false,
     blastEnumQuantifierFlag: Boolean = false,
     assertionOverConjunction: Boolean = false,
     containsOverConcat: Boolean = false,
     containsOverReplace: Boolean = false,
-    lengthOverSubstring: Boolean = false,
-    indexOfSubstringGadget: Boolean = false,
-    indexOfGteZeroGadget: Boolean = false,
+    indexOfGTZGadgets: Boolean = false,
     outFile: Option[String] = None,
     prettyPrint: Boolean = false,
     files: Seq[java.io.File] = Seq()
@@ -71,6 +73,13 @@ object UclidMain {
         .maxOccurs(Solvers.values.size)
         .text(
           s"Solver to use (${Solvers.values.mkString(" or ")}). Solver must be in your path."
+        )
+
+      opt[Int]('t', "timeout")
+        .valueName("<timeout>")
+        .action((x, c) => c.copy(timeout = x))
+        .text(
+          s"Timeout (in seconds) to give the solver."
         )
 
       opt[String]('o', "out")
@@ -103,7 +112,7 @@ object UclidMain {
       opt[Unit]("plus-minus-zero")
         .action((_, c) => c.copy(plusMinusZero = true))
         .text(
-          "Rewrite \"(+ a b ... 0 ... z)\" to \"(+ a b ... z)\""
+          "Rewrite \"(+ a b ... 0 ... z)\" to \"(+ a b ... z)\" and \"(- 0 x)\" to \"-x\" and \"(- x 0)\" to \"x\"."
         )
 
       opt[Unit]("blast-enum-quantifiers")
@@ -121,31 +130,19 @@ object UclidMain {
       opt[Unit]("contains-over-concat")
         .action((_, c) => c.copy(containsOverConcat = true))
         .text(
-          "Rewrite \"xy contains c\" as \"x contains c or y contains c\"."
+          "Rewrite \"xy contains c\" as \"x contains c or y contains c,\" where c is a literal string of length 1."
         )
 
       opt[Unit]("contains-over-replace")
         .action((_, c) => c.copy(containsOverReplace = true))
         .text(
-          "Rewrite \"(replace c1 with c2 in x) contains c3\" as \"x contains c3\" if c1 = c3 and c2 = c3; as \"false\" if c1 = c3 and c2 != c3; as \"x contains c3\" if c1 != c3 and c2 != c3; and \"x contains c3 or x contains c1\" if c1 != c3 and c2 == c3."
+          "Rewrite \"(replace c1 with c2 in x) contains c3,\" where c1, c2, and c3 are literal strings of length 1."
         )
 
-      opt[Unit]("length-over-substring")
-        .action((_, c) => c.copy(lengthOverSubstring = true))
+      opt[Unit]("indexof-gte-zero-gadgets")
+        .action((_, c) => c.copy(indexOfGTZGadgets = true))
         .text(
-          "Rewrite \"len(x[n:m])\" as \"ite(len(x) - n - (len(x) - m) < 0, 0, len(x) - n - (len(x) - m))\"."
-        )
-
-      opt[Unit]("indexof-substring-gadget")
-        .action((_, c) => c.copy(indexOfSubstringGadget = true))
-        .text(
-          "Rewrite \"index of c in x[k:len(x)-k]\" to \"index of c in z\" where x = yz and len(y) = k."
-        )
-
-      opt[Unit]("indexof-gte-zero-gadget")
-        .action((_, c) => c.copy(indexOfGteZeroGadget = true))
-        .text(
-          "Rewrite \"index of c in x >= 0\" to \"x contains c\""
+          "Rewrite \"index of y in x >= 0\" to \"x contains y.\""
         )
     }
     parser.parse(args, Config())
@@ -163,6 +160,7 @@ object UclidMain {
       "SMT"
     } else {
       errorResult.messages = "\nAll files must be Uclid5 queries (.ucl) or SMT2 queries (.smt2)!"
+      println("\n"+errorResult)
       return List(UclidResult(errorResult))
     }
 
@@ -184,23 +182,117 @@ object UclidMain {
     var parseDuration = 0.0
     var processDuration = 0.0
     var analysisDuration = 0.0
+    if (inputLanguage == "UCLID") {
+      List(runUclidMode(solver, config))
+    } else {
+      runSMTMode(solver, config)
+    }
+  }
+
+  def runUclidMode(solver: Solver, config: Config) : UclidResult = {
+    val errorResult =
+      new ProofResult()
 
     try {
-      if (inputLanguage == "UCLID") {
-        print("\nParsing input ... ")
+      print("\nParsing input ... ")
+      val startParse = System.nanoTime
+      val modules = UclidCompiler.parse(config.files) match {
+        case Right(m) => m
+        case Left(e) =>
+          errorResult.messages = "\n" + e.toString()
+          println("\n"+errorResult)
+          return UclidResult(errorResult)
+      }
+      var parseDuration = (System.nanoTime - startParse) / 1e9d
+      println(s"Parsing completed in ${parseDuration} seconds.")
+
+      print("Processing model ... ")
+      val startProcess = System.nanoTime
+      val ctx = UclidCompiler.process(modules, Some(config.mainModuleName))
+      if (config.plusMinusZero) {
+        ctx.termgraph.plusMinusZero()
+      }
+      if (config.blastEnumQuantifierFlag) {
+        ctx.termgraph.blastEnumQuantifier()
+      }
+      if (config.containsOverConcat) {
+        ctx.termgraph.containsOverConcat()
+      }
+      if (config.containsOverReplace) {
+        ctx.termgraph.containsOverReplace()
+      }
+      if (config.indexOfGTZGadgets) {
+        ctx.termgraph.indexOfGTZGadgets()
+      }
+      if (config.assertionOverConjunction) {
+        throw new SemanticError("Flatten Assertions Not Yet Supported In UCLID Mode")
+      }
+      var processDuration = (System.nanoTime - startProcess) / 1e9d
+      println(s"Processing completed in ${processDuration} seconds.")
+
+      print("Analyzing model ... ")
+      val startAnalysis = System.nanoTime
+      val features = if (config.features) {
+        ctx.termgraph.featuresList(ctx.entryPoints())
+      } else {
+        List.empty
+      }
+      var analysisDuration = (System.nanoTime - startAnalysis) / 1e9d
+      println(s"Analysis completed in ${analysisDuration} seconds.")
+      if (config.features) {
+        println(features.map(f => "-- " + f).mkString("\n"))
+      }
+
+      val res = solver.solve(config.run, config.timeout, ctx, config.outFile, config.prettyPrint)
+      val ret = if (ctx.ignoreResult()) {
+        UclidResult(ProofResult(None, res._1.messages), parseDuration, processDuration, analysisDuration, res._2, res._3)
+      } else {
+        UclidResult(res._1, parseDuration, processDuration, analysisDuration, res._2, res._3)
+      }
+
+      if (config.run) {
+        println(ret.presult)
+      } else {
+        println(ret.presult.messages)
+      }
+      ret 
+    } catch {
+      case (e: java.io.FileNotFoundException) =>
+        errorResult.messages = "\n" + e.toString()
+        println("\n"+errorResult)
+        UclidResult(errorResult)
+      case e: SemanticError =>
+        errorResult.messages = "\n" + e.msg
+        println("\n"+errorResult)
+        UclidResult(errorResult)
+      case e: SolverMismatchError =>
+        errorResult.messages = "\n" + e.msg
+        println("\n"+errorResult)
+        UclidResult(errorResult)
+      case e: SmtParserError =>
+        errorResult.messages = "\n" + e.msg
+        println("\n"+errorResult)
+        UclidResult(errorResult)
+      case e: TimeoutException => 
+        errorResult.messages = "\n" + e.toString()
+        println("\n"+errorResult)
+        UclidResult(errorResult)
+    }
+  }
+
+  def runSMTMode(solver: Solver, config: Config) : List[UclidResult] = {
+    // Must be SMT Language
+    val results = config.files.map(f => {
+      val errorResult = new ProofResult()
+      try {
+        print(s"\nParsing ${f.getName()} ... ")
         val startParse = System.nanoTime
-        val modules = UclidCompiler.parse(config.files) match {
-          case Right(m) => m
-          case Left(e) =>
-            errorResult.messages = "\n" + e.toString()
-            return List(UclidResult(errorResult))
-        }
-        parseDuration = (System.nanoTime - startParse) / 1e9d
+        val ctx = SmtCompiler.compile(scala.io.Source.fromFile(f).mkString(""))
+        var parseDuration = (System.nanoTime - startParse) / 1e9d
         println(s"Parsing completed in ${parseDuration} seconds.")
 
-        print("Processing model ... ")
+        print("Processing query ... ")
         val startProcess = System.nanoTime
-        val ctx = UclidCompiler.process(modules, Some(config.mainModuleName))
         if (config.plusMinusZero) {
           ctx.termgraph.plusMinusZero()
         }
@@ -213,141 +305,73 @@ object UclidMain {
         if (config.containsOverReplace) {
           ctx.termgraph.containsOverReplace()
         }
-        if (config.lengthOverSubstring) {
-          ctx.termgraph.lengthOverSubstring()
-        }
-        if (config.indexOfSubstringGadget) {
-          ctx.script = ctx.termgraph.indexOfSubstringGadget() ++ ctx.script
-        }
-        if (config.indexOfGteZeroGadget) {
-          ctx.termgraph.indexOfGteZeroGadget()
+        if (config.indexOfGTZGadgets) {
+          ctx.termgraph.indexOfGTZGadgets()
         }
         if (config.assertionOverConjunction) {
-          throw new SemanticError("Flatten Assertions Not Yet Supported In UCLID Mode")
+          ctx.script = ctx.script.foldLeft(List.empty)((acc, c) => {
+            c match {
+              case a : Assert => {
+                acc ++ ctx.termgraph.assertionOverConjunction(a)
+              }
+              case _ => acc ++ List(c)
+            }
+          })
         }
-        processDuration = (System.nanoTime - startProcess) / 1e9d
+        var processDuration = (System.nanoTime - startProcess) / 1e9d
         println(s"Processing completed in ${processDuration} seconds.")
 
-        print("Analyzing model ... ")
+        print("Analyzing query ... ")
         val startAnalysis = System.nanoTime
         val features = if (config.features) {
           ctx.termgraph.featuresList(ctx.entryPoints())
         } else {
           List.empty
         }
-        analysisDuration = (System.nanoTime - startAnalysis) / 1e9d
+        var analysisDuration = (System.nanoTime - startAnalysis) / 1e9d
         println(s"Analysis completed in ${analysisDuration} seconds.")
         if (config.features) {
           println(features.map(f => "-- " + f).mkString("\n"))
         }
   
-        val res = solver.solve(config.run, ctx, config.outFile, config.prettyPrint)
+        val res = solver.solve(config.run, config.timeout, ctx, config.outFile, config.prettyPrint)
         val ret = if (ctx.ignoreResult()) {
-          List(UclidResult(ProofResult(None, res._1.messages), parseDuration, processDuration, analysisDuration, res._2, res._3))
+          UclidResult(ProofResult(None, res._1.messages), parseDuration, processDuration, analysisDuration, res._2, res._3)
         } else {
-          List(UclidResult(res._1, parseDuration, processDuration, analysisDuration, res._2, res._3))
+          UclidResult(res._1, parseDuration, processDuration, analysisDuration, res._2, res._3)
         }
 
         if (config.run) {
-          println(ret(0).presult)
+          println(ret.presult)
         } else {
-          println(ret(0).presult.messages)
+          println(ret.presult.messages)
         }
 
-        ret 
-      } else {
-        // Must be SMT Language
-        val results = config.files.map(f => {
-          print(s"\nParsing ${f.getName()} ... ")
-          val startParse = System.nanoTime
-          val ctx = SmtCompiler.compile(scala.io.Source.fromFile(f).mkString(""))
-          parseDuration = (System.nanoTime - startParse) / 1e9d
-          println(s"Parsing completed in ${parseDuration} seconds.")
-  
-          print("Processing query ... ")
-          val startProcess = System.nanoTime
-          if (config.plusMinusZero) {
-            ctx.termgraph.plusMinusZero()
-          }
-          if (config.blastEnumQuantifierFlag) {
-            ctx.termgraph.blastEnumQuantifier()
-          }
-          if (config.containsOverConcat) {
-            ctx.termgraph.containsOverConcat()
-          }
-          if (config.containsOverReplace) {
-            ctx.termgraph.containsOverReplace()
-          }
-          if (config.lengthOverSubstring) {
-            ctx.termgraph.lengthOverSubstring()
-          }
-          if (config.indexOfSubstringGadget) {
-            ctx.script = ctx.termgraph.indexOfSubstringGadget() ++ ctx.script
-          }
-          if (config.indexOfGteZeroGadget) {
-            ctx.termgraph.indexOfGteZeroGadget()
-          }
-          if (config.assertionOverConjunction) {
-            ctx.script = ctx.script.foldLeft(List.empty)((acc, c) => {
-              c match {
-                case a : Assert => {
-                  acc ++ ctx.termgraph.assertionOverConjunction(a)
-                }
-                case _ => acc ++ List(c)
-              }
-            })
-          }
-          processDuration = (System.nanoTime - startProcess) / 1e9d
-          println(s"Processing completed in ${processDuration} seconds.")
-  
-          print("Analyzing query ... ")
-          val startAnalysis = System.nanoTime
-          val features = if (config.features) {
-            ctx.termgraph.featuresList(ctx.entryPoints())
-          } else {
-            List.empty
-          }
-          analysisDuration = (System.nanoTime - startAnalysis) / 1e9d
-          println(s"Analysis completed in ${analysisDuration} seconds.")
-          if (config.features) {
-            println(features.map(f => "-- " + f).mkString("\n"))
-          }
-    
-          val res = solver.solve(config.run, ctx, config.outFile, config.prettyPrint)
-          val ret = if (ctx.ignoreResult()) {
-            UclidResult(ProofResult(None, res._1.messages), parseDuration, processDuration, analysisDuration, res._2, res._3)
-          } else {
-            UclidResult(res._1, parseDuration, processDuration, analysisDuration, res._2, res._3)
-          }
-
-          if (config.run) {
-            println(ret.presult)
-          } else {
-            println(ret.presult.messages)
-          }
-
-          ret
-        })
-        results.toList
+        ret
+      } catch {
+        case (e: java.io.FileNotFoundException) =>
+          errorResult.messages = "\n" + e.toString()
+          println("\n"+errorResult)
+          UclidResult(errorResult)
+        case e: SemanticError =>
+          errorResult.messages = "\n" + e.msg
+          println("\n"+errorResult)
+          UclidResult(errorResult)
+        case e: SolverMismatchError =>
+          errorResult.messages = "\n" + e.msg
+          println("\n"+errorResult)
+          UclidResult(errorResult)
+        case e: SmtParserError =>
+          errorResult.messages = "\n" + e.msg
+          println("\n"+errorResult)
+          UclidResult(errorResult)
+        case e: TimeoutException => 
+          errorResult.messages = "\n" + e.toString()
+          println("\n"+errorResult)
+          UclidResult(errorResult)
       }
-    } catch {
-      case (e: java.io.FileNotFoundException) =>
-        errorResult.messages = "\n" + e.toString()
-        println("\n"+errorResult)
-        List(UclidResult(errorResult))
-      case e: SemanticError =>
-        errorResult.messages = "\n" + e.msg
-        println("\n"+errorResult)
-        List(UclidResult(errorResult))
-      case e: SolverMismatchError =>
-        errorResult.messages = "\n" + e.msg
-        println("\n"+errorResult)
-        List(UclidResult(errorResult))
-      case e: SmtParserError =>
-        errorResult.messages = "\n" + e.msg
-        println("\n"+errorResult)
-        List(UclidResult(errorResult))
-    }
+    })
+    results.toList
   }
 }
 

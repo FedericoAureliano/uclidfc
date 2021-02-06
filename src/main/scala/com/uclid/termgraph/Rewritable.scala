@@ -36,9 +36,10 @@ trait Rewritable() extends AbstractTermGraph {
     }
   }
 
-  def indexOfGteZeroGadget() : Unit = {
+  def indexOfGTZGadgets() : Unit = {
     (0 to stmts.length - 1).foreach { p =>
       stmts(p) match {
+        // index of c in x >= 0 means x contains c 
         case Application(gte, t::zero::Nil) if stmts(zero) == TheoryMacro("0", List.empty) => {
           stmts(gte) match {
             case TheoryMacro(">=", _) => {
@@ -58,11 +59,54 @@ trait Rewritable() extends AbstractTermGraph {
             case _ =>
           }
         }
+        // index of c in x < 0 means x does not contain c 
+        case Application(lt, t::zero::Nil) if stmts(zero) == TheoryMacro("0", List.empty) => {
+          stmts(lt) match {
+            case TheoryMacro("<", _) => {
+              stmts(t) match {
+                case Application(indexof, x::needle::offset::Nil) if offset == zero => {
+                  stmts(indexof) match {
+                    case TheoryMacro("str.indexof", _) => {
+                      val contains = memoAddInstruction(TheoryMacro("str.contains", List.empty))
+                      val not = memoAddInstruction(TheoryMacro("not", List.empty))
+                      val containsApp = memoAddInstruction(Application(contains, x::needle::Nil))
+                      memoUpdateInstruction(p, Application(not, List(containsApp)))
+                    }
+                    case _ =>
+                  }
+                }
+                case _ =>
+              }
+            }
+            case _ =>
+          }
+        }
+        // index of c in x = -1 means x does not contain c 
+        case Application(eq, t::minusOne::Nil) if stmts(eq) == TheoryMacro("=") => {
+          stmts(minusOne) match {
+            case Application(minus, one::Nil) if stmts(minus) == TheoryMacro("-") && stmts(one) == TheoryMacro("1") => {
+              stmts(t) match {
+                case Application(indexof, x::needle::zero::Nil) if stmts(zero) == TheoryMacro("0", List.empty) => {
+                  stmts(indexof) match {
+                    case TheoryMacro("str.indexof", _) => {
+                      val contains = memoAddInstruction(TheoryMacro("str.contains", List.empty))
+                      val not = memoAddInstruction(TheoryMacro("not", List.empty))
+                      val containsApp = memoAddInstruction(Application(contains, x::needle::Nil))
+                      memoUpdateInstruction(p, Application(not, List(containsApp)))
+                    }
+                    case _ =>
+                  }
+                }
+                case _ =>
+              }
+            }
+            case _ =>
+          }
+        }
         case _ =>
       }
     }
   }
-
 
   def assertionOverConjunction(assertion: Assert) : List[Command] = {
     var changeHappened = true
@@ -122,6 +166,9 @@ trait Rewritable() extends AbstractTermGraph {
     }
   }
 
+  /**
+    * "(replace c1 with c2 in x) contains c3" as "x contains c3" if c1 = c3 and c2 = c3; as "false" if c1 = c3 and c2 != c3; as "x contains c3" if c1 != c3 and c2 != c3; and "x contains c3 or x contains c1" if c1 != c3 and c2 == c3.
+    */
   def containsOverReplace() : Unit = {
     (0 to stmts.length - 1).foreach { p =>
       stmts(p) match {
@@ -154,105 +201,6 @@ trait Rewritable() extends AbstractTermGraph {
           }
         }
         case _ =>
-      }
-    }
-  }
-
-  def lengthOverSubstring() : Unit = {
-    (0 to stmts.length - 1).foreach { p =>
-      stmts(p) match {
-        case Application(length, t :: Nil) => {
-          stmts(length) match {
-            case TheoryMacro("str.len", _) => {
-              stmts(t) match {
-                case Application(substr, x::start::finish::Nil) => {
-                  stmts(substr) match {
-                    case TheoryMacro("str.substr", _) => {
-                      val sub = memoAddInstruction(TheoryMacro("-"))
-                      val zero = memoAddInstruction(TheoryMacro("0"))
-                      val lt = memoAddInstruction(TheoryMacro("<"))
-                      val ite = memoAddInstruction(TheoryMacro("ite"))
-
-                      val lenX = memoAddInstruction(Application(length, List(x)))
-                      val trimStart = memoAddInstruction(Application(sub, List(lenX, start)))
-                      val trimEnd = memoAddInstruction(Application(sub, List(finish, lenX)))
-                      val total = memoAddInstruction(Application(sub, List(trimStart, trimEnd)))
-
-                      val condition = memoAddInstruction(Application(lt, List(total, zero)))
-                      memoUpdateInstruction(p, Application(ite, List(condition, zero, total)))
-                    }
-                    case _ =>
-                  }
-                }
-                case _ =>
-              }
-            }
-            case _ =>
-          }
-        }
-        case _ =>
-      }
-    }
-  }
-
-  // returns auxiliary assertions
-  def indexOfSubstringGadget() : List[Assert] = {
-    (0 to stmts.length - 1).foldLeft(List.empty) { (acc, p) =>
-      stmts(p) match {
-        case Application(indexof, t :: c :: offset :: Nil) => {
-          stmts(indexof) match {
-            case TheoryMacro("str.indexof", _) => {
-              stmts(t) match {
-                case Application(substr, x::k::lenMinusK::Nil) => {
-                  stmts(substr) match {
-                    case TheoryMacro("str.substr", _) => {
-                      stmts(lenMinusK) match {
-                        case Application(minus, lenx :: j :: Nil) if j == k && stmts(minus) == TheoryMacro("-", List.empty) => {
-                          stmts(lenx) match {
-                            case Application(len, r::Nil) if r == x => {
-                              stmts(len) match {
-                                case TheoryMacro("str.len", _) => {
-                                  val stringSort = memoAddInstruction(TheorySort("String"))
-                                  val gte = memoAddInstruction(TheoryMacro(">="))
-                                  val implies = memoAddInstruction(TheoryMacro("=>"))
-                                  val and = memoAddInstruction(TheoryMacro("and"))
-                                  val eq = memoAddInstruction(TheoryMacro("="))
-                                  val concat = memoAddInstruction(TheoryMacro("str.++"))
-
-                                  val y = memoAddInstruction(UserFunction(freshSymbolName(), stringSort))
-                                  memoUpdateInstruction(t, UserFunction(freshSymbolName(), stringSort)) // this is z
-                                  val yz = memoAddInstruction(Application(concat, List(y, t)))
-                                  val xeqyz = memoAddInstruction(Application(eq, List(x, yz)))
-                                  
-                                  val leny = memoAddInstruction(Application(len, List(y)))
-                                  val lenx = memoAddInstruction(Application(len, List(x)))
-                                  val lenyeqk = memoAddInstruction(Application(eq, List(leny, k)))
-                                  
-                                  val rhs = memoAddInstruction(Application(and, List(xeqyz, lenyeqk)))
-                                  val lhs = memoAddInstruction(Application(gte, List(lenx, k)))
-                                  val aux = memoAddInstruction(Application(implies, List(lhs, rhs)))
-
-                                  Assert(aux) :: acc
-                                }
-                                case _ => acc
-                              }
-                            }
-                            case _ => acc
-                          }
-                        }
-                        case _ => acc
-                      }
-                    }
-                    case _ => acc
-                  }
-                }
-                case _ => acc
-              }
-            }
-            case _ => acc
-          }
-        }
-        case _ => acc
       }
     }
   }
