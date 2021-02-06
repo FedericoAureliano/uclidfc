@@ -5,7 +5,8 @@
 ; Rewrite=assertion-over-conjunction
 ; Rewrite=contains-over-concat
 ; Rewrite=contains-over-replace
-; Rewrite=length-over-substring
+; Rewrite=indexof-gte-zero-gadgets
+; Rewrite=plus-minus-zero
 
 (declare-fun uri () String)
 

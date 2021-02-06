@@ -2,6 +2,7 @@ package com.uclid.termgraph
 
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.HashMap
+import scala.collection.mutable.Queue
 
 abstract class AbstractTermGraph() {
 
@@ -110,35 +111,34 @@ abstract class AbstractTermGraph() {
   }
 
   private def mark_i(position: Int, marks: Array[Boolean]): Unit = {
-    def markParams(params: List[Int]) =
-      params.foreach(p => markInstruction(p))
-
-    def markInstruction(pos: Int): Unit =
+    // markInstruction(position)
+    val frontier : Queue[Int] = Queue(position)
+    while (!frontier.isEmpty) {
+      val pos = frontier.dequeue()
       if (!marks(pos)) {
         marks(pos) = true
         stmts(pos) match {
-          case Ref(i, _)               => markInstruction(i)
+          case Ref(i, _)               => frontier.addOne(i)
           case Numeral(_)              =>
-          case TheorySort(_, p)        => markParams(p)
+          case TheorySort(_, p)        => p.foreach(a => frontier.addOne(a))
           case UserSort(_, _)          =>
-          case FunctionParameter(_, s) => markInstruction(s)
-          case TheoryMacro(_, p)       => markParams(p)
+          case FunctionParameter(_, s) => frontier.addOne(s)
+          case TheoryMacro(_, p)       => p.foreach(a => frontier.addOne(a))
           case UserMacro(_, s, b, p) =>
-            markInstruction(s); markInstruction(b); markParams(p)
-          case UserFunction(_, s, p) => markInstruction(s); markParams(p)
-          case Synthesis(_, s, p)    => markInstruction(s); markParams(p)
-          case Constructor(_, _, p)  => markParams(p)
-          case Selector(_, s)        => markInstruction(s)
-          case DataType(_, p)        => markParams(p)
+            frontier.addOne(s); frontier.addOne(b); p.foreach(a => frontier.addOne(a))
+          case UserFunction(_, s, p) => frontier.addOne(s); p.foreach(a => frontier.addOne(a))
+          case Synthesis(_, s, p)    => frontier.addOne(s); p.foreach(a => frontier.addOne(a))
+          case Constructor(_, _, p)  => p.foreach(a => frontier.addOne(a))
+          case Selector(_, s)        => frontier.addOne(s)
+          case DataType(_, p)        => p.foreach(a => frontier.addOne(a))
           case Module(_, d, i, x, v) =>
-            markInstruction(i); markInstruction(d); markInstruction(x);
-            markInstruction(v)
+            frontier.addOne(i); frontier.addOne(d); frontier.addOne(x);
+            frontier.addOne(v)
           case Application(caller, args) =>
-            markInstruction(caller); args.foreach(i => markInstruction(i))
+            frontier.addOne(caller); args.foreach(i => frontier.addOne(i))
         }
       }
-
-    markInstruction(position)
+    }
   }
 }
 
