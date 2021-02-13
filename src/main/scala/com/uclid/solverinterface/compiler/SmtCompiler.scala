@@ -5,6 +5,7 @@ import com.uclid.termgraph._
 
 import scala.collection.mutable.ListBuffer
 import scala.collection.mutable.HashMap
+import scala.collection.mutable.Stack
 
 object SmtCompiler {
 
@@ -41,6 +42,59 @@ object SmtCompiler {
     val local: HashMap[String, Int] = new HashMap()
     var termgraph = new TermGraph()
     var ctx = new SyMTContext(termgraph)
+
+    val ite = ctx.termgraph.memoAddInstruction(TheoryMacro("ite"))
+    val plus = ctx.termgraph.memoAddInstruction(TheoryMacro("+"))
+    val minus = ctx.termgraph.memoAddInstruction(TheoryMacro("-"))
+    val times = ctx.termgraph.memoAddInstruction(TheoryMacro("*"))
+    val concat = ctx.termgraph.memoAddInstruction(TheoryMacro("str.++"))
+    val indexof = ctx.termgraph.memoAddInstruction(TheoryMacro("str.indexof"))
+    val substr = ctx.termgraph.memoAddInstruction(TheoryMacro("str.substr"))
+    val len = ctx.termgraph.memoAddInstruction(TheoryMacro("str.len"))
+    val contains = ctx.termgraph.memoAddInstruction(TheoryMacro("str.contains"))
+    val prefixof = ctx.termgraph.memoAddInstruction(TheoryMacro("str.prefixof"))
+    val suffixof = ctx.termgraph.memoAddInstruction(TheoryMacro("str.suffixof"))
+    val replace = ctx.termgraph.memoAddInstruction(TheoryMacro("str.replace"))
+    val at = ctx.termgraph.memoAddInstruction(TheoryMacro("str.at"))
+    val gt = ctx.termgraph.memoAddInstruction(TheoryMacro(">"))
+    val lt = ctx.termgraph.memoAddInstruction(TheoryMacro("<"))
+    val gte = ctx.termgraph.memoAddInstruction(TheoryMacro(">="))
+    val lte = ctx.termgraph.memoAddInstruction(TheoryMacro("<="))
+    val eq = ctx.termgraph.memoAddInstruction(TheoryMacro("="))
+    val and = ctx.termgraph.memoAddInstruction(TheoryMacro("and"))
+    val or = ctx.termgraph.memoAddInstruction(TheoryMacro("or"))
+    val not = ctx.termgraph.memoAddInstruction(TheoryMacro("not"))
+    val falseT = ctx.termgraph.memoAddInstruction(TheoryMacro("false"))
+    val trueT = ctx.termgraph.memoAddInstruction(TheoryMacro("true"))
+
+
+    val interpretedSymbols = Map(
+      ("ite", ite),
+      ("+", plus),
+      ("-", minus),
+      ("*", times),
+      ("str.++", concat),
+      ("str.indexof", indexof),
+      ("str.substr", substr),
+      ("str.len", len),
+      ("str.contains", contains),
+      ("str.prefixof", prefixof),
+      ("str.suffixof", suffixof),
+      ("str.replace", replace),
+      ("str.at", at),
+      (">", gt),
+      ("<", lt),
+      (">=", gte),
+      ("<=", lte),
+      ("=", eq),
+      ("and", and),
+      ("or", or),
+      ("not", not),
+      ("false", falseT),
+      ("true", trueT)  
+    )
+
+
     var pos = 0
     var nest = 0
 
@@ -90,26 +144,45 @@ object SmtCompiler {
 
     def parseTerm(): Int = {
       val saveNest = nest
-      tokens(pos) match {
-        case "(" => {
-          pos += 1
-          nest += 1
-          val op = parseOperator()
-          val operands = new ListBuffer[Int]()
-          while (nest > saveNest) {
-            tokens(pos) match {
-              case ")" => {
-                pos += 1
-                nest -= 1
-              }
-              case _ => operands.addOne(parseTerm())
+
+      val path = new Stack[Instruction]()
+      val child = 0
+
+      while {
+        tokens(pos) match {
+          case "(" => {
+            pos += 1
+            nest += 1
+            val op = parseOperator()
+            path.push(Application(op, List.empty))
+          }
+          case ")" => {
+            pos += 1
+            nest -= 1
+            if (path.size > 1) {
+              val mostRecent = ctx.termgraph.memoAddInstruction(path.pop())
+              val parent = path.pop().asInstanceOf[Application]
+              path.push(Application(parent.caller, parent.args ++ List(mostRecent)))
+            } else {
+              // this is the top level, so just let it be
             }
           }
-          val ret = ctx.termgraph.memoAddInstruction(Application(op, operands.toList))
-          ret
+          case atom => if (path.size > 0) {
+              // add to parent
+              val parent = path.pop().asInstanceOf[Application]
+              path.push(Application(parent.caller, parent.args ++ List(parseSymbol())))
+            } else {
+              // there was no parent so just return 
+              return parseSymbol()
+            }
         }
-        case atom => parseSymbol()
-      }
+
+        (nest > saveNest)
+      } 
+      do () 
+
+      assert(path.size == 1)
+      ctx.termgraph.memoAddInstruction(path.head)
     }
   
     def parseSortList(): List[Int] = {
@@ -164,64 +237,13 @@ object SmtCompiler {
         tokens(pos - 1),
         global.getOrElse(
           List(tokens(pos - 1)),
-          tokens(pos - 1) match {
-            case "ite" =>
-              ctx.termgraph.memoAddInstruction(TheoryMacro("ite"))
-
-            case "+" =>
-              ctx.termgraph.memoAddInstruction(TheoryMacro("+"))
-            case "-" =>
-              ctx.termgraph.memoAddInstruction(TheoryMacro("-"))
-            case "*" =>
-              ctx.termgraph.memoAddInstruction(TheoryMacro("*"))
-
-            case "str.++" =>
-              ctx.termgraph.memoAddInstruction(TheoryMacro("str.++"))
-            case "str.indexof" =>
-              ctx.termgraph.memoAddInstruction(TheoryMacro("str.indexof"))
-            case "str.substr" =>
-              ctx.termgraph.memoAddInstruction(TheoryMacro("str.substr"))
-            case "str.len" =>
-              ctx.termgraph.memoAddInstruction(TheoryMacro("str.len"))
-            case "str.contains" =>
-              ctx.termgraph.memoAddInstruction(TheoryMacro("str.contains"))
-            case "str.prefixof" =>
-              ctx.termgraph.memoAddInstruction(TheoryMacro("str.prefixof"))
-            case "str.suffixof" =>
-              ctx.termgraph.memoAddInstruction(TheoryMacro("str.suffixof"))
-            case "str.replace" =>
-              ctx.termgraph.memoAddInstruction(TheoryMacro("str.replace"))
-            case "str.at" =>
-              ctx.termgraph.memoAddInstruction(TheoryMacro("str.at"))
-
-            case ">" =>
-              ctx.termgraph.memoAddInstruction(TheoryMacro(">"))
-            case "<" =>
-              ctx.termgraph.memoAddInstruction(TheoryMacro("<"))
-            case ">=" =>
-              ctx.termgraph.memoAddInstruction(TheoryMacro(">="))
-            case "<=" =>
-              ctx.termgraph.memoAddInstruction(TheoryMacro("<="))
-            case "=" =>
-              ctx.termgraph.memoAddInstruction(TheoryMacro("="))
-
-            case "and" =>
-              ctx.termgraph.memoAddInstruction(TheoryMacro("and"))
-            case "or" =>
-              ctx.termgraph.memoAddInstruction(TheoryMacro("or"))
-            case "not" =>
-              ctx.termgraph.memoAddInstruction(TheoryMacro("not"))
-
-            case "false" =>
-              ctx.termgraph.memoAddInstruction(TheoryMacro("false"))
-            case "true" =>
-              ctx.termgraph.memoAddInstruction(TheoryMacro("true"))
+          interpretedSymbols.getOrElse(tokens(pos - 1), tokens(pos - 1) match {
             case other if other.startsWith("\"") && other.endsWith("\"") =>
               ctx.termgraph.memoAddInstruction(TheoryMacro(other))
             case other =>
               // must be an integer (add support for other stuff later)
               ctx.termgraph.memoAddInstruction(TheoryMacro(other.toInt.toString))
-          }
+          })
         )
       )
 
