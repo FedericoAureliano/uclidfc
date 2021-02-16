@@ -2,8 +2,8 @@ package com.uclid.solverinterface.solver
 
 import com.uclid.context.Context
 
-import sys.process._
 import java.io.{File, PrintWriter}
+import scala.sys.process._
 import scala.util.Random
 
 class Medley(choices: List[Solver]) extends Solver() {

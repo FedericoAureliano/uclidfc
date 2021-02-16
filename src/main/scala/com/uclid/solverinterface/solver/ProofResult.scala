@@ -1,7 +1,7 @@
 package com.uclid.solverinterface.solver
 
-import sys.process._
 import java.io.{File, PrintWriter}
+import scala.sys.process._
 
 class ProofResult(
   var result: Option[Boolean] = None,

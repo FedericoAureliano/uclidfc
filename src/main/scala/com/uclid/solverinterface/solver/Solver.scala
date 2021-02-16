@@ -1,13 +1,13 @@
 package com.uclid.solverinterface.solver
 
-import com.uclid.termgraph
-import com.uclid.solverinterface.solver.ProofResult
 import com.uclid.context.Context
+import com.uclid.solverinterface.solver.ProofResult
+import com.uclid.termgraph
 
-import scala.concurrent._
-import ExecutionContext.Implicits.global
-import scala.sys.process._
 import java.io.{File, PrintWriter}
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent._
+import scala.sys.process._
 
 abstract class Solver() {
 

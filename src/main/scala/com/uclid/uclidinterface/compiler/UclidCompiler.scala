@@ -1,16 +1,11 @@
 package com.uclid.uclidinterface.compiler
 
-import com.uclid.uclidinterface.compiler.parser._
+import com.uclid.context.{SemanticError, UclidContext}
 import com.uclid.termgraph._
 import com.uclid.uclidinterface.compiler.lexer.UclidLexer
-import com.uclid.uclidinterface.compiler.parser.{Model, UclidParser}
-import com.uclid.context.UclidContext
-import com.uclid.context.SemanticError
+import com.uclid.uclidinterface.compiler.parser.{Model, UclidParser, _}
 
-import scala.collection.mutable.ArrayBuffer
-import scala.collection.mutable.ListBuffer
-import scala.collection.mutable.HashMap
-import scala.collection.mutable.Stack
+import scala.collection.mutable.{ArrayBuffer, HashMap, ListBuffer, Stack}
 
 object UclidCompiler {
 

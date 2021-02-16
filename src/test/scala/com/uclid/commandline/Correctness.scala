@@ -1,6 +1,7 @@
 package com.uclid.commandline
 
 import org.junit.Test
+
 import java.io.File
 
 class Correctness {

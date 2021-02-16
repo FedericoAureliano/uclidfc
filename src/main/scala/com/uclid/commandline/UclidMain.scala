@@ -1,17 +1,16 @@
 package com.uclid.commandline
 
-import com.uclid.termgraph
-import com.uclid.context._
-import com.uclid.context.{Command, Check}
-import com.uclid.solverinterface.solver._
+import com.uclid.context.{Check, Command, _}
 import com.uclid.solverinterface.compiler._
-import com.uclid.uclidinterface.compiler.parser._
+import com.uclid.solverinterface.solver._
+import com.uclid.termgraph
 import com.uclid.uclidinterface.compiler._
+import com.uclid.uclidinterface.compiler.parser._
 
-import scala.concurrent._
-import ExecutionContext.Implicits.global
-import scala.sys.process._
 import scala.collection.mutable.ListBuffer
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent._
+import scala.sys.process._
 
 object Solvers extends Enumeration {
   type Solvers = Value

@@ -2,9 +2,9 @@ package com.uclid.commandline
 
 import com.uclid.termgraph
 
-import scala.io.Source
 import java.io.File
 import scala.collection.mutable.ArrayBuffer
+import scala.io.Source
 
 def readTestFile(file: File): Tuple8[
   String,

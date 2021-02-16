@@ -2,12 +2,8 @@ package com.uclid.context
 
 import com.uclid.termgraph._
 
-import scala.collection.mutable.HashSet
-import scala.collection.mutable.ArrayBuffer
-import scala.collection.mutable.ListBuffer
-import scala.collection.mutable.HashMap
-import scala.collection.mutable.Stack
 import scala.collection.immutable.Nil
+import scala.collection.mutable._
 
 sealed trait Command
 case class Assert(t: Int) extends Command

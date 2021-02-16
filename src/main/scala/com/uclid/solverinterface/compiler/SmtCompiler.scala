@@ -3,9 +3,8 @@ package com.uclid.solverinterface.compiler
 import com.uclid.context.SyMTContext
 import com.uclid.termgraph._
 
-import scala.collection.mutable.ListBuffer
 import java.util.HashMap
-import scala.collection.mutable.Stack
+import scala.collection.mutable.{ListBuffer, Stack}
 
 object SmtCompiler {
 
