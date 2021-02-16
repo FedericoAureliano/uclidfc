@@ -2,9 +2,7 @@ package com.uclid.termgraph
 
 import com.uclid.context._
 
-import scala.collection.mutable.ArrayBuffer
-import scala.collection.mutable.ListBuffer
-import scala.collection.mutable.HashMap
+import scala.collection.mutable.{ArrayBuffer, HashMap, ListBuffer}
 
 trait Rewritable() extends AbstractTermGraph {
 

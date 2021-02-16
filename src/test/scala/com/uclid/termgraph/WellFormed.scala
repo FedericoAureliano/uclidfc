@@ -1,6 +1,7 @@
 package com.uclid.termgraph
 
 import org.junit.Test
+
 import scala.collection.mutable.ArrayBuffer
 
 class TestWellFormed {

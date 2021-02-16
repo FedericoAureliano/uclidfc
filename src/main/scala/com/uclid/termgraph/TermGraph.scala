@@ -1,8 +1,6 @@
 package com.uclid.termgraph
 
-import scala.collection.mutable.ArrayBuffer
-import scala.collection.mutable.HashMap
-import scala.collection.mutable.Queue
+import scala.collection.mutable.{ArrayBuffer, HashMap, Queue}
 
 abstract class AbstractTermGraph() {
 

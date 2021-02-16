@@ -2,8 +2,8 @@ package com.uclid.solverinterface.solver
 
 import com.uclid.context.Context
 
-import sys.process._
 import java.io.{File, PrintWriter}
+import scala.sys.process._
 
 class Z3() extends Solver() {
   def getCommand(): String = "z3"
