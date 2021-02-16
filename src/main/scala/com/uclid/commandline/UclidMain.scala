@@ -297,23 +297,30 @@ object UclidMain {
         println(s"Parsing completed in ${parseDuration} seconds.")
 
         print("Processing query ... ")
+        var changed = false
         val startProcess = System.nanoTime
         if (config.plusMinusZero) {
+          changed = true
           ctx.termgraph.plusMinusZero()
         }
         if (config.blastEnumQuantifierFlag) {
+          changed = true
           ctx.termgraph.blastEnumQuantifier()
         }
         if (config.containsOverConcat) {
+          changed = true
           ctx.termgraph.containsOverConcat()
         }
         if (config.containsOverReplace) {
+          changed = true
           ctx.termgraph.containsOverReplace()
         }
         if (config.indexOfGTZGadgets) {
+          changed = true
           ctx.termgraph.indexOfGTZGadgets()
         }
         if (config.assertionOverConjunction) {
+          changed = true
           ctx.script = ctx.script.foldLeft(List.empty)((acc, c) => {
             c match {
               case a : Assert => {
@@ -338,8 +345,14 @@ object UclidMain {
         if (config.features) {
           println(features.map(f => "-- " + f).mkString("\n"))
         }
+        
+        val unmodifiedSMTFile = if (changed) {
+          None
+        } else {
+          Some(f)
+        }
   
-        val res = solver.solve(config.run, config.timeout, ctx, config.outFile, config.prettyPrint)
+        val res = solver.solve(config.run, config.timeout, ctx, config.outFile, config.prettyPrint, unmodifiedSMTFile)
         val ret = if (ctx.ignoreResult()) {
           UclidResult(ProofResult(None, res._1.messages), parseDuration, processDuration, analysisDuration, res._2, res._3)
         } else {

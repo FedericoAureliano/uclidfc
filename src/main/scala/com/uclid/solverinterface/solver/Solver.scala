@@ -63,20 +63,24 @@ abstract class Solver() {
     timeout: Int,
     ctx: Context,
     outFile: Option[String],
-    prettyPrint: Boolean
+    prettyPrint: Boolean,
+    unmodifiedSMTFile: Option[File] = None
   ): (ProofResult, Double, Double) = {
 
-    // need to call this first before checking if it is a synthesis query
     print("Generating query ... ")
     val t1 = System.nanoTime
-    val query = generateQuery(ctx, prettyPrint)
+    val qfile = unmodifiedSMTFile match {
+      case Some(value) => value
+      case None => {
+        // need to call this first before checking if it is a synthesis query
+        val query = generateQuery(ctx, prettyPrint)
+        val suffix = if (ctx.termgraph.isSynthesisQuery) { ".sl" }
+        else { ".smt2" }
+        writeQueryToFile(query, outFile, suffix).getAbsolutePath()
+      }
+    }
     val generationDuration = (System.nanoTime - t1) / 1e9d
     println(s"Query generated in ${generationDuration} seconds.")
-
-    val suffix = if (ctx.termgraph.isSynthesisQuery) { ".sl" }
-    else { ".smt2" }
-    val qfile =
-      writeQueryToFile(query, outFile, suffix).getAbsolutePath()
 
     if (!run) {
       return (
