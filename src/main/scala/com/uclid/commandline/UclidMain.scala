@@ -106,30 +106,36 @@ object UclidMain {
         .action((_, c) => c.copy(features = true))
         .text("Print query features.")
 
-      note(sys.props("line.separator") + "Rewrites")
+      note(sys.props("line.separator") + "Script Rewrites")
+
+      opt[Unit]("assertion-over-conjunction")
+        .action((_, c) => c.copy(assertionOverConjunction = true))
+        .text(
+          "Rewrite asserted conjunctions to repeated assertions."
+        )
+      
+      note(sys.props("line.separator") + "Arithmetic Rewrites")
 
       opt[Unit]("plus-minus-zero")
         .action((_, c) => c.copy(plusMinusZero = true))
         .text(
-          "Rewrite \"(+ a b ... 0 ... z)\" to \"(+ a b ... z)\" and \"(- 0 x)\" to \"-x\" and \"(- x 0)\" to \"x\"."
+          "Remove zeros from additions/subtractions."
         )
 
+      note(sys.props("line.separator") + "Algebraic Datatype Rewrites")
+      
       opt[Unit]("blast-enum-quantifiers")
         .action((_, c) => c.copy(blastEnumQuantifierFlag = true))
         .text(
           "Rewrite quantifiers over enums to finite disjunctions/conjunctions."
         )
 
-      opt[Unit]("assertion-over-conjunction")
-        .action((_, c) => c.copy(assertionOverConjunction = true))
-        .text(
-          "Rewrite asserted conjunctions to repeated assertion."
-        )
-
+      note(sys.props("line.separator") + "String Rewrites")
+      
       opt[Unit]("contains-over-concat")
         .action((_, c) => c.copy(containsOverConcat = true))
         .text(
-          "Rewrite \"xy contains c\" as \"x contains c or y contains c,\" where c is a literal string of length 1."
+          "Rewrite \"xy contains c,\" where c is a literal string of length 1."
         )
 
       opt[Unit]("contains-over-replace")

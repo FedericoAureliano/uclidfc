@@ -51,25 +51,39 @@ make changes to its source code. To recompile, run `sbt assembly`.
 uclidfc [options] <file> ...
 
 Basic Usage
-  -m, --main <module>        Name of the main module.
-  -s, --solver <solver>      Solver to use (alt_ergo or cvc4 or vampire or z3). Solver must be in your path.
-  -o, --out <file>           Write query to <file>.
-  --skip-solver              Don't run the solver.
-  <file> ...                 List of input files.
+  -m, --main <module>            Name of the main module.
+  -s, --solver <solver>          Solver to use (alt_ergo or cvc4 or vampire or z3). Solver must be in your path.
+  -t, --timeout <timeout>        Timeout (in seconds) to give the solver.
+  -o, --out <file>               Write query to <file>.
+  --pretty-print                 Try to make output queries human readable.
+  --skip-solver                  Don't run the solver.
+  <file> ...                     List of input files.
 
 Analysis
-  --print-features           Print query features.
+  --print-features               Print query features.
 
-Rewrites
-  --blast-enum-quantifiers   Rewrite quantifiers over enums to finite disjunctions/conjunctions.
+Script Rewrites
+  --assertion-over-conjunction   Rewrite asserted conjunctions to repeated assertions.
+
+Arithmetic Rewrites
+  --plus-minus-zero              Remove zeros from additions/subtractions.
+
+Algebraic Datatype Rewrites
+  --blast-enum-quantifiers       Rewrite quantifiers over enums to finite disjunctions/conjunctions.
+
+String Rewrites
+  --contains-over-concat         Rewrite "xy contains c," where c is a literal string of length 1.
+  --contains-over-replace        Rewrite "(replace c1 with c2 in x) contains c3," where c1, c2, and c3 are literal strings of length 1.
+  --indexof-gte-zero-gadgets     Rewrite "index of y in x >= 0" to "x contains y."
+
+
 ```
 
-In SMT mode (when you call uclidfc on .smt2 files) uclidfc will iterate over
-the files instead of combining them, like it does when in UCLID mode (when you
-call uclidfc on .ucl files). If you give uclidfc multiple solver arguments,
-uclidfc will automatically select the solver to use. So, the following command
-will, for each query in `models/tests/smt2/`, print the query features, and use
-either z3 or cvc4 to solve the query.
+In SMT mode (when you call uclidfc on .smt2 files) uclidfc will iterate over the
+files. If you give uclidfc multiple solver arguments, uclidfc will automatically
+select the solver to use. So, the following command will, for each query in
+`models/tests/smt2/`, print the query features, and use either z3 or cvc4 to
+solve the query.
 
 ```
 uclidfc models/tests/smt2/* --print-features -s cvc4 -s z3
