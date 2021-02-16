@@ -21,3 +21,6 @@ node_modules
 package*.json
 
 TODO.md
+
+.bsp
+.idea
