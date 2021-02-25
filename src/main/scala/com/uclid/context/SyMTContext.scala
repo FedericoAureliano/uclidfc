@@ -126,7 +126,7 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
               val ctr = termgraph.stmts(a.caller).asInstanceOf[Constructor]
               stack.push(Left(p._1))
               stack.push(Right(s"\n"))
-              stack.push(Left(ctr.selectors(p._2)))
+              stack.push(Left(ctr.selectors.reverse(p._2)))
               stack.push(Right("; assigning to "))
             } else {
               stack.push(Left(p._1))
