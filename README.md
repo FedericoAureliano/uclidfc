@@ -54,7 +54,8 @@ Basic Usage
   -m, --main <module>            Name of the main module.
   -s, --solver <solver>          Solver to use (alt_ergo or cvc4 or vampire or z3). Solver must be in your path.
   -t, --timeout <timeout>        Timeout (in seconds) to give the solver.
-  -o, --out <file>               Write query to <file>.
+  -o, --optimize <level>         Optimization level (none or zero).
+  -w, --write <file>             Write query to <file>.
   --pretty-print                 Try to make output queries human readable.
   --skip-solver                  Don't run the solver.
   <file> ...                     List of input files.

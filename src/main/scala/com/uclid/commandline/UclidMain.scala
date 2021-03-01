@@ -229,9 +229,6 @@ object UclidMain {
       print("Processing model ... ")
       val startProcess = System.nanoTime
       val ctx = UclidCompiler.process(modules, Some(config.mainModuleName))
-      if (config.optimizeLevel == Optimize.zero) {
-        ctx.termgraph.optimizeLevel0()
-      }
       if (config.plusMinusZero) {
         ctx.termgraph.plusMinusZero()
       }
@@ -249,6 +246,9 @@ object UclidMain {
       }
       if (config.assertionOverConjunction) {
         throw new SemanticError("Flatten Assertions Not Yet Supported In UCLID Mode")
+      }
+      if (config.optimizeLevel == Optimize.zero) {
+        ctx.termgraph.optimizeLevel0(ctx.entryPoints())
       }
       var processDuration = (System.nanoTime - startProcess) / 1e9d
       println(s"Processing completed in ${processDuration} seconds.")
@@ -317,9 +317,6 @@ object UclidMain {
         print("Processing query ... ")
         var changed = false
         val startProcess = System.nanoTime
-        if (config.optimizeLevel == Optimize.zero) {
-          ctx.termgraph.optimizeLevel0()
-        }
         if (config.plusMinusZero) {
           changed = true
           ctx.termgraph.plusMinusZero()
@@ -350,6 +347,9 @@ object UclidMain {
               case _ => acc ++ List(c)
             }
           })
+        }
+        if (config.optimizeLevel == Optimize.zero) {
+          ctx.termgraph.optimizeLevel0(ctx.entryPoints())
         }
         var processDuration = (System.nanoTime - startProcess) / 1e9d
         println(s"Processing completed in ${processDuration} seconds.")

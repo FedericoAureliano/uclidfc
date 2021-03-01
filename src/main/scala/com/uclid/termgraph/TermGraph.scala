@@ -93,7 +93,7 @@ abstract class AbstractTermGraph() {
   ): Unit = {
     // require that at most one instruction points to this address
     require(memo.forall(p => p._2 != r || stmts(r) == p._1))
-
+    
     newInstruction match {
       case app : Application =>
         app.args.foreach(a => assert(stmts(a).isInstanceOf[Application] || stmts(a).isInstanceOf[Ref]))
@@ -121,6 +121,30 @@ abstract class AbstractTermGraph() {
   def memoGetInstruction(inst: Instruction): Int =
     memo(inst)
 
+
+  def terms(startingPoints: Iterable[Int]): Array[Boolean] = {
+    val marks = Array.fill[Boolean](stmts.length)(false)
+    startingPoints.foreach(r => terms_i(r, marks))
+    marks
+  }
+
+  private def terms_i(position: Int, marks: Array[Boolean]): Unit = {
+    // markInstruction(position)
+    val frontier : Queue[Int] = Queue(position)
+    while (!frontier.isEmpty) {
+      val pos = frontier.dequeue()
+      if (!marks(pos)) {
+        marks(pos) = true
+        stmts(pos) match {
+          case Ref(i, _)               => frontier.addOne(i)
+          case Application(caller, args) =>
+            frontier.addOne(caller); args.foreach(i => frontier.addOne(i))
+          case _ =>
+        }
+      }
+    }
+  }
+
   def mark(startingPoints: Iterable[Int]): Array[Boolean] = {
     val marks = Array.fill[Boolean](stmts.length)(false)
     startingPoints.foreach(r => mark_i(r, marks))
@@ -145,7 +169,7 @@ abstract class AbstractTermGraph() {
             frontier.addOne(s); frontier.addOne(b); p.foreach(a => frontier.addOne(a))
           case UserFunction(_, s, p) => frontier.addOne(s); p.foreach(a => frontier.addOne(a))
           case Synthesis(_, s, p)    => frontier.addOne(s); p.foreach(a => frontier.addOne(a))
-          case Constructor(_, _, p)  => p.foreach(a => frontier.addOne(a))
+          case Constructor(_, s, p)  => frontier.addOne(s); p.foreach(a => frontier.addOne(a))
           case Selector(_, s)        => frontier.addOne(s)
           case DataType(_, p)        => p.foreach(a => frontier.addOne(a))
           case Module(_, d, _, _, _) =>

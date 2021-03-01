@@ -6,226 +6,336 @@ import scala.collection.mutable.{ArrayBuffer, HashMap, ListBuffer}
 
 trait Rewritable() extends AbstractTermGraph {
 
-  def optimizeLevel0() : Unit = {
-    inlineMacros()
-  }
-  
-  def inlineMacros(bound: Int = -1) : Unit = {
-    var count = bound
-    (0 to stmts.length - 1).foreach { p =>
-      stmts(p) match {
-        case Application(umacroPos, args) if stmts(umacroPos).isInstanceOf[UserMacro] => {
-          val umacro = stmts(umacroPos).asInstanceOf[UserMacro]
-          val bindings = umacro.params.zip(args).toMap
-          val inlined = copyTerm(umacro.body)
-          updateTerm(inlined, bindings)
-          memoUpdateInstruction(p, Ref(inlined, None))
-          count = count - 1
-          if (count == 0) {
-            return
-          }
-        }
-        case _ =>
-      }
+  def optimizeLevel0(startingPoints: List[Int]): Unit = {
+    var locations : List[Int] = terms(startingPoints).zipWithIndex.map((a, b) => if (a) {Some(b)} else {None}).flatten.toList
+    
+    var inlineResult = inlineMacros(locations, 1)
+    var elimResult = eliminateDestructConstruct(locations, -1)
+    var keepGoing = inlineResult || elimResult
+
+    while (keepGoing) { // do this iteratively in a loop to avoid big blowup from inlining (which creates many destruct/construct applications)
+      locations = terms(startingPoints).zipWithIndex.map((a, b) => if (a) {Some(b)} else {None}).flatten.toList
+      // inline one macro
+      inlineResult = inlineMacros(locations, 1)
+      // reduce all "select y from construct {x=a ... y=b ... z=c}" to "b"
+      elimResult = eliminateDestructConstruct(locations, -1)
+      keepGoing = inlineResult || elimResult
     }
   }
 
-  def plusMinusZero() : Unit = {
+  def inlineMacros(locations: List[Int], bound: Int): Boolean = {
+    var changed = false
+    var count = bound
+    locations.foreach { p =>
+      stmts(p) match {
+        case Application(umacroPos, args)
+            if stmts(umacroPos).isInstanceOf[UserMacro] =>
+          val umacro = stmts(umacroPos).asInstanceOf[UserMacro]
+          val bindings = umacro.params.zip(args).filter((a, b) => a != b).toMap
+          if (!bindings.isEmpty) {
+            val inlined = copyTerm(umacro.body)
+            updateTerm(inlined, bindings)
+            memoUpdateInstruction(p, Ref(inlined, None))
+            changed = true
+            count = count - 1
+            if (count == 0) {
+              return changed
+            }
+          }
+        case _ =>
+      }
+    }
+    changed
+  }
+
+  def eliminateDestructConstruct(locations: List[Int], bound: Int): Boolean = {
+    var changed = false
+    var count = bound
+    locations.foreach { p =>
+      stmts(p) match {
+        case Application(selRef, app :: Nil)
+            if stmts(selRef).isInstanceOf[Selector] =>
+          stmts(app) match {
+            case Application(ctrRef, args)
+                if stmts(ctrRef).isInstanceOf[Constructor] =>
+              val ctr = stmts(ctrRef).asInstanceOf[Constructor]
+              val index = ctr.selectors.indexOf(selRef)
+              if (index >= 0) {
+                memoUpdateInstruction(p, stmts(args(index)))
+                changed = true
+                count = count - 1
+                if (count == 0) {
+                  return changed
+                }
+              }
+            case r: Ref =>
+              var appRef = r.loc
+              while (stmts(appRef).isInstanceOf[Ref])
+                appRef = stmts(appRef).asInstanceOf[Ref].loc
+              stmts(appRef) match {
+                case Application(ctrRef, args)
+                    if stmts(ctrRef).isInstanceOf[Constructor] =>
+                  val ctr = stmts(ctrRef).asInstanceOf[Constructor]
+                  val index = ctr.selectors.indexOf(selRef)
+                  if (index >= 0) {
+                    memoUpdateInstruction(p, stmts(args(index)))
+                    changed = true
+                    count = count - 1
+                    if (count == 0) {
+                      return changed
+                    }
+                  }
+                case _ =>
+              }
+            case _ =>
+          }
+        case _ =>
+      }
+    }
+    changed
+  }
+
+  def plusMinusZero(): Unit =
     (0 to stmts.length - 1).foreach { p =>
       stmts(p) match {
-        case Application(plus, args)  if stmts(plus) == TheoryMacro("+", List.empty) => {
-          val newArgs : List[Int] = args.foldLeft(List.empty)((acc, a) => {
+        case Application(plus, args)
+            if stmts(plus) == TheoryMacro("+", List.empty) =>
+          val newArgs: List[Int] = args.foldLeft(List.empty) { (acc, a) =>
             stmts(a) match {
               case TheoryMacro("0", _) => acc
-              case _ => acc ++ List(a)
+              case _                   => acc ++ List(a)
             }
-          })
+          }
           if (newArgs.length == 0) {
             memoUpdateInstruction(p, TheoryMacro("0", List.empty))
           } else {
             memoUpdateInstruction(p, Application(plus, newArgs))
           }
-        }
-        case Application(minus, x::y::Nil)  if stmts(minus) == TheoryMacro("-", List.empty) => {
+        case Application(minus, x :: y :: Nil)
+            if stmts(minus) == TheoryMacro("-", List.empty) =>
           if (stmts(x) == TheoryMacro("0", List.empty)) {
             memoUpdateInstruction(p, Application(minus, y :: Nil))
           } else if (stmts(y) == TheoryMacro("0", List.empty)) {
             memoUpdateInstruction(p, stmts(x))
           }
-        }
         case _ =>
       }
     }
-  }
 
-  def indexOfGTZGadgets() : Unit = {
+  def indexOfGTZGadgets(): Unit =
     (0 to stmts.length - 1).foreach { p =>
       stmts(p) match {
-        // index of c in x >= 0 means x contains c 
-        case Application(gte, t::zero::Nil) if stmts(zero) == TheoryMacro("0", List.empty) => {
+        // index of c in x >= 0 means x contains c
+        case Application(gte, t :: zero :: Nil)
+            if stmts(zero) == TheoryMacro("0", List.empty) =>
           stmts(gte) match {
-            case TheoryMacro(">=", _) => {
+            case TheoryMacro(">=", _) =>
               stmts(t) match {
-                case Application(indexof, x::needle::offset::Nil) if offset == zero => {
+                case Application(indexof, x :: needle :: offset :: Nil)
+                    if offset == zero =>
                   stmts(indexof) match {
-                    case TheoryMacro("str.indexof", _) => {
-                      val contains = memoAddInstruction(TheoryMacro("str.contains", List.empty))
-                      memoUpdateInstruction(p, Application(contains, x::needle::Nil))
-                    }
+                    case TheoryMacro("str.indexof", _) =>
+                      val contains = memoAddInstruction(
+                        TheoryMacro("str.contains", List.empty)
+                      )
+                      memoUpdateInstruction(
+                        p,
+                        Application(contains, x :: needle :: Nil)
+                      )
                     case _ =>
                   }
-                }
                 case _ =>
               }
-            }
             case _ =>
           }
-        }
-        // index of c in x < 0 means x does not contain c 
-        case Application(lt, t::zero::Nil) if stmts(zero) == TheoryMacro("0", List.empty) => {
+        // index of c in x < 0 means x does not contain c
+        case Application(lt, t :: zero :: Nil)
+            if stmts(zero) == TheoryMacro("0", List.empty) =>
           stmts(lt) match {
-            case TheoryMacro("<", _) => {
+            case TheoryMacro("<", _) =>
               stmts(t) match {
-                case Application(indexof, x::needle::offset::Nil) if offset == zero => {
+                case Application(indexof, x :: needle :: offset :: Nil)
+                    if offset == zero =>
                   stmts(indexof) match {
-                    case TheoryMacro("str.indexof", _) => {
-                      val contains = memoAddInstruction(TheoryMacro("str.contains", List.empty))
-                      val not = memoAddInstruction(TheoryMacro("not", List.empty))
-                      val containsApp = memoAddInstruction(Application(contains, x::needle::Nil))
-                      memoUpdateInstruction(p, Application(not, List(containsApp)))
-                    }
+                    case TheoryMacro("str.indexof", _) =>
+                      val contains = memoAddInstruction(
+                        TheoryMacro("str.contains", List.empty)
+                      )
+                      val not =
+                        memoAddInstruction(TheoryMacro("not", List.empty))
+                      val containsApp = memoAddInstruction(
+                        Application(contains, x :: needle :: Nil)
+                      )
+                      memoUpdateInstruction(
+                        p,
+                        Application(not, List(containsApp))
+                      )
                     case _ =>
                   }
-                }
                 case _ =>
               }
-            }
             case _ =>
           }
-        }
-        // index of c in x = -1 means x does not contain c 
-        case Application(eq, t::minusOne::Nil) if stmts(eq) == TheoryMacro("=") => {
+        // index of c in x = -1 means x does not contain c
+        case Application(eq, t :: minusOne :: Nil)
+            if stmts(eq) == TheoryMacro("=") =>
           stmts(minusOne) match {
-            case Application(minus, one::Nil) if stmts(minus) == TheoryMacro("-") && stmts(one) == TheoryMacro("1") => {
+            case Application(minus, one :: Nil)
+                if stmts(minus) == TheoryMacro("-") && stmts(
+                  one
+                ) == TheoryMacro("1") =>
               stmts(t) match {
-                case Application(indexof, x::needle::zero::Nil) if stmts(zero) == TheoryMacro("0", List.empty) => {
+                case Application(indexof, x :: needle :: zero :: Nil)
+                    if stmts(zero) == TheoryMacro("0", List.empty) =>
                   stmts(indexof) match {
-                    case TheoryMacro("str.indexof", _) => {
-                      val contains = memoAddInstruction(TheoryMacro("str.contains", List.empty))
-                      val not = memoAddInstruction(TheoryMacro("not", List.empty))
-                      val containsApp = memoAddInstruction(Application(contains, x::needle::Nil))
-                      memoUpdateInstruction(p, Application(not, List(containsApp)))
-                    }
+                    case TheoryMacro("str.indexof", _) =>
+                      val contains = memoAddInstruction(
+                        TheoryMacro("str.contains", List.empty)
+                      )
+                      val not =
+                        memoAddInstruction(TheoryMacro("not", List.empty))
+                      val containsApp = memoAddInstruction(
+                        Application(contains, x :: needle :: Nil)
+                      )
+                      memoUpdateInstruction(
+                        p,
+                        Application(not, List(containsApp))
+                      )
                     case _ =>
                   }
-                }
                 case _ =>
               }
-            }
             case _ =>
           }
-        }
         case _ =>
       }
     }
-  }
 
-  def assertionOverConjunction(assertion: Assert) : List[Command] = {
+  def assertionOverConjunction(assertion: Assert): List[Command] = {
     var changeHappened = true
-    var newCommands : List[Command] = List(assertion)
+    var newCommands: List[Command] = List(assertion)
     while (changeHappened) {
       changeHappened = false
-      newCommands = newCommands.foldLeft(List.empty)((acc1, c) => 
+      newCommands = newCommands.foldLeft(List.empty)((acc1, c) =>
         c match {
-          case ass : Assert => {
+          case ass: Assert =>
             stmts(ass.t) match {
-              case Application(op, operands) => {
+              case Application(op, operands) =>
                 stmts(op) match {
-                  case TheoryMacro("and", _) => {
+                  case TheoryMacro("and", _) =>
                     changeHappened = true
-                    acc1 ++ operands.foldLeft(List.empty)((acc2, o) => Assert(o) :: acc2)
-                  }
+                    acc1 ++ operands.foldLeft(List.empty)((acc2, o) =>
+                      Assert(o) :: acc2
+                    )
                   case _ => acc1 ++ List(c)
                 }
-              }
               case _ => acc1 ++ List(c)
             }
-          }
           case _ => acc1 ++ List(c)
-        })
+        }
+      )
     }
     newCommands
   }
 
-  def containsOverConcat() : Unit = {
+  def containsOverConcat(): Unit =
     (0 to stmts.length - 1).foreach { p =>
       stmts(p) match {
-        case Application(contains, haystack::needle::Nil) if stmts(needle).isInstanceOf[TheoryMacro] && stmts(needle).asInstanceOf[TheoryMacro].name.length == 3 => {
+        case Application(contains, haystack :: needle :: Nil)
+            if stmts(needle).isInstanceOf[TheoryMacro] && stmts(needle)
+              .asInstanceOf[TheoryMacro]
+              .name
+              .length == 3 =>
           stmts(contains) match {
-            case TheoryMacro("str.contains", _) => {
+            case TheoryMacro("str.contains", _) =>
               stmts(haystack) match {
-                case Application(concat, strings) => {
+                case Application(concat, strings) =>
                   stmts(concat) match {
-                    case TheoryMacro("str.++", _) => {
+                    case TheoryMacro("str.++", _) =>
                       // we have a contains over a concat. Make it a disjunction
                       val orRef = memoAddInstruction(TheoryMacro("or"))
-                      val components = strings.map(s => {
-                        memoAddInstruction(Application(contains, List(s, needle)))
-                      })
+                      val components = strings.map { s =>
+                        memoAddInstruction(
+                          Application(contains, List(s, needle))
+                        )
+                      }
                       memoUpdateInstruction(p, Application(orRef, components))
-                    }
                     case _ =>
                   }
-                }
                 case _ =>
               }
-            }
             case _ =>
           }
-        }
         case _ =>
       }
     }
-  }
 
-  /**
-    * "(replace c1 with c2 in x) contains c3" as "x contains c3" if c1 = c3 and c2 = c3; as "false" if c1 = c3 and c2 != c3; as "x contains c3" if c1 != c3 and c2 != c3; and "x contains c3 or x contains c1" if c1 != c3 and c2 == c3.
+  /** "(replace c1 with c2 in x) contains c3" as "x contains c3" if c1 = c3 and c2 = c3; as "false" if c1 = c3 and c2 != c3; as "x contains c3" if c1 != c3 and c2 != c3; and "x contains c3 or x contains c1" if c1 != c3 and c2 == c3.
     */
-  def containsOverReplace() : Unit = {
+  def containsOverReplace(): Unit =
     (0 to stmts.length - 1).foreach { p =>
       stmts(p) match {
-        case Application(contains, haystack::needle::Nil) if stmts(needle).isInstanceOf[TheoryMacro] && stmts(needle).asInstanceOf[TheoryMacro].name.length == 3 => {
+        case Application(contains, haystack :: needle :: Nil)
+            if stmts(needle).isInstanceOf[TheoryMacro] && stmts(needle)
+              .asInstanceOf[TheoryMacro]
+              .name
+              .length == 3 =>
           stmts(contains) match {
-            case TheoryMacro("str.contains", _) => {
+            case TheoryMacro("str.contains", _) =>
               stmts(haystack) match {
-                case Application(replace, x::oldChar::newChar::Nil) if stmts(oldChar).isInstanceOf[TheoryMacro] && stmts(oldChar).asInstanceOf[TheoryMacro].name.length == 3 && stmts(newChar).isInstanceOf[TheoryMacro] && stmts(newChar).asInstanceOf[TheoryMacro].name.length == 3 => {
+                case Application(replace, x :: oldChar :: newChar :: Nil)
+                    if stmts(oldChar).isInstanceOf[TheoryMacro] && stmts(
+                      oldChar
+                    ).asInstanceOf[TheoryMacro].name.length == 3 && stmts(
+                      newChar
+                    ).isInstanceOf[TheoryMacro] && stmts(newChar)
+                      .asInstanceOf[TheoryMacro]
+                      .name
+                      .length == 3 =>
                   stmts(replace) match {
-                    case TheoryMacro("str.replace", _) => {
+                    case TheoryMacro("str.replace", _) =>
                       if (oldChar == needle && newChar != needle) {
-                        memoUpdateInstruction(p, TheoryMacro("false", List.empty))
+                        memoUpdateInstruction(
+                          p,
+                          TheoryMacro("false", List.empty)
+                        )
                       } else if (oldChar == needle && newChar == needle) {
-                        memoUpdateInstruction(p, Application(contains, List(x, needle)))
+                        memoUpdateInstruction(
+                          p,
+                          Application(contains, List(x, needle))
+                        )
                       } else if (oldChar != needle && newChar == needle) {
                         val orRef = memoAddInstruction(TheoryMacro("or"))
-                        memoUpdateInstruction(p, Application(orRef, List(memoAddInstruction(Application(contains, List(x, needle))), memoAddInstruction(Application(contains, List(x, oldChar))))))
+                        memoUpdateInstruction(
+                          p,
+                          Application(
+                            orRef,
+                            List(
+                              memoAddInstruction(
+                                Application(contains, List(x, needle))
+                              ),
+                              memoAddInstruction(
+                                Application(contains, List(x, oldChar))
+                              )
+                            )
+                          )
+                        )
                       } else {
                         // they are both not equal so just ingore them altogether
-                        memoUpdateInstruction(p, Application(contains, List(x, needle)))
+                        memoUpdateInstruction(
+                          p,
+                          Application(contains, List(x, needle))
+                        )
                       }
-                    }
                     case _ =>
                   }
-                }
                 case _ =>
               }
-            }
             case _ =>
           }
-        }
         case _ =>
       }
     }
-  }
 
   /** Rewrite quantifiers over enums to disjunctions/conjunctions
     *
@@ -350,7 +460,8 @@ trait Rewritable() extends AbstractTermGraph {
         case Ref(loc, named) =>
           named match {
             case None => memoUpdateInstruction(i, Ref(loc, None))
-            case Some(name) => memoUpdateInstruction(i, Ref(loc, Some(prefix + name)))
+            case Some(name) =>
+              memoUpdateInstruction(i, Ref(loc, Some(prefix + name)))
           }
         case Selector(name, sort) =>
           memoUpdateInstruction(i, Selector(prefix + name, sort))
@@ -496,26 +607,28 @@ trait Rewritable() extends AbstractTermGraph {
     map.get(pos) match {
       case Some(value) =>
         memoUpdateInstruction(pos, Ref(value, None))
-      case None => stmts(pos) match {
-        case Application(caller, args) =>
-          args.foreach(a => updateTerm(a, map))
-          map.get(caller) match {
-            case None =>
-            case Some(value) => if (completeButUnapplied(value)) {
-              memoUpdateInstruction(pos, Application(value, args))
-            } else {
-              // we're trying to replace caller---it better not have children
-              assert(args.length == 0)
-              memoUpdateInstruction(pos, stmts(value))
+      case None =>
+        stmts(pos) match {
+          case Application(caller, args) =>
+            args.foreach(a => updateTerm(a, map))
+            map.get(caller) match {
+              case None =>
+              case Some(value) =>
+                if (completeButUnapplied(value)) {
+                  memoUpdateInstruction(pos, Application(value, args))
+                } else {
+                  // we're trying to replace caller---it better not have children
+                  assert(args.length == 0)
+                  memoUpdateInstruction(pos, stmts(value))
+                }
             }
-          }
-        case Ref(loc, named) =>
-          updateTerm(loc, map)
-          map.get(loc) match {
-            case None =>
-            case Some(value) => memoUpdateInstruction(pos, Ref(value, None))
-          }
-      }
+          case Ref(loc, named) =>
+            updateTerm(loc, map)
+            map.get(loc) match {
+              case None        =>
+              case Some(value) => memoUpdateInstruction(pos, Ref(value, None))
+            }
+        }
     }
   }
 }
