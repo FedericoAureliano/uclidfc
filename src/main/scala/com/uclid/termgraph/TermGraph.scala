@@ -39,27 +39,29 @@ abstract class AbstractTermGraph() {
   def memoAddInstruction(
     inst: Instruction,
     toName: Option[String] = None
-  ): Int =
+  ): Int = {
     inst match {
-      case FunctionParameter(_, _) =>
-        // We never want to memoize variables so that we avoid accidental variable capture.
-        // This would happen a lot in rewrites where updating a variable in some function could mess up some other function.
-        addInstruction(inst)
+      case app : Application =>
+        app.args.foreach(a => assert(stmts(a).isInstanceOf[Application] || stmts(a).isInstanceOf[Ref]))
+        assert(!stmts(app.caller).isInstanceOf[Application])
+      case r : Ref => 
+        assert(stmts(r.loc).isInstanceOf[Application] || stmts(r.loc).isInstanceOf[Ref])
       case _ =>
-        val location = memo.get(inst) match {
-          case Some(loc) => loc
-          case None      => addInstruction(inst)
-        }
-        toName match {
-          case Some(name) =>
-            val newLoc = addInstruction(Ref(location, name))
-            memo.put(inst, newLoc)
-            newLoc
-          case None =>
-            memo.put(inst, location)
-            location
-        }
     }
+    val location = memo.get(inst) match {
+      case Some(loc) => loc
+      case None      => addInstruction(inst)
+    }
+    toName match {
+      case Some(name) =>
+        val newLoc = addInstruction(Ref(location, Some(name)))
+        memo.put(inst, newLoc)
+        newLoc
+      case None =>
+        memo.put(inst, location)
+        location
+    }
+  }
 
   /** Add an instruction to the end of the array buffer representing the term graph WITHOUT ADDING TO MEMO.
     *
@@ -67,6 +69,14 @@ abstract class AbstractTermGraph() {
     * @return address where the location was added
     */
   def addInstruction(inst: Instruction): Int = {
+    inst match {
+      case app : Application =>
+        app.args.foreach(a => assert(stmts(a).isInstanceOf[Application] || stmts(a).isInstanceOf[Ref]))
+        assert(!stmts(app.caller).isInstanceOf[Application])
+      case r : Ref => 
+        assert(stmts(r.loc).isInstanceOf[Application] || stmts(r.loc).isInstanceOf[Ref])
+      case _ =>
+    }
     val r = stmts.length
     stmts.addOne(inst)
     r
@@ -83,6 +93,15 @@ abstract class AbstractTermGraph() {
   ): Unit = {
     // require that at most one instruction points to this address
     require(memo.forall(p => p._2 != r || stmts(r) == p._1))
+
+    newInstruction match {
+      case app : Application =>
+        app.args.foreach(a => assert(stmts(a).isInstanceOf[Application] || stmts(a).isInstanceOf[Ref]))
+        assert(!stmts(app.caller).isInstanceOf[Application])
+      case r : Ref => 
+        assert(stmts(r.loc).isInstanceOf[Application] || stmts(r.loc).isInstanceOf[Ref])
+      case _ =>
+    }
 
     val old = stmts(r)
     memo.remove(old)
@@ -129,13 +148,27 @@ abstract class AbstractTermGraph() {
           case Constructor(_, _, p)  => p.foreach(a => frontier.addOne(a))
           case Selector(_, s)        => frontier.addOne(s)
           case DataType(_, p)        => p.foreach(a => frontier.addOne(a))
-          case Module(_, d, i, x, v) =>
-            frontier.addOne(i); frontier.addOne(d); frontier.addOne(x);
-            frontier.addOne(v)
+          case Module(_, d, _, _, _) =>
+            frontier.addOne(d)
           case Application(caller, args) =>
             frontier.addOne(caller); args.foreach(i => frontier.addOne(i))
         }
       }
+    }
+  }
+
+  def completeButUnapplied(loc: Int): Boolean = {
+    stmts(loc) match {
+      case UserFunction(_, _, params) => params.length == 0
+      case UserMacro(_, _, _, params) => params.length == 0
+      case Synthesis(_, _, params) => params.length == 0
+      case Constructor(_, _, params) => params.length == 0
+      case Selector(_, _) => false
+      case FunctionParameter(_, _) => true
+      case TheoryMacro(name, _) => 
+        // TODO support more than ints, bools, and strings
+        name.toIntOption.isDefined || name == "true" || name == "false" || (name.startsWith("\"") && name.endsWith("\""))
+      case _ => false
     }
   }
 }

@@ -8,7 +8,7 @@ trait Probed() extends AbstractTermGraph {
     List(
       "Term graph size: " + numberOfNodes().toString,
       "Requires synthesis: " + isSynthesisQuery,
-      "Number of bound variables: " + numberOfVariables().toString,
+      "Number of variables: " + numberOfVariables().toString,
       "Largest integer literal: " + largestIntegerLiteral(entryPoints).toString,
       "Logic components:\n" + logicComponents(entryPoints)
         .map((logic, fraction) => s"---- $logic: $fraction")
@@ -17,7 +17,7 @@ trait Probed() extends AbstractTermGraph {
 
   def numberOfNodes(): Int = stmts.length
   def numberOfMemoEntries(): Int = memo.keys.toList.length
-  def numberOfVariables(): Int = numberOfNodes() - numberOfMemoEntries()
+  def numberOfVariables(): Int = stmts.filter(p => p.isInstanceOf[UserFunction]).length
 
   def largestIntegerLiteral(entryPoints: List[Int]): Option[Int] = {
     var max: Option[Int] = None

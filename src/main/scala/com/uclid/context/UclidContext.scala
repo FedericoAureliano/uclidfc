@@ -50,13 +50,13 @@ class UclidContext(termgraph: TermGraph) extends SyMTContext(termgraph) {
 
     val body: String = if (spec != "") {
       if (termgraph.isSynthesisQuery) {
-        programToQueryCtx() + "\n(constraint (not " + spec + "))"
+        programToQueryCtx(termgraph.mark(entryPoints())) + "\n(constraint (not " + spec + "))"
       } else {
-        programToQueryCtx() + "\n(assert " + spec + ")"
+        programToQueryCtx(termgraph.mark(entryPoints())) + "\n(assert " + spec + ")"
       }
     } else {
       if (getValues.isDefined) {
-        programToQueryCtx()
+        programToQueryCtx(termgraph.mark(entryPoints()))
       } else {
         ""
       } + "\n; nothing to verify"
@@ -67,7 +67,7 @@ class UclidContext(termgraph: TermGraph) extends SyMTContext(termgraph) {
         val cmd = if (getValues.get.length == 0) {
           "(get-model)"
         } else {
-          s"(get-value (${getValues.get.map(v => programPointToQueryTerm(v)).mkString(" ")}))"
+          s"(get-value (${getValues.get.map(v => programPointToQueryTerm(v, 0, true)).mkString(" ")}))"
         }
         "(echo \"Model\")\n" + cmd
       } else {

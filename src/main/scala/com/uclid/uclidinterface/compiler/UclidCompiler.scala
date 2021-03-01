@@ -91,18 +91,20 @@ object UclidCompiler {
       }
 
     // encode a term and return a pointer to the start of the term
+    // also returns function parameters that it uses for e.g. havocs
     def exprToTerm(
       stateParam: Option[Int],
       local: Map[Identifier, Int],
       expr: Expr
     ): (Int, List[Int]) = {
       var newNondets: List[Int] = List.empty
-      expr match {
+      val ret = expr match {
         case id: Identifier =>
           // try locals first
-          (
-            local.getOrElse(
-              id,
+          val r1 = local.get(id) match {
+            case Some(ll) if termgraph.completeButUnapplied(ll) => termgraph.memoAddInstruction(Application(ll, List.empty))
+            case Some(ll) => ll
+            case None => {
               // if not in locals, then try state
               stateParam match {
                 case Some(state) =>
@@ -125,30 +127,36 @@ object UclidCompiler {
                         val ret = letsMapStack.find(m => m.contains(id)) match {
                           case Some(foundMap) => foundMap(id)
                           case None =>
-                            globalsMap
-                              .getOrElse(
-                                id,
-                                throw new SemanticError(id.toString)
-                              )
+                            globalsMap.get(id) match {
+                              case Some(gg) if termgraph.completeButUnapplied(gg) => termgraph.memoAddInstruction(Application(gg, List.empty))
+                              case Some(gg) => gg
+                              case None => throw new SemanticError(id.toString)
+                            }
                         }
                         return (ret, newNondets)
                     }
                   // return application of selector to state
-                  termgraph.memoAddInstruction(Application(selRef, List(state)))
+                  val wrappedState = if (termgraph.completeButUnapplied(state)) {
+                    termgraph.memoAddInstruction(Application(state, List.empty))
+                  } else {
+                    state
+                  }
+                  termgraph.memoAddInstruction(Application(selRef, List(wrappedState)))
                 // if state doesn't exist, then check lets and then globals
                 case None =>
                   letsMapStack.find(m => m.contains(id)) match {
                     case Some(foundMap) => foundMap(id)
                     case None =>
-                      globalsMap.getOrElse(
-                        id,
-                        throw new SemanticError(id.toString)
-                      )
+                      globalsMap.get(id) match {
+                        case Some(gg) if termgraph.completeButUnapplied(gg) => termgraph.memoAddInstruction(Application(gg, List.empty))
+                        case Some(gg) => gg
+                        case None => throw new SemanticError(id.toString)
+                      }
                   }
               }
-            ),
-            newNondets
-          )
+            }
+          }
+          (r1, newNondets)
         case FreshLit(typ) =>
           val sortRef = typeUseToSortRef(typ)
           newNondets = newNondets.appended(
@@ -156,10 +164,10 @@ object UclidCompiler {
               FunctionParameter(termgraph.freshSymbolName(), sortRef)
             )
           )
-          (newNondets.last, newNondets)
+          (termgraph.memoAddInstruction(Application(newNondets.last, List.empty)), newNondets)
         case l: Literal =>
           (
-            termgraph.memoAddInstruction(TheoryMacro(l.value().toString())),
+            termgraph.memoAddInstruction(Application(termgraph.memoAddInstruction(TheoryMacro(l.value().toString())), List.empty)),
             newNondets
           )
         case OperatorApplication(GetNextValueOp(), _) =>
@@ -205,10 +213,8 @@ object UclidCompiler {
           }
 
           val asConstAppRef = {
-            val asConstRef =
-              termgraph.memoAddInstruction(TheoryMacro("as const"))
             val typeRef = typeUseToSortRef(typ)
-            termgraph.memoAddInstruction(Application(asConstRef, List(typeRef)))
+            termgraph.memoAddInstruction(TheoryMacro("as const", List(typeRef)))
           }
 
           val appRef = termgraph.memoAddInstruction(
@@ -292,11 +298,17 @@ object UclidCompiler {
             newNondets = newNondets ++ loc._2
             operandRefs.addOne(loc._1)
           }
-
-          val appRef =
-            termgraph.memoAddInstruction(Application(opRef, operandRefs.toList))
-
-          (appRef, newNondets)
+          
+          if (operandRefs.length == 0) {
+            // if function takes no args then it will already 
+            // be applied by exprToTerm so just return that
+            (opRef, newNondets)
+          } else {
+            val appRef =
+              termgraph.memoAddInstruction(Application(opRef, operandRefs.toList))
+  
+            (appRef, newNondets)
+          }
 
         case ModuleNextCallExpr(expr) =>
           // get the instance
@@ -314,9 +326,15 @@ object UclidCompiler {
             termgraph.stmts(mod.next).asInstanceOf[UserMacro]
 
           val extraArgs = nextMacro.params.tail
+            
+          val extraArgsApplied = extraArgs.map(fp => if (termgraph.completeButUnapplied(fp)) {
+            termgraph.memoAddInstruction(Application(fp, List.empty))
+          } else {
+            fp
+          })
 
           val nextCallRef = termgraph.memoAddInstruction(
-            Application(mod.next, List(instanceRef) ++ extraArgs)
+            Application(mod.next, List(instanceRef) ++ extraArgsApplied)
           )
 
           (nextCallRef, newNondets ++ extraArgs)
@@ -338,13 +356,25 @@ object UclidCompiler {
 
           val extraArgs = initMacro.params.tail
 
+          val extraArgsApplied = extraArgs.map(fp => if (termgraph.completeButUnapplied(fp)) {
+            termgraph.memoAddInstruction(Application(fp, List.empty))
+          } else {
+            fp
+          })
+
           val initCallRef = termgraph.memoAddInstruction(
-            Application(mod.init, List(instanceRef) ++ extraArgs)
+            Application(mod.init, List(instanceRef) ++ extraArgsApplied)
           )
 
           (initCallRef, newNondets ++ extraArgs)
-      } // end helper exprToTerm
-    }
+      }
+      if (termgraph.completeButUnapplied(ret._1)) {
+        // if it is complete but hasn't been applied yet, apply it
+        (termgraph.memoAddInstruction(Application(ret._1, List.empty)), ret._2)
+      } else {
+        ret
+      }
+    } // end helper exprToTerm
 
     // statements are encoded as functions.
     def assignToMacro(
@@ -353,7 +383,7 @@ object UclidCompiler {
       stmt: AssignStmt
     ): (Int, List[Int]) = {
       var newParams: List[Int] = List.empty
-      (
+      val ret = (
         {
           val lhs = stmt.lhs
           val rhs = stmt.rhs
@@ -380,6 +410,7 @@ object UclidCompiler {
                 if (id.name == sel.name) {
                   found = true
                   val res = exprToTerm(Some(stateParam), Map.empty, rhs)
+                  assert(res._2.forall(p => termgraph.stmts(p).isInstanceOf[FunctionParameter]))
                   newParams ++= res._2
                   res._1
                 } else {
@@ -418,6 +449,7 @@ object UclidCompiler {
               // first get the constructor for the type of expr
               val exprCtrRef = {
                 val res = exprToTerm(Some(stateParam), Map.empty, expr)
+                assert(res._2.forall(p => termgraph.stmts(p).isInstanceOf[FunctionParameter]))
                 newParams ++= res._2
                 termgraph
                   .stmts(
@@ -470,6 +502,8 @@ object UclidCompiler {
         },
         newParams
       )
+      assert(ret._2.forall(p => termgraph.stmts(p).isInstanceOf[FunctionParameter]))
+      ret
     }
 
     def blockToMacro(
@@ -485,7 +519,12 @@ object UclidCompiler {
 
         val firstRes = stmtToMacro(stateParam, ctrRef, block.stmts.head)
         newParams ++= firstRes._2
-        mostRecentParams = firstRes._2
+        mostRecentParams = firstRes._2.map(fp => if (termgraph.completeButUnapplied(fp)) {
+          termgraph.memoAddInstruction(Application(fp, List.empty))
+        } else {
+          fp
+        })
+          
 
         val firstFuncRef = firstRes._1
 
@@ -493,26 +532,31 @@ object UclidCompiler {
           return firstRes
         } else {
           val startRef = termgraph.memoAddInstruction(
-            Application(firstFuncRef, List(stateParam) ++ mostRecentParams)
+            Application(firstFuncRef, termgraph.memoAddInstruction(Application(stateParam, List.empty)) :: mostRecentParams)
           )
 
           block.stmts.tail.foldLeft(startRef) { (acc, stmt) =>
             val funcRef = {
               val res = stmtToMacro(stateParam, ctrRef, stmt)
               newParams ++= res._2
-              mostRecentParams = res._2
+              mostRecentParams = res._2.map(fp => if (termgraph.completeButUnapplied(fp)) {
+                termgraph.memoAddInstruction(Application(fp, List.empty))
+              } else {
+                fp
+              })
+                
               res._1
             }
             // add the nondet parameters at the end
             val appRef = termgraph.memoAddInstruction(
-              Application(funcRef, List(acc) ++ mostRecentParams)
+              Application(funcRef, acc :: mostRecentParams)
             )
             appRef
           }
         }
 
       } else {
-        stateParam
+        termgraph.memoAddInstruction(Application(stateParam, List.empty))
       }
 
       val blockRef = termgraph.memoAddInstruction(
@@ -525,6 +569,7 @@ object UclidCompiler {
       )
 
       letsMapStack.pop()
+      assert(newParams.forall(p => termgraph.stmts(p).isInstanceOf[FunctionParameter]))
       (blockRef, newParams)
     }
 
@@ -535,12 +580,20 @@ object UclidCompiler {
     ): (Int, List[Int]) = {
       val left = stmtToMacro(stateParam, ctrRef, ifelse.ifblock)
       val leftAppRef = termgraph.memoAddInstruction(
-        Application(left._1, List(stateParam) ++ left._2)
+        Application(left._1, List(termgraph.memoAddInstruction(Application(stateParam, List.empty))) ++ left._2.map(fp => if (termgraph.completeButUnapplied(fp)) {
+          termgraph.memoAddInstruction(Application(fp, List.empty))
+        } else {
+          fp
+        }))  
       )
 
       val right = stmtToMacro(stateParam, ctrRef, ifelse.elseblock)
       val rightAppRef = termgraph.memoAddInstruction(
-        Application(right._1, List(stateParam) ++ right._2)
+        Application(right._1, List(termgraph.memoAddInstruction(Application(stateParam, List.empty))) ++ right._2.map(fp => if (termgraph.completeButUnapplied(fp)) {
+          termgraph.memoAddInstruction(Application(fp, List.empty))
+        } else {
+          fp
+        }))
       )
 
       val cond = exprToTerm(Some(stateParam), Map.empty, ifelse.cond)
@@ -560,14 +613,17 @@ object UclidCompiler {
         )
       )
 
-      (macroRef, cond._2 ++ left._2 ++ right._2)
+      val ret = (macroRef, cond._2 ++ left._2 ++ right._2)
+      assert(ret._2.forall(p => termgraph.stmts(p).isInstanceOf[FunctionParameter]))
+      ret
     }
 
     def stmtToMacro(stateParam: Int, ctrRef: Int, stmt: Statement): (
       Int,
       List[Int]
     ) = // returns a pointer to the macro and the extra args you need for it
-      stmt match {
+    {
+      val ret = stmt match {
         case a: AssignStmt => assignToMacro(stateParam, ctrRef, a)
         case b: BlockStmt  => blockToMacro(stateParam, ctrRef, b)
         case i: IfElseStmt => ifelseToMacro(stateParam, ctrRef, i)
@@ -618,12 +674,15 @@ object UclidCompiler {
               // line number, column number, ast id
               s"line${l.pos.line}col${l.pos.column}!${stmt.astNodeId}",
               modRef,
-              stateParam,
+              termgraph.memoAddInstruction(Application(stateParam, List.empty)),
               List(stateParam)
             )
           )
           (macroRef, List.empty)
       }
+      assert(ret._2.forall(p => termgraph.stmts(p).isInstanceOf[FunctionParameter]))
+      ret
+    }
 
     // encode a transition block and return a pointer to the function definition
     def transitionToTerm(
@@ -639,6 +698,8 @@ object UclidCompiler {
       )
 
       val um = termgraph.stmts(res._1).asInstanceOf[UserMacro]
+
+      assert(um.params.forall(p => termgraph.stmts(p).isInstanceOf[FunctionParameter]))
 
       termgraph.memoUpdateInstruction(
         res._1,
@@ -689,7 +750,7 @@ object UclidCompiler {
           termgraph.stmts(p) match {
             case FunctionParameter(_, sort) =>
               val vRef =
-                termgraph.addInstruction(UserFunction(freshSymbolName(), sort))
+                termgraph.memoAddInstruction(Application(termgraph.addInstruction(UserFunction(freshSymbolName(), sort)), List.empty))
               vRef
           }
         }
@@ -701,10 +762,16 @@ object UclidCompiler {
           val args = nextParams.tail.map { p =>
             termgraph.stmts(p) match {
               case FunctionParameter(name, sort) =>
-                val vRef =
+                val vRef = {
                   termgraph.memoAddInstruction(
-                    UserFunction(s"$name!step!$i", sort)
+                    Application(
+                      termgraph.memoAddInstruction(
+                        UserFunction(s"$name!step!$i", sort)
+                      ),
+                      List.empty
+                    )
                   )
+                }
                 vRef
             }
           }
@@ -980,7 +1047,7 @@ object UclidCompiler {
           properties(0).expr
         )._1 //specs shouldn't create new nondets
       } else {
-        val trueRef = termgraph.memoAddInstruction(TheoryMacro("true"))
+        val trueRef = termgraph.memoAddInstruction(Application(termgraph.memoAddInstruction(TheoryMacro("true")), List.empty))
         trueRef
       }
 
@@ -1227,20 +1294,11 @@ object UclidCompiler {
         )
 
       // create selectors and remember where they are
-      val selectorTerms = new HashMap[String, Int]()
       val selectorRefs =
         fields.map { v =>
           val typeRef = typeUseToSortRef(v._2)
           val selRef =
             termgraph.memoAddInstruction(Selector(v._1.name, typeRef))
-
-          // create application for scope
-          val getterRef =
-            termgraph.memoAddInstruction(
-              Application(selRef, List(inputStateRef))
-            )
-          selectorTerms.addOne((v._1.name, getterRef))
-
           selRef
         }
 

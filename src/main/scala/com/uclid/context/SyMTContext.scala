@@ -32,7 +32,7 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
       NEWLINE = " "
     }
     val logic = s"(set-logic ${termgraph.queryLogic(entryPoints())})"
-    val ctx = programToQueryCtx()
+    val ctx = programToQueryCtx(termgraph.mark(entryPoints()))
     val body = script
       .map { c =>
         c match {
@@ -57,7 +57,8 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
 
   protected def programPointToQueryTerm(
     point: Int,
-    indentInput: Int = 0
+    indentInput: Int = 0,
+    noMemo: Boolean = false
   ): String = {
     var indent = indentInput
 
@@ -77,13 +78,13 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
             case s: Selector          => selectorToQueryTerm(s)
             case n: Numeral           => numeralToQueryTerm(n)
             case r: Ref =>
-              if (!termgraph.isSynthesisQuery && !alreadyDeclared.contains(r.loc)) {
+              if (!noMemo && !termgraph.isSynthesisQuery && !alreadyDeclared.contains(r.loc) && r.named.isDefined) {
                 alreadyDeclared.add(r.loc)
-                stack.push(Right(s" :named ${r.named})"))
+                stack.push(Right(s" :named ${r.named.get})"))
                 stack.push(Left(r.loc))
                 stack.push(Right("(! "))
-              } else if (!termgraph.isSynthesisQuery && alreadyDeclared.contains(r.loc)) {
-                stack.push(Right(r.named))
+              } else if (!noMemo && !termgraph.isSynthesisQuery && alreadyDeclared.contains(r.loc) && r.named.isDefined) {
+                stack.push(Right(r.named.get))
               } else {
                 stack.push(Left(r.loc))
               }
@@ -163,13 +164,15 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
       stack.push(Right(n.value.toString()))
 
     def theorymacroToQueryTerm(t: TheoryMacro): Unit =
-      if (t.params.length > 0) {
+      if (t.name == "forall" || t.name == "exists") {
         stack.push(Right(")"))
         t.params.reverse.foreach { s =>
           val sel = termgraph.stmts(s).asInstanceOf[FunctionParameter]
           stack.push(Right(s"(${sel.name} ${programPointToQueryTerm(sel.sort, 0)})"))
         }
         stack.push(Right(s"${t.name} ("))
+      } else if (t.name == "as const") {
+        stack.push(Right(s"(${t.name} ${programPointToQueryTerm(t.params(0), 0)})"))
       } else {
         stack.push(Right(t.name))
       }
@@ -208,9 +211,8 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
     out.toString()
   }
 
-  def programToQueryCtx(): String = {
+  def programToQueryCtx(toDeclare: Array[Boolean]): String = {
     var indent = 0
-    val toDeclare = Array.fill[Boolean](termgraph.numberOfNodes())(true)
 
     def dispatch(position: Int): Option[String] =
       if (toDeclare(position)) {

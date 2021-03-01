@@ -170,9 +170,9 @@ object SmtCompiler {
     /** Interpreted symbols, globally declared functions, bound variables, ...
       * @return the termgraph reference to the parsed symbol
       */ 
-    def parseSymbol(): Int =
+    def parseSymbol(): Int = {
       pos += 1
-      if (local.size() > 0 && local.containsKey(tokens(pos - 1))) {
+      val ret = if (local.size() > 0 && local.containsKey(tokens(pos - 1))) {
         local.get(tokens(pos - 1))
       } else if (global.containsKey(tokens(pos - 1))) {
         global.get(tokens(pos - 1))
@@ -184,6 +184,13 @@ object SmtCompiler {
             ctx.termgraph.memoAddInstruction(TheoryMacro(other))
         }
       }
+      
+      if (ctx.termgraph.completeButUnapplied(ret)) {
+        ctx.termgraph.memoAddInstruction(Application(ret, List.empty))
+      } else {
+        ret
+      }
+    }
     ctx
   }
 }

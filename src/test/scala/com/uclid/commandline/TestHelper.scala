@@ -47,7 +47,10 @@ def readTestFile(file: File): Tuple8[
   val rewrites =
     "(?<=Rewrite=)(.*)".r.findAllIn(lines).map(r => "--" + r).toList
   val options =
-    "(?<=Option=)(.*)".r.findAllIn(lines).map(r => "--" + r).toList
+    "(?<=Option=)(.* .*)".r.findAllIn(lines).map(r => {
+      val pair = r.split(" ")
+      List("--" + pair(0), pair(1))
+    }).flatten.toList
   (
     (
       file.getAbsolutePath(),
@@ -67,6 +70,7 @@ def endToEnd(
   solvers: List[String],
   rewrites: List[String]
 ): List[UclidResult] = {
+  println(rewrites)
   solvers match {
     case Nil =>
       UclidMain.main(

@@ -6,6 +6,30 @@ import scala.collection.mutable.{ArrayBuffer, HashMap, ListBuffer}
 
 trait Rewritable() extends AbstractTermGraph {
 
+  def optimizeLevel0() : Unit = {
+    inlineMacros()
+  }
+  
+  def inlineMacros(bound: Int = -1) : Unit = {
+    var count = bound
+    (0 to stmts.length - 1).foreach { p =>
+      stmts(p) match {
+        case Application(umacroPos, args) if stmts(umacroPos).isInstanceOf[UserMacro] => {
+          val umacro = stmts(umacroPos).asInstanceOf[UserMacro]
+          val bindings = umacro.params.zip(args).toMap
+          val inlined = copyTerm(umacro.body)
+          updateTerm(inlined, bindings)
+          memoUpdateInstruction(p, Ref(inlined, None))
+          count = count - 1
+          if (count == 0) {
+            return
+          }
+        }
+        case _ =>
+      }
+    }
+  }
+
   def plusMinusZero() : Unit = {
     (0 to stmts.length - 1).foreach { p =>
       stmts(p) match {
@@ -286,7 +310,7 @@ trait Rewritable() extends AbstractTermGraph {
             // not an enum
             return None
           }
-          memoAddInstruction(TheoryMacro(ctr.name))
+          memoAddInstruction(Application(p, List.empty))
         }
       case _ => return None
     }
@@ -296,7 +320,7 @@ trait Rewritable() extends AbstractTermGraph {
       // v is the bound variable we want to replace
       // x is the enum variant we want to plug in for v
       val replaceMap = HashMap((v, x))
-      updateTerm(newBody, replaceMap)
+      updateTerm(newBody, replaceMap.toMap)
       newBody
     }
     Some(copies)
@@ -324,7 +348,10 @@ trait Rewritable() extends AbstractTermGraph {
             Module(prefix + name, ct, init, next, spec)
           )
         case Ref(loc, named) =>
-          memoUpdateInstruction(i, Ref(loc, prefix + named))
+          named match {
+            case None => memoUpdateInstruction(i, Ref(loc, None))
+            case Some(name) => memoUpdateInstruction(i, Ref(loc, Some(prefix + name)))
+          }
         case Selector(name, sort) =>
           memoUpdateInstruction(i, Selector(prefix + name, sort))
         case Synthesis(name, sort, params) =>
@@ -426,13 +453,17 @@ trait Rewritable() extends AbstractTermGraph {
     * @return the new location
     */
   protected def copyTerm(pos: Int): Int = {
-    assert(
-      stmts(pos).isInstanceOf[Application],
-      s"should be an application but is ${stmts(pos)}"
-    )
+    // assert(
+    //   stmts(pos).isInstanceOf[Application],
+    //   s"should be an application but is ${stmts(pos)}"
+    // )
     val map = copyTermHelper(pos)
-    updateTerm(map(pos), map)
-    map(pos)
+    if (map.contains(pos)) {
+      updateTerm(map(pos), map.toMap)
+      map(pos)
+    } else {
+      pos
+    }
   }
 
   /** Copies the term but instead of updating references, returns a map describing the changes
@@ -447,9 +478,8 @@ trait Rewritable() extends AbstractTermGraph {
   ): HashMap[Int, Int] = {
     stmts(pos) match {
       case Application(caller, args) =>
-        val newCaller = copyTermHelper(caller, map).getOrElse(caller, caller)
         val newArgs = args.map(a => copyTermHelper(a, map).getOrElse(a, a))
-        val newPos: Int = addInstruction(Application(newCaller, newArgs))
+        val newPos: Int = addInstruction(Application(caller, newArgs))
         map.addOne((pos, newPos))
       case _ =>
     }
@@ -461,18 +491,31 @@ trait Rewritable() extends AbstractTermGraph {
     * @param pos starting location
     * @param map the changes we want to make: whenever we see x we will replace it with map(x)
     */
-  protected def updateTerm(pos: Int, map: HashMap[Int, Int]): Unit =
-    stmts(pos) match {
-      case Application(caller, args) =>
-        memoUpdateInstruction(
-          pos,
-          Application(
-            map.getOrElse(caller, caller),
-            args.map(a => map.getOrElse(a, a))
-          )
-        )
-        updateTerm(caller, map)
-        args.foreach(a => updateTerm(a, map))
-      case _ =>
+  protected def updateTerm(pos: Int, map: Map[Int, Int]): Unit = {
+    assert(stmts(pos).isInstanceOf[Application] || stmts(pos).isInstanceOf[Ref])
+    map.get(pos) match {
+      case Some(value) =>
+        memoUpdateInstruction(pos, Ref(value, None))
+      case None => stmts(pos) match {
+        case Application(caller, args) =>
+          args.foreach(a => updateTerm(a, map))
+          map.get(caller) match {
+            case None =>
+            case Some(value) => if (completeButUnapplied(value)) {
+              memoUpdateInstruction(pos, Application(value, args))
+            } else {
+              // we're trying to replace caller---it better not have children
+              assert(args.length == 0)
+              memoUpdateInstruction(pos, stmts(value))
+            }
+          }
+        case Ref(loc, named) =>
+          updateTerm(loc, map)
+          map.get(loc) match {
+            case None =>
+            case Some(value) => memoUpdateInstruction(pos, Ref(value, None))
+          }
+      }
     }
+  }
 }

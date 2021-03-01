@@ -22,9 +22,10 @@ trait Fuzzable() extends AbstractTermGraph {
         fuzz(sel.sort)
       }
     val body = memoAddInstruction(Application(mod.ct, components))
-    memoAddInstruction(
+    val um = memoAddInstruction(
       UserMacro(freshSymbolName(), memoGetInstruction(mod), body, List.empty)
     )
+    memoAddInstruction(Application(um, List.empty))
   }
 
   private def fuzzDatatype(d: DataType): Int = {
@@ -36,30 +37,26 @@ trait Fuzzable() extends AbstractTermGraph {
       fuzz(sel.sort)
     }
     val body = memoAddInstruction(Application(ctr, components))
-    memoAddInstruction(
+    val um = memoAddInstruction(
       UserMacro(freshSymbolName(), memoGetInstruction(d), body, List.empty)
     )
+    memoAddInstruction(Application(um, List.empty))
   }
 
   private def fuzzTheorysort(t: TheorySort): Int =
     t match {
       case TheorySort("Bool", _) =>
-        memoAddInstruction(TheoryMacro(random.nextBoolean().toString()))
+        memoAddInstruction(Application(memoAddInstruction(TheoryMacro(random.nextBoolean().toString())), List.empty))
       case TheorySort("Int", _) =>
-        memoAddInstruction(TheoryMacro(random.nextInt().toString()))
+        memoAddInstruction(Application(memoAddInstruction(TheoryMacro(random.nextInt().toString())), List.empty))
       case TheorySort("Array", params) =>
         val out = fuzz(params.last)
-        val asConstAppRef = {
-          val asConstRef = memoAddInstruction(TheoryMacro("as const"))
-          memoAddInstruction(
-            Application(asConstRef, List(memoGetInstruction(t)))
-          )
-        }
+        val asConstAppRef = memoAddInstruction(TheoryMacro("as const", List(memoGetInstruction(t))))
         memoAddInstruction(
           Application(asConstAppRef, List(out))
         )
     }
 
   private def fuzzUsersort(u: UserSort): Int =
-    memoAddInstruction(UserFunction(freshSymbolName(), memoGetInstruction(u)))
+    memoAddInstruction(Application(memoAddInstruction(UserFunction(freshSymbolName(), memoGetInstruction(u))), List.empty))
 }
