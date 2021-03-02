@@ -161,7 +161,7 @@ object UclidCompiler {
           val sortRef = typeUseToSortRef(typ)
           newNondets = newNondets.appended(
             termgraph.memoAddInstruction(
-              FunctionParameter(termgraph.freshSymbolName(), sortRef)
+              FunctionParameter(Util.freshSymbolName(), sortRef)
             )
           )
           (termgraph.memoAddInstruction(Application(newNondets.last, List.empty)), newNondets)
@@ -750,7 +750,7 @@ object UclidCompiler {
           termgraph.stmts(p) match {
             case FunctionParameter(_, sort) =>
               val vRef =
-                termgraph.memoAddInstruction(Application(termgraph.addInstruction(UserFunction(freshSymbolName(), sort)), List.empty))
+                termgraph.memoAddInstruction(Application(termgraph.addInstruction(UserFunction(Util.freshSymbolName(), sort)), List.empty))
               vRef
           }
         }
@@ -1074,7 +1074,7 @@ object UclidCompiler {
           case BooleanType() => acc
           case IntegerType() => acc
           case ArrayType(inType, outType) =>
-            val idx = Identifier(freshSymbolName())
+            val idx = Identifier(Util.freshSymbolName())
             val select = OperatorApplication(ArraySelect(), List(f._1, idx))
             createInitAssumes(List((select, outType))) match {
               case Nil => acc

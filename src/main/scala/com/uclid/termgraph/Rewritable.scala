@@ -7,20 +7,60 @@ import scala.collection.mutable.{ArrayBuffer, HashMap, ListBuffer}
 trait Rewritable() extends AbstractTermGraph {
 
   def optimizeLevel0(startingPoints: List[Int]): Unit = {
-    var locations : List[Int] = terms(startingPoints).zipWithIndex.map((a, b) => if (a) {Some(b)} else {None}).flatten.toList
-    
-    var inlineResult = inlineMacros(locations, 1)
-    var elimResult = eliminateDestructConstruct(locations, -1)
+    var inlineResult = true
+    var elimResult = true
     var keepGoing = inlineResult || elimResult
-
-    while (keepGoing) { // do this iteratively in a loop to avoid big blowup from inlining (which creates many destruct/construct applications)
-      locations = terms(startingPoints).zipWithIndex.map((a, b) => if (a) {Some(b)} else {None}).flatten.toList
+    var locations : List[Int] = terms(startingPoints).zipWithIndex.map((a, b) => if (a) {Some(b)} else {None}).flatten.toList
+    while (keepGoing) { 
+      // do this iteratively in a loop to avoid big blowup from inlining (which creates many destruct/construct applications)
+      
       // inline one macro
       inlineResult = inlineMacros(locations, 1)
       // reduce all "select y from construct {x=a ... y=b ... z=c}" to "b"
       elimResult = eliminateDestructConstruct(locations, -1)
+
       keepGoing = inlineResult || elimResult
+      locations = terms(startingPoints).zipWithIndex.map((a, b) => if (a) {Some(b)} else {None}).flatten.toList
     }
+
+    splitRecords(locations)
+  }
+
+  def splitRecords(locations: List[Int]): Unit = {
+    locations.foreach(p => {
+      stmts(p) match {
+        case u : UserFunction if u.params.length == 0 && stmts(u.sort).isInstanceOf[AbstractDataType] => {
+          val toReplace = stmts(u.sort) match {
+            case DataType(_, ctRef::Nil) if stmts(ctRef).asInstanceOf[Constructor].selectors.length > 0 => {
+              val ct = stmts(ctRef).asInstanceOf[Constructor]
+              ct.selectors.map(s => {
+                val sel = stmts(s).asInstanceOf[Selector]
+                val fresh = memoAddInstruction(Application(memoAddInstruction(UserFunction(Util.freshSymbolName(), sel.sort)), List.empty))
+                // now replace all "select s from u" terms with "fresh"
+                val selSfromU = memoAddInstruction(Application(s, List(memoAddInstruction(Application(p, List.empty)))))
+                (selSfromU, fresh)
+              })
+            }
+            case Module(_, ctRef, _, _, _) => {
+              val ct = stmts(ctRef).asInstanceOf[Constructor]
+              ct.selectors.map(s => {
+                val sel = stmts(s).asInstanceOf[Selector]
+                val fresh = memoAddInstruction(Application(memoAddInstruction(UserFunction(Util.freshSymbolName(), sel.sort)), List.empty))
+                // now replace all "select s from u" terms with "fresh"
+                val selSfromU = memoAddInstruction(Application(s, List(memoAddInstruction(Application(p, List.empty)))))
+                (selSfromU, fresh)
+              })
+            }
+            case _ => List.empty
+          }
+          locations.foreach(l => if (stmts(l).isInstanceOf[Ref] || stmts(l).isInstanceOf[Application]) {
+              updateTerm(l, toReplace.toMap)
+            })
+        }
+        case _ => 
+      }
+    })
+    repair()
   }
 
   def inlineMacros(locations: List[Int], bound: Int): Boolean = {
@@ -45,6 +85,7 @@ trait Rewritable() extends AbstractTermGraph {
         case _ =>
       }
     }
+    repair()
     changed
   }
 
@@ -92,10 +133,11 @@ trait Rewritable() extends AbstractTermGraph {
         case _ =>
       }
     }
+    repair()
     changed
   }
 
-  def plusMinusZero(): Unit =
+  def plusMinusZero(): Unit = {
     (0 to stmts.length - 1).foreach { p =>
       stmts(p) match {
         case Application(plus, args)
@@ -121,8 +163,11 @@ trait Rewritable() extends AbstractTermGraph {
         case _ =>
       }
     }
+    repair()
+  }
 
-  def indexOfGTZGadgets(): Unit =
+  def indexOfGTZGadgets(): Unit = {
+
     (0 to stmts.length - 1).foreach { p =>
       stmts(p) match {
         // index of c in x >= 0 means x contains c
@@ -210,6 +255,8 @@ trait Rewritable() extends AbstractTermGraph {
         case _ =>
       }
     }
+    repair()
+  }
 
   def assertionOverConjunction(assertion: Assert): List[Command] = {
     var changeHappened = true
@@ -235,10 +282,11 @@ trait Rewritable() extends AbstractTermGraph {
         }
       )
     }
+    repair()
     newCommands
   }
 
-  def containsOverConcat(): Unit =
+  def containsOverConcat(): Unit = {
     (0 to stmts.length - 1).foreach { p =>
       stmts(p) match {
         case Application(contains, haystack :: needle :: Nil)
@@ -269,10 +317,12 @@ trait Rewritable() extends AbstractTermGraph {
         case _ =>
       }
     }
+    repair()
+  }
 
   /** "(replace c1 with c2 in x) contains c3" as "x contains c3" if c1 = c3 and c2 = c3; as "false" if c1 = c3 and c2 != c3; as "x contains c3" if c1 != c3 and c2 != c3; and "x contains c3 or x contains c1" if c1 != c3 and c2 == c3.
     */
-  def containsOverReplace(): Unit =
+  def containsOverReplace(): Unit = {
     (0 to stmts.length - 1).foreach { p =>
       stmts(p) match {
         case Application(contains, haystack :: needle :: Nil)
@@ -336,6 +386,8 @@ trait Rewritable() extends AbstractTermGraph {
         case _ =>
       }
     }
+    repair()
+  }
 
   /** Rewrite quantifiers over enums to disjunctions/conjunctions
     *
@@ -352,6 +404,7 @@ trait Rewritable() extends AbstractTermGraph {
       (0 to stmts.length - 1).foreach { p =>
         val update = blastEnumQuantifier(p)
         changeHappened = update || changeHappened
+        repair()
       }
     }
   }
@@ -363,7 +416,7 @@ trait Rewritable() extends AbstractTermGraph {
     *
     * TODO: handle case where enum quantifier is not in first position
     */
-  private def blastEnumQuantifier(app: Int): Boolean =
+  private def blastEnumQuantifier(app: Int): Boolean = {
     stmts(app) match {
       case Application(quant, body :: Nil)
           if stmts(quant).isInstanceOf[TheoryMacro] =>
@@ -400,6 +453,7 @@ trait Rewritable() extends AbstractTermGraph {
         }
       case _ => return false
     }
+  }
 
   /** Copy quantifier body and plug in all variants of [some enum]
     *

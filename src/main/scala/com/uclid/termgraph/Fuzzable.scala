@@ -1,10 +1,9 @@
 package com.uclid.termgraph
 
 import scala.collection.mutable.ArrayBuffer
-import scala.util.Random
+import com.uclid.termgraph.Util
 
 trait Fuzzable() extends AbstractTermGraph {
-  val random = new Random
 
   def fuzz(position: Int): Int =
     stmts(position) match {
@@ -23,14 +22,14 @@ trait Fuzzable() extends AbstractTermGraph {
       }
     val body = memoAddInstruction(Application(mod.ct, components))
     val um = memoAddInstruction(
-      UserMacro(freshSymbolName(), memoGetInstruction(mod), body, List.empty)
+      UserMacro(Util.freshSymbolName(), memoGetInstruction(mod), body, List.empty)
     )
     memoAddInstruction(Application(um, List.empty))
   }
 
   private def fuzzDatatype(d: DataType): Int = {
     // pick a random constructor
-    val ctr = d.constructors(random.nextInt(d.constructors.length))
+    val ctr = d.constructors(Util.random.nextInt(d.constructors.length))
     // apply constructor to random instances of all its selectors
     val components = stmts(ctr).asInstanceOf[Constructor].selectors.map { s =>
       val sel = stmts(s).asInstanceOf[Selector]
@@ -38,7 +37,7 @@ trait Fuzzable() extends AbstractTermGraph {
     }
     val body = memoAddInstruction(Application(ctr, components))
     val um = memoAddInstruction(
-      UserMacro(freshSymbolName(), memoGetInstruction(d), body, List.empty)
+      UserMacro(Util.freshSymbolName(), memoGetInstruction(d), body, List.empty)
     )
     memoAddInstruction(Application(um, List.empty))
   }
@@ -46,9 +45,9 @@ trait Fuzzable() extends AbstractTermGraph {
   private def fuzzTheorysort(t: TheorySort): Int =
     t match {
       case TheorySort("Bool", _) =>
-        memoAddInstruction(Application(memoAddInstruction(TheoryMacro(random.nextBoolean().toString())), List.empty))
+        memoAddInstruction(Application(memoAddInstruction(TheoryMacro(Util.random.nextBoolean().toString())), List.empty))
       case TheorySort("Int", _) =>
-        memoAddInstruction(Application(memoAddInstruction(TheoryMacro(random.nextInt().toString())), List.empty))
+        memoAddInstruction(Application(memoAddInstruction(TheoryMacro(Util.random.nextInt().toString())), List.empty))
       case TheorySort("Array", params) =>
         val out = fuzz(params.last)
         val asConstAppRef = memoAddInstruction(TheoryMacro("as const", List(memoGetInstruction(t))))
@@ -58,5 +57,5 @@ trait Fuzzable() extends AbstractTermGraph {
     }
 
   private def fuzzUsersort(u: UserSort): Int =
-    memoAddInstruction(Application(memoAddInstruction(UserFunction(freshSymbolName(), memoGetInstruction(u))), List.empty))
+    memoAddInstruction(Application(memoAddInstruction(UserFunction(Util.freshSymbolName(), memoGetInstruction(u))), List.empty))
 }

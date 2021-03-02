@@ -151,12 +151,13 @@ trait Probed() extends AbstractTermGraph {
             case TheorySort("Int", _)   => i = true
             case TheorySort("String", _)   => s = true
             case Synthesis(_, _, _)     => isSynthesisQuery = true
+            case UserSort(_, _) => uf = true
             case _                      =>
           }
         }
       )
 
-    s"${if (qf && !isSynthesisQuery) { "QF_" }
+    val out = s"${if (qf && !isSynthesisQuery) { "QF_" }
     else { "" }}${if (uf) { "UF" }
     else { "" }}${if (s) { "S" }
     else { "" }}${if (a) { "A" }
@@ -165,5 +166,11 @@ trait Probed() extends AbstractTermGraph {
     else if (!linear && i) { "N" }
     else { "" }}${if (i) { "IA" }
     else { "" }}"
+
+    if (out == "QF_") {
+      "QF_UF"
+    } else {
+      out
+    }
   }
 }

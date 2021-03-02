@@ -118,10 +118,3 @@ case class Module(name: String, ct: Int, init: Int, next: Int, spec: Int)
 }
 
 case class Application(caller: Int, args: List[Int]) extends Instruction {}
-
-private var uniqueId = 0
-
-def freshSymbolName(): String = {
-  uniqueId += 1
-  s"fresh!${uniqueId}"
-}

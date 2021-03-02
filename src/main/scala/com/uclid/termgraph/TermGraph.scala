@@ -1,6 +1,17 @@
 package com.uclid.termgraph
 
 import scala.collection.mutable.{ArrayBuffer, HashMap, Queue}
+import scala.util.Random
+
+object Util {
+  val random = new Random
+  private var uniqueId = 0
+  def freshSymbolName(): String = {
+    uniqueId += 1
+    s"fresh!${uniqueId}"
+  }
+}
+
 
 abstract class AbstractTermGraph() {
 
@@ -15,17 +26,9 @@ abstract class AbstractTermGraph() {
 
   var isSynthesisQuery = false
 
-  private var uniqueId = 0
-
-  def freshSymbolName(): String = {
-    uniqueId += 1
-    s"fresh!${uniqueId}"
-  }
-
   def clear(): Unit = {
     stmts.clear()
     memo.clear()
-    uniqueId = 0
   }
 
   /** Add instruction to stmts if it isn't already there, otherwise return its location.
@@ -194,6 +197,50 @@ abstract class AbstractTermGraph() {
         name.toIntOption.isDefined || name == "true" || name == "false" || (name.startsWith("\"") && name.endsWith("\""))
       case _ => false
     }
+  }
+
+  def repair() : Unit = {
+    memo.clear()
+    val newStmts: ArrayBuffer[Instruction] = stmts.clone()
+
+    def findTarget(in: Int) : Int = {
+      var pos = in
+      while (stmts(pos).isInstanceOf[Ref]) {
+        pos = stmts(pos).asInstanceOf[Ref].loc
+      }
+      pos
+    }
+    
+    (0 to stmts.length - 1).foreach { p =>
+      var pos = findTarget(p)
+
+      val newInst = stmts(pos) match {
+        case Ref(i, n) => Ref(findTarget(i), n)
+        case TheorySort(n, p) => TheorySort(n, p.map(a => findTarget(a)))
+        case FunctionParameter(n, s) => FunctionParameter(n, findTarget(s))
+        case TheoryMacro(n, p) => TheoryMacro(n, p.map(a => findTarget(a)))
+        case UserMacro(n, s, b, p) => UserMacro(n, findTarget(s), findTarget(b), p.map(a => findTarget(a)))
+        case UserFunction(n, s, p) => UserFunction(n, findTarget(s), p.map(a => findTarget(a)))
+        case Synthesis(n, s, p) => Synthesis(n, findTarget(s), p.map(a => findTarget(a)))
+        case Constructor(n, s, p) => Constructor(n, findTarget(s), p.map(a => findTarget(a)))
+        case Selector(n, s) => Selector(n, findTarget(s))
+        case DataType(n, p) => DataType(n, p.map(a => findTarget(a)))
+        case Module(n, d, i, x, s) => Module(n, findTarget(d), findTarget(i), findTarget(x), findTarget(s))
+        case Application(caller, args) => Application(findTarget(caller), args.map(a => findTarget(a)))
+        case other => other
+      }
+      
+      memo.get(newInst) match {
+        case Some(otherPos) =>  newStmts(p) = Ref(otherPos, None)
+        case None => {
+          newStmts(p) = newInst
+          memo.addOne(newInst, p)
+        }
+      }
+    }
+
+    stmts.clear()
+    stmts.addAll(newStmts)
   }
 }
 
