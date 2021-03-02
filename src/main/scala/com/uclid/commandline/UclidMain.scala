@@ -17,11 +17,6 @@ object Solvers extends Enumeration {
   val alt_ergo, cvc4, vampire, z3 = Value
 }
 
-object Optimize extends Enumeration {
-  type Optimize = Value
-  val none, zero = Value
-}
-
 /** This is the main class for Uclid.
   */
 object UclidMain {
@@ -29,8 +24,7 @@ object UclidMain {
   implicit val solverRead: scopt.Read[Solvers.Value] =
     scopt.Read.reads(Solvers.withName(_))
 
-  implicit val optimizeRead: scopt.Read[Optimize.Value] =
-    scopt.Read.reads(Optimize.withName(_))
+  val optimizationLevels = List(0, 1)
 
   def main(args: Array[String]): Unit =
     parseOptions(args) match {
@@ -49,7 +43,7 @@ object UclidMain {
     run: Boolean = true,
     timeout: Int = Int.MaxValue,
     features: Boolean = false,
-    optimizeLevel: Optimize.Value = Optimize.none,
+    optimizeLevel: Int = 0,
     plusMinusZero: Boolean = false,
     blastEnumQuantifierFlag: Boolean = false,
     assertionOverConjunction: Boolean = false,
@@ -90,11 +84,13 @@ object UclidMain {
           s"Timeout (in seconds) to give the solver."
         )
 
-      opt[Optimize.Value]('o', "optimize")
+      opt[Int]('o', "optimize")
         .valueName("<level>")
         .action((x, c) => c.copy(optimizeLevel = x))
-        .maxOccurs(Optimize.values.size)
-        .text(s"Optimization level (${Optimize.values.mkString(" or ")}).")
+        .validate(x =>
+          if (optimizationLevels.contains(x)) success
+          else failure(s"Optimization level must be ${optimizationLevels.mkString(" or ")}.") )
+        .text(s"Optimization level (${optimizationLevels.mkString(" or ")}).")
 
       opt[String]('w', "write")
         .valueName("<file>")
@@ -247,7 +243,7 @@ object UclidMain {
       if (config.assertionOverConjunction) {
         throw new SemanticError("Flatten Assertions Not Yet Supported In UCLID Mode")
       }
-      if (config.optimizeLevel == Optimize.zero) {
+      if (config.optimizeLevel == 1) {
         ctx.termgraph.optimizeLevel0(ctx.entryPoints())
       }
       var processDuration = (System.nanoTime - startProcess) / 1e9d
@@ -348,7 +344,7 @@ object UclidMain {
             }
           })
         }
-        if (config.optimizeLevel == Optimize.zero) {
+        if (config.optimizeLevel == 1) {
           ctx.termgraph.optimizeLevel0(ctx.entryPoints())
         }
         var processDuration = (System.nanoTime - startProcess) / 1e9d
