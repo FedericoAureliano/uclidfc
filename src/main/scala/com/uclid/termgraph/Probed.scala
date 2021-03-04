@@ -12,7 +12,9 @@ trait Probed() extends AbstractTermGraph {
       "Largest integer literal: " + largestIntegerLiteral(entryPoints).toString,
       "Logic components:\n" + logicComponents(entryPoints)
         .map((logic, fraction) => s"---- $logic: $fraction")
-        .mkString("\n")
+        .mkString("\n"),
+      "Max Arity: " + maxArity(entryPoints).toString,
+      "Avg Arity: " + avgArity(entryPoints).toString
     )
 
   def numberOfNodes(): Int = stmts.length
@@ -36,6 +38,38 @@ trait Probed() extends AbstractTermGraph {
         }
       )
     max
+  }
+
+  def maxArity(entryPoints: List[Int]): Int = {
+    var max: Option[Int] = None
+    stmts
+      .foreach(inst =>
+        inst match {
+          case UserFunction(_, _, params) =>
+            //value = # args to function
+            if (params.length >= max.getOrElse(params.length)) {
+              max = Some(params.length)
+            }
+          case _ =>
+        }
+      )
+      max.getOrElse(0)
+  }
+
+    def avgArity(entryPoints: List[Int]): Float = {
+    var avg: Float = 0.0
+    var count: Float = 0.0
+    stmts
+      .foreach(inst =>
+        inst match {
+          case UserFunction(_, _, params) => {
+            count = count + 1
+            avg = (1 / count) * params.length + ((count - 1) / count) * avg
+          }
+          case _ =>
+        }
+      )
+      avg
   }
 
   def logicComponents(entryPoints: List[Int]): List[(String, Int)] = {
