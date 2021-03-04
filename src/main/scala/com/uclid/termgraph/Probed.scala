@@ -22,7 +22,9 @@ trait Probed() extends AbstractTermGraph {
       "Largest integer literal: " + largestIntegerLiteral(entryPoints).toString,
       "Logic components:\n" + logicComponents(entryPoints)
         .map((logic, fraction) => s"---- $logic: $fraction")
-        .mkString("\n")
+        .mkString("\n"),
+      "Max Arity: " + maxArity(entryPoints).toString,
+      "Avg Arity: " + avgArity(entryPoints).toString
     )
 
   def numberOfNodes(): Int = getStmts().length
