@@ -9,6 +9,8 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent._
 import scala.sys.process._
 
+val INFO = "(set-info :smt-lib-version 2.6)\n(set-info :category \"industrial\")\n(set-info :source |Generator: Uclid5.|)\n(set-info :status unknown)\n\n"
+
 abstract class Solver() {
 
   def runProcess(in: String, timeout: Int): (List[String], List[String], Int, Double) = {
@@ -73,9 +75,12 @@ abstract class Solver() {
       case Some(value) => value
       case None => {
         // need to call this first before checking if it is a synthesis query
-        val query = generateQuery(ctx, prettyPrint)
+        var query = generateQuery(ctx, prettyPrint)
         val suffix = if (ctx.termgraph.isSynthesisQuery) { ".sl" }
-        else { ".smt2" }
+        else { 
+          query = INFO + query
+          ".smt2" 
+        }
         writeQueryToFile(query, outFile, suffix).getAbsolutePath()
       }
     }
