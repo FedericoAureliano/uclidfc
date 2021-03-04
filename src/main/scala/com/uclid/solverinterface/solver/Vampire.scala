@@ -35,7 +35,7 @@ class Vampire() extends Solver() {
   def getCommand(): String =
     "vampire --mode smtcomp --input_syntax smtlib2 --term_algebra_acyclicity light --term_algebra_rules on --fmb_enumeration_strategy smt"
 
-  def generateQuery(ctx: Context, prettyPrint: Boolean): String = {
+  def generateQuery(ctx: Context, prettyPrint: Int): String = {
     val query = ctx.toQuery(prettyPrint)
 
     // find the set logic command

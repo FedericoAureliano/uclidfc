@@ -8,7 +8,7 @@ import scala.sys.process._
 class AltErgo() extends Solver() {
   def getCommand(): String = "alt-ergo -enable-adts-cs"
 
-  def generateQuery(ctx: Context, prettyPrint: Boolean): String = {
+  def generateQuery(ctx: Context, prettyPrint: Int): String = {
     // get the query but remove the set logic and set-option commands
     val query = ctx
       .toQuery(prettyPrint)

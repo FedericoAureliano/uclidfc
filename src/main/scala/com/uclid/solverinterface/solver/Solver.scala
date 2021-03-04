@@ -56,7 +56,7 @@ abstract class Solver() {
     f
   }
 
-  def generateQuery(ctx: Context, prettyPrint: Boolean): String
+  def generateQuery(ctx: Context, prettyPrint: Int): String
   def getCommand(): String
   def parseAnswer(answer: String): String
 
@@ -65,7 +65,7 @@ abstract class Solver() {
     timeout: Int,
     ctx: Context,
     outFile: Option[String],
-    prettyPrint: Boolean,
+    prettyPrint: Int,
     unmodifiedSMTFile: Option[File] = None
   ): (ProofResult, Double, Double) = {
 

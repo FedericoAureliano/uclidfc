@@ -750,7 +750,7 @@ object UclidCompiler {
           termgraph.stmts(p) match {
             case FunctionParameter(_, sort) =>
               val vRef =
-                termgraph.memoAddInstruction(Application(termgraph.addInstruction(UserFunction(Util.freshSymbolName(), sort)), List.empty))
+                termgraph.memoAddInstruction(Application(termgraph.memoAddInstruction(UserFunction(Util.freshSymbolName(), sort)), List.empty))
               vRef
           }
         }

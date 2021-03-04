@@ -5,6 +5,14 @@ import com.uclid.termgraph._
 import scala.collection.immutable.Nil
 import scala.collection.mutable._
 
+val TAB = "  "
+
+sealed abstract class ToPrint
+sealed case class Direct(str: String) extends ToPrint
+sealed case class Jump(pos: Int) extends ToPrint
+sealed case class NewLine() extends ToPrint
+sealed case class Indent(amount: Int) extends ToPrint
+
 sealed trait Command
 case class Assert(t: Int) extends Command
 case class Check() extends Command
@@ -12,6 +20,10 @@ case class Check() extends Command
 class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
   override def ignoreResult() = false
   var script: List[Command] = List.empty
+
+  protected var prettyPrint = 0;
+
+  def newline() = if (prettyPrint > 0) {"\n"} else {" "}
 
   override def entryPoints() = script.foldLeft(List.empty)((acc, c) => {
     c match {
@@ -26,11 +38,8 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
   def checkSat(): Unit =
     script = script ++ List(Check()
 )
-  def toQuery(prettyPrint: Boolean): String = {
-    if (!prettyPrint) {
-      TAB = ""
-      NEWLINE = " "
-    }
+  def toQuery(pp: Int): String = {
+    prettyPrint = pp
     val logic = s"(set-logic ${termgraph.queryLogic(entryPoints())})"
     val ctx = programToQueryCtx(termgraph.mark(entryPoints()))
     val body = script
@@ -40,9 +49,9 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
           case Check()   => "(check-sat)"
         }
       }
-      .mkString(s"$NEWLINE")
+      .mkString(s"${newline()}")
 
-    logic + "\n" + ctx + "\n" + body
+    logic + s"${newline()}" + ctx + s"${newline()}" + body
   }
 
   protected val options: ListBuffer[(String, String)] =
@@ -52,8 +61,6 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
     options.addOne((option, value))
 
   protected val alreadyDeclared = new HashSet[Int]()
-  protected var TAB = "  "
-  protected var NEWLINE = "\n"
 
   protected def programPointToQueryTerm(
     point: Int,
@@ -63,13 +70,29 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
     var indent = indentInput
 
     val out = new StringBuilder()
-    val stack = new Stack[Either[Int, String]]()
+    val stack = new Stack[ToPrint]()
 
-    stack.push(Left(point))
+    def pushAssignmentComment(sel: Int) = {
+      if (prettyPrint > 0) {
+        stack.push(NewLine())
+        stack.push(Direct(s"; assigning to ${termgraph.stmts(sel).asInstanceOf[Selector].name}"))
+      } else {
+        stack.push(Direct(" "))
+      }
+    }
+
+    def pushDebugComment(inst: Instruction) = {
+      if (prettyPrint > 1) {
+        stack.push(NewLine())
+        stack.push(Direct(s"; Instruction: ${inst} @${termgraph.memoGetInstruction(inst)}"))
+      }
+    }
+
+    stack.push(Jump(point))
 
     while (!stack.isEmpty) {
       stack.pop() match {
-        case Left(position) => {
+        case Jump(position) => {
           termgraph.stmts(position) match {
             case a: Application       => applicationToQueryTerm(a)
             case c: Constructor       => constructorToQueryTerm(c)
@@ -80,13 +103,13 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
             case r: Ref =>
               if (!noMemo && !termgraph.isSynthesisQuery && !alreadyDeclared.contains(r.loc) && r.named.isDefined) {
                 alreadyDeclared.add(r.loc)
-                stack.push(Right(s" :named ${r.named.get})"))
-                stack.push(Left(r.loc))
-                stack.push(Right("(! "))
+                stack.push(Direct(s" :named ${r.named.get})"))
+                stack.push(Jump(r.loc))
+                stack.push(Direct("(! "))
               } else if (!noMemo && !termgraph.isSynthesisQuery && alreadyDeclared.contains(r.loc) && r.named.isDefined) {
-                stack.push(Right(r.named.get))
+                stack.push(Direct(r.named.get))
               } else {
-                stack.push(Left(r.loc))
+                stack.push(Jump(r.loc))
               }
             case t: TheoryMacro  => theorymacroToQueryTerm(t)
             case t: TheorySort   => theorysortToQueryTerm(t)
@@ -97,116 +120,134 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
             case m: Module       => moduleToQueryTerm(m)
           }
         }
-        case Right(str) => {
-          out.addAll(str)
-          if (str == "\n") {
-            out.addAll(s"${TAB * indent}")
-          } else if (str == "(") {
-            indent += 1
-          } else if (str == ")") {
-            indent -= 1
-          }
+        case Direct(str) => out.addAll(str)
+        case Indent(change) => indent += change
+        case NewLine() => if (prettyPrint > 0) {
+          out.addAll(s"\n${TAB * indent}")
+        } else {
+          out.addAll(" ")
         }
       }
     }
 
 
     // Helper functions that deal with each case
-
-    def applicationToQueryTerm(a: Application): Unit =
+    def applicationToQueryTerm(a: Application): Unit = {
+      pushDebugComment(a)
       if (a.args.length > 1) {
-        stack.push(Right(")"))
+        stack.push(Indent(-1))
+        stack.push(Direct(")"))
         a.args.reverse.zipWithIndex
           .foreach { p =>
             if (p._2 != 0) {
-              stack.push(Right(s"$NEWLINE"))
+              stack.push(NewLine())
             }
             // if we have a constructor lets label the arguments
             if (termgraph.stmts(a.caller).isInstanceOf[Constructor]) {
               //get the ith selector
               val ctr = termgraph.stmts(a.caller).asInstanceOf[Constructor]
-              stack.push(Left(p._1))
-              stack.push(Right(s"\n"))
-              stack.push(Left(ctr.selectors.reverse(p._2)))
-              stack.push(Right("; assigning to "))
+              stack.push(Jump(p._1))
+              pushAssignmentComment(ctr.selectors.reverse(p._2))
             } else {
-              stack.push(Left(p._1))
+              stack.push(Jump(p._1))
             }
           }
-        stack.push(Right(s"$NEWLINE"))
-        stack.push(Left(a.caller))
-        stack.push(Right("("))
+        stack.push(NewLine())
+        stack.push(Indent(1))
+        stack.push(Jump(a.caller))
+        stack.push(Direct("("))
       } else {
         if (a.args.length == 1) {
-          stack.push(Right(")"))
-          stack.push(Left(a.args(0)))
-          stack.push(Right(" "))
-          stack.push(Left(a.caller))
-          stack.push(Right("("))
+          stack.push(Direct(")"))
+          stack.push(Jump(a.args(0)))
+          stack.push(Direct(" "))
+          stack.push(Jump(a.caller))
+          stack.push(Direct("("))
         } else {
-          stack.push(Left(a.caller))
+          stack.push(Jump(a.caller))
         }
       }
+    }
 
-    def constructorToQueryTerm(c: Constructor): Unit =
-      stack.push(Right(c.name))
+    def constructorToQueryTerm(c: Constructor): Unit = {
+      pushDebugComment(c)
+      stack.push(Direct(c.name))
+    }
 
-    def datatypeToQueryTerm(d: DataType): Unit =
-      stack.push(Right(d.name))
+    def datatypeToQueryTerm(d: DataType): Unit = {
+      pushDebugComment(d)
+      stack.push(Direct(d.name))
+    }
 
-    def functionparameterToQueryTerm(f: FunctionParameter): Unit =
-      stack.push(Right(f.name))
+    def functionparameterToQueryTerm(f: FunctionParameter): Unit = {
+      pushDebugComment(f)
+      stack.push(Direct(f.name))
+    }
 
-    def selectorToQueryTerm(s: Selector): Unit =
-      stack.push(Right(s.name))
+    def selectorToQueryTerm(s: Selector): Unit = {
+      pushDebugComment(s)
+      stack.push(Direct(s.name))
+    }
 
     def numeralToQueryTerm(n: Numeral): Unit =
-      stack.push(Right(n.value.toString()))
+      stack.push(Direct(n.value.toString()))
 
-    def theorymacroToQueryTerm(t: TheoryMacro): Unit =
+    def theorymacroToQueryTerm(t: TheoryMacro): Unit = {
+      pushDebugComment(t)
       if (t.name == "forall" || t.name == "exists") {
-        stack.push(Right(")"))
+        stack.push(Direct(")"))
         t.params.reverse.foreach { s =>
           val sel = termgraph.stmts(s).asInstanceOf[FunctionParameter]
-          stack.push(Right(s"(${sel.name} ${programPointToQueryTerm(sel.sort, 0)})"))
+          stack.push(Direct(s"(${sel.name} ${programPointToQueryTerm(sel.sort, 0)})"))
         }
-        stack.push(Right(s"${t.name} ("))
+        stack.push(Direct(s"${t.name} ("))
       } else if (t.name == "as const") {
-        stack.push(Right(s"(${t.name} ${programPointToQueryTerm(t.params(0), 0)})"))
+        stack.push(Direct(s"(${t.name} ${programPointToQueryTerm(t.params(0), 0)})"))
       } else {
-        stack.push(Right(t.name))
+        stack.push(Direct(t.name))
       }
+    }
 
-    def theorysortToQueryTerm(t: TheorySort): Unit =
+    def theorysortToQueryTerm(t: TheorySort): Unit = {
+      pushDebugComment(t)
       if (t.params.length > 0) {
-        stack.push(Right(")"))
+        stack.push(Direct(")"))
         t.params.reverse.foreach(p => {
-          stack.push(Left(p))
-          stack.push(Right(" "))
+          stack.push(Jump(p))
+          stack.push(Direct(" "))
         })
-        stack.push(Right(s"(${t.name} "))
+        stack.push(Direct(s"(${t.name} "))
       } else {
-        stack.push(Right(t.name))
+        stack.push(Direct(t.name))
       }
+    }
 
-    def userfunctionToQueryTerm(u: UserFunction): Unit =
-      stack.push(Right(u.name))
+    def userfunctionToQueryTerm(u: UserFunction): Unit = {
+      pushDebugComment(u)
+      stack.push(Direct(u.name))
+    }
 
-    def usermacroToQueryTerm(u: UserMacro): Unit =
-      stack.push(Right(u.name))
-
+    def usermacroToQueryTerm(u: UserMacro): Unit = {
+      pushDebugComment(u)
+      stack.push(Direct(u.name))
+    }
     def synthesisToQueryTerm(s: Synthesis): Unit = {
+      pushDebugComment(s)
       if (!termgraph.isSynthesisQuery) {
         throw new SemanticError("Must be a synthesis query!")
       }
-      stack.push(Right(s.name))
+      stack.push(Direct(s.name))
     }
 
-    def usersortToQueryTerm(u: UserSort): Unit =
-      stack.push(Right(u.name))
+    def usersortToQueryTerm(u: UserSort): Unit = {
+      pushDebugComment(u)
+      stack.push(Direct(u.name))
+    }
 
-    def moduleToQueryTerm(m: Module): Unit =
-      stack.push(Right(m.name))
+    def moduleToQueryTerm(m: Module): Unit = {
+      pushDebugComment(m)
+      stack.push(Direct(m.name))
+    }
 
     out.toString()
   }
@@ -226,7 +267,7 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
             val dispatched =
               List(dispatch(u.body), Some(usermacroToQueryCtx(u))).flatten
             if (dispatched.length > 0) {
-              Some(dispatched.mkString(s"$NEWLINE"))
+              Some(dispatched.mkString(s"${newline()}"))
             } else {
               None
             }
@@ -236,7 +277,7 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
             val dispatched =
               (List(a.caller) ++ a.args).map(a => dispatch(a)).flatten
             if (dispatched.length > 0) {
-              Some(dispatched.mkString(s"$NEWLINE"))
+              Some(dispatched.mkString(s"${newline()}"))
             } else {
               None
             }
@@ -258,7 +299,7 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
         tmp ++= s"(${ctr.name}"
         indent += 1
         ctr.selectors.foreach { s =>
-          tmp ++= s"$NEWLINE"
+          tmp ++= s"${newline()}"
           val sel = termgraph.stmts(s).asInstanceOf[Selector]
           tmp ++= s"${TAB * indent}(${sel.name} ${programPointToQueryTerm(sel.sort, indent)})"
         }
@@ -303,7 +344,7 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
         }
         .mkString(" ")}) "
 
-      tmp ++= s"${programPointToQueryTerm(u.sort, indent)}$NEWLINE"
+      tmp ++= s"${programPointToQueryTerm(u.sort, indent)}${newline()}"
       indent += 1
       tmp ++= s"${TAB * indent}${programPointToQueryTerm(u.body, indent)})"
       indent -= 1
@@ -323,7 +364,7 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
         }
         .mkString(" ")}) "
 
-      tmp ++= s"${programPointToQueryTerm(u.sort, indent)})$NEWLINE"
+      tmp ++= s"${programPointToQueryTerm(u.sort, indent)})${newline()}"
 
       tmp.toString()
     }
@@ -334,24 +375,24 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
     def moduleToQueryCtx(m: Module): String = {
       val tmp = new StringBuilder()
       val ctr = termgraph.stmts(m.ct).asInstanceOf[Constructor]
-      tmp ++= s"${TAB * indent}; declaring module ${m.name}\n"
+      if (prettyPrint > 0) {tmp ++= s"${TAB * indent}; declaring module ${m.name}\n"}
       indent += 1
       tmp ++= s"${TAB * indent}(declare-datatypes ((${m.name} 0)) (((${ctr.name}"
       indent += 1
       ctr.selectors.foreach { s =>
-        tmp ++= s"$NEWLINE"
+        tmp ++= s"${newline()}"
         val sel = termgraph.stmts(s).asInstanceOf[Selector]
         tmp ++= s"${TAB * indent}(${sel.name} ${programPointToQueryTerm(sel.sort, indent)})"
       }
-      tmp ++= s"))))$NEWLINE$NEWLINE"
+      tmp ++= s"))))${newline()}"
       indent -= 1
       val init = dispatch(m.init)
       val next = dispatch(m.next)
       val spec = dispatch(m.spec)
 
-      tmp ++= List(init, next, spec).flatten.mkString(s"$NEWLINE")
+      tmp ++= List(init, next, spec).flatten.mkString(s"${newline()}")
       indent -= 1
-      tmp ++= s"${TAB * indent}\n; done declaring module ${m.name}\n"
+      if (prettyPrint > 0) {tmp ++= s"${TAB * indent}\n; done declaring module ${m.name}\n"}
 
       tmp.toString()
     }
@@ -359,6 +400,6 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
     termgraph.stmts.zipWithIndex
       .map(p => dispatch(p._2))
       .flatten
-      .mkString(s"$NEWLINE")
+      .mkString(s"${newline()}")
   }
 }

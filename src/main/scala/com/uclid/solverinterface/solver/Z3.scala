@@ -8,7 +8,7 @@ import scala.sys.process._
 class Z3() extends Solver() {
   def getCommand(): String = "z3"
 
-  def generateQuery(ctx: Context, prettyPrint: Boolean): String = {
+  def generateQuery(ctx: Context, prettyPrint: Int): String = {
     // get the query but remove the set logic command
     val query = ctx
       .toQuery(prettyPrint)

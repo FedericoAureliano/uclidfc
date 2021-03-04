@@ -22,23 +22,20 @@ class UclidContext(termgraph: TermGraph) extends SyMTContext(termgraph) {
 
   override def entryPoints() = assertionRefs.toList ++ axiomRefs ++ getValues.getOrElse(List.empty)
 
-  override def toQuery(prettyPrint: Boolean): String = {
-    if (!prettyPrint) {
-      TAB = ""
-      NEWLINE = " "
-    }
+  override def toQuery(pp: Int): String = {
+    prettyPrint = pp
     alreadyDeclared.clear()
     val logic = termgraph.queryLogic(entryPoints())
     val logicString = s"(set-logic ${logic})"
-    val opts = options.map(o => s"(set-option :${o._1} ${o._2})").mkString("\n")
+    val opts = options.map(o => s"(set-option :${o._1} ${o._2})").mkString(s"${newline()}")
 
     val axiomStrings = axiomRefs
       .map(r => s"${TAB * 1}${programPointToQueryTerm(r, 1)}")
-      .mkString("\n")
+      .mkString(s"${newline()}")
 
     val assertionStrings = assertionRefs
       .map(r => s"${TAB * 2}${programPointToQueryTerm(r, 2)}")
-      .mkString("\n")
+      .mkString(s"${newline()}")
 
     val spec = (assertionRefs.length > 0, axiomRefs.length > 0) match {
       case (true, true) =>
