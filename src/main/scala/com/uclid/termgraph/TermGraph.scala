@@ -115,7 +115,7 @@ abstract class AbstractTermGraph() {
           case Ref(i)               => frontier.addOne(i)
           case Application(caller, args) =>
             frontier.addOne(caller); args.foreach(i => frontier.addOne(i))
-          case UserMacro(_, _, b, _) => frontier.addOne(b)
+          // case UserMacro(_, _, b, _) => frontier.addOne(b)
           case _ =>
         }
       }

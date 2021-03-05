@@ -30,6 +30,7 @@ trait Rewritable() extends AbstractTermGraph {
     }
 
     splitRecords(locations)
+    repair()
   }
 
   def splitRecords(locations: List[Int]): Unit = {
@@ -78,7 +79,7 @@ trait Rewritable() extends AbstractTermGraph {
           val umacro = getStmt(umacroPos).asInstanceOf[UserMacro]
           val bindings = umacro.params.map(p => {
             memoAddInstruction(Application(p, List.empty))
-          }).zip(args).filter((a, b) => a != b).toMap
+          }).zip(args.map(a => findTarget(a))).filter((a, b) => a != b).toMap
           if (!bindings.isEmpty) {
             val inlined = copyUpdateTerm(umacro.body, bindings)
             memoUpdateInstruction(p, Ref(inlined))
@@ -171,6 +172,7 @@ trait Rewritable() extends AbstractTermGraph {
         case _ =>
       }
     }
+    repair()
   }
 
   def indexOfGTZGadgets(): Unit = {
@@ -261,6 +263,7 @@ trait Rewritable() extends AbstractTermGraph {
         case _ =>
       }
     }
+    repair()
   }
 
   def assertionOverConjunction(assertion: Assert): List[Command] = {
@@ -321,6 +324,7 @@ trait Rewritable() extends AbstractTermGraph {
         case _ =>
       }
     }
+    repair()
   }
 
   /** "(replace c1 with c2 in x) contains c3" as "x contains c3" if c1 = c3 and c2 = c3; as "false" if c1 = c3 and c2 != c3; as "x contains c3" if c1 != c3 and c2 != c3; and "x contains c3 or x contains c1" if c1 != c3 and c2 == c3.
@@ -391,6 +395,7 @@ trait Rewritable() extends AbstractTermGraph {
         case _ =>
       }
     }
+    repair()
   }
 
   /** Rewrite quantifiers over enums to disjunctions/conjunctions
@@ -407,6 +412,7 @@ trait Rewritable() extends AbstractTermGraph {
       changeHappened = false
       (0 to getStmts().length - 1).foreach { p =>
         changeHappened = blastEnumQuantifier(p) || changeHappened
+        repair()
       }
     }
   }
@@ -499,9 +505,11 @@ trait Rewritable() extends AbstractTermGraph {
     */
   protected def copyUpdateTerm(pos: Int, map: Map[Int, Int]): Int = {
     require(map.forall((a, b) => getStmt(a).isInstanceOf[Application] == getStmt(b).isInstanceOf[Application]))
+    require(map.forall((a, b) => findTarget(a) == a && findTarget(b) == b))
     // try to rewrite the current position
-    map.get(pos) match {
-      case Some(value) => value
+    map.get(findTarget(pos)) match {
+      case Some(value) => 
+        value
       case None => {
         getStmt(pos) match {
           case Application(caller, args) =>
@@ -516,5 +524,8 @@ trait Rewritable() extends AbstractTermGraph {
         }
       }
     }
-  }
+  }.ensuring(out => {
+    val marks = terms(List(out))
+    map.forall((key, value) => !marks(key))
+  })
 }
