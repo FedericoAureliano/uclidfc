@@ -24,7 +24,6 @@ class UclidContext(termgraph: TermGraph) extends SyMTContext(termgraph) {
 
   override def toQuery(pp: Int): String = {
     prettyPrint = pp
-    alreadyDeclared.clear()
     val logic = termgraph.queryLogic(entryPoints())
     val logicString = s"(set-logic ${logic})"
     val opts = options.map(o => s"(set-option :${o._1} ${o._2})").mkString(s"${newline()}")
@@ -86,6 +85,12 @@ class UclidContext(termgraph: TermGraph) extends SyMTContext(termgraph) {
       ""
     }
 
-    s"$logicString\n$opts\n\n$body\n$postQuery"
+    val internal = if (prettyPrint > 1) {
+      "\n\n; " + termgraph.getStmts().zipWithIndex.map((inst, i) => s"${i}: ${inst}").mkString("\n; ")
+    } else {
+      ""
+    }
+
+    s"$logicString\n$opts\n\n$body\n$postQuery\n$internal"
   }
 }

@@ -10,7 +10,7 @@ abstract class AbstractDataType extends Instruction {
 }
 
 // Points to another position in the array
-case class Ref(loc: Int, named: Option[String]) extends Instruction {}
+case class Ref(loc: Int) extends Instruction {}
 
 /*
 Numerals are used for e.g. fixed-width bit-vectors

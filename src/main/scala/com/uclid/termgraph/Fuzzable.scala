@@ -6,7 +6,7 @@ import com.uclid.termgraph.Util
 trait Fuzzable() extends AbstractTermGraph {
 
   def fuzz(position: Int): Int =
-    stmts(position) match {
+    getStmt(position) match {
       case d: DataType   => fuzzDatatype(d)
       case t: TheorySort => fuzzTheorysort(t)
       case u: UserSort   => fuzzUsersort(u)
@@ -16,8 +16,8 @@ trait Fuzzable() extends AbstractTermGraph {
   private def fuzzModule(mod: Module): Int = {
     // apply constructor to random instances of all its selectors
     val components =
-      stmts(mod.ct).asInstanceOf[Constructor].selectors.map { s =>
-        val sel = stmts(s).asInstanceOf[Selector]
+      getStmt(mod.ct).asInstanceOf[Constructor].selectors.map { s =>
+        val sel = getStmt(s).asInstanceOf[Selector]
         fuzz(sel.sort)
       }
     val body = memoAddInstruction(Application(mod.ct, components))
@@ -31,8 +31,8 @@ trait Fuzzable() extends AbstractTermGraph {
     // pick a random constructor
     val ctr = d.constructors(Util.random.nextInt(d.constructors.length))
     // apply constructor to random instances of all its selectors
-    val components = stmts(ctr).asInstanceOf[Constructor].selectors.map { s =>
-      val sel = stmts(s).asInstanceOf[Selector]
+    val components = getStmt(ctr).asInstanceOf[Constructor].selectors.map { s =>
+      val sel = getStmt(s).asInstanceOf[Selector]
       fuzz(sel.sort)
     }
     val body = memoAddInstruction(Application(ctr, components))

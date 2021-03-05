@@ -15,13 +15,13 @@ trait Probed() extends AbstractTermGraph {
         .mkString("\n")
     )
 
-  def numberOfNodes(): Int = stmts.length
+  def numberOfNodes(): Int = getStmts().length
   def numberOfMemoEntries(): Int = memo.keys.toList.length
-  def numberOfVariables(): Int = stmts.filter(p => p.isInstanceOf[UserFunction]).length
+  def numberOfVariables(): Int = getStmts().filter(p => p.isInstanceOf[UserFunction]).length
 
   def largestIntegerLiteral(entryPoints: List[Int]): Option[Int] = {
     var max: Option[Int] = None
-    stmts
+    getStmts()
       .foreach(inst =>
         inst match {
           case TheoryMacro(name, _) =>
@@ -50,17 +50,17 @@ trait Probed() extends AbstractTermGraph {
     val marks = mark(entryPoints)
 
     marks
-      .zip(stmts)
+      .zip(getStmts())
       .foreach((marked, inst) =>
         if (marked) {
           inst match {
             case Application(caller, args) =>
               (caller :: args).foreach(pos => {
-                stmts(pos) match {
+                getStmt(pos) match {
                   case TheoryMacro("*", _) =>
                     if (
                       args.filter { a =>
-                        stmts(a) match {
+                        getStmt(a) match {
                           case TheoryMacro(name, _) =>
                             name.toIntOption.isDefined
                           case _ => false
@@ -120,17 +120,17 @@ trait Probed() extends AbstractTermGraph {
     val marks = mark(entryPoints)
 
     marks
-      .zip(stmts)
+      .zip(getStmts())
       .foreach((marked, inst) =>
         if (marked) {
           inst match {
             case _: AbstractDataType => dt = true
             case Application(caller, args) =>
-              stmts(caller) match {
+              getStmt(caller) match {
                 case TheoryMacro("*", _) =>
                   if (
                     args.filter { a =>
-                      stmts(a) match {
+                      getStmt(a) match {
                         case TheoryMacro(name, _) =>
                           name.toIntOption.isDefined
                         case _ => false

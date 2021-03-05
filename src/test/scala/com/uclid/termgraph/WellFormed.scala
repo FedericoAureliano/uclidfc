@@ -15,7 +15,7 @@ class TestWellFormed {
     val integer = TheorySort("Int") // 4
 
     val tg = new TermGraph()
-    tg.stmts.addAll(ArrayBuffer(head, body, arg, plus, integer))
+    tg.getStmts().addAll(ArrayBuffer(head, body, arg, plus, integer))
     tg.checkRefBounds()
   }
 }

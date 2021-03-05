@@ -76,6 +76,7 @@ abstract class Solver() {
       case None => {
         // need to call this first before checking if it is a synthesis query
         var query = generateQuery(ctx, prettyPrint)
+        assert(query != "", "Empty query!")
         val suffix = if (ctx.termgraph.isSynthesisQuery) { ".sl" }
         else { 
           query = INFO + query

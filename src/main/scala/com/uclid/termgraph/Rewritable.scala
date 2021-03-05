@@ -13,7 +13,7 @@ trait Rewritable() extends AbstractTermGraph {
     var locations : List[Int] = terms(startingPoints).zipWithIndex.map((a, b) => if (a) {Some(b)} else {None}).flatten.toList
     while (keepGoing) { 
       // do this iteratively in a loop to avoid big blowup from inlining (which creates many destruct/construct applications)
-      
+
       // inline one macro
       inlineResult = inlineMacros(locations, 1)
       // reduce all "select y from construct {x=a ... y=b ... z=c}" to "b"
@@ -28,13 +28,13 @@ trait Rewritable() extends AbstractTermGraph {
 
   def splitRecords(locations: List[Int]): Unit = {
     locations.foreach(p => {
-      stmts(p) match {
-        case u : UserFunction if u.params.length == 0 && stmts(u.sort).isInstanceOf[AbstractDataType] => {
-          val toReplace = stmts(u.sort) match {
-            case DataType(_, ctRef::Nil) if stmts(ctRef).asInstanceOf[Constructor].selectors.length > 0 => {
-              val ct = stmts(ctRef).asInstanceOf[Constructor]
+      getStmt(p) match {
+        case u : UserFunction if u.params.length == 0 && getStmt(u.sort).isInstanceOf[AbstractDataType] => {
+          val toReplace = getStmt(u.sort) match {
+            case DataType(_, ctRef::Nil) if getStmt(ctRef).asInstanceOf[Constructor].selectors.length > 0 => {
+              val ct = getStmt(ctRef).asInstanceOf[Constructor]
               ct.selectors.map(s => {
-                val sel = stmts(s).asInstanceOf[Selector]
+                val sel = getStmt(s).asInstanceOf[Selector]
                 val fresh = memoAddInstruction(Application(memoAddInstruction(UserFunction(Util.freshSymbolName(), sel.sort)), List.empty))
                 // now replace all "select s from u" terms with "fresh"
                 val selSfromU = memoAddInstruction(Application(s, List(memoAddInstruction(Application(p, List.empty)))))
@@ -42,9 +42,9 @@ trait Rewritable() extends AbstractTermGraph {
               })
             }
             case Module(_, ctRef, _, _, _) => {
-              val ct = stmts(ctRef).asInstanceOf[Constructor]
+              val ct = getStmt(ctRef).asInstanceOf[Constructor]
               ct.selectors.map(s => {
-                val sel = stmts(s).asInstanceOf[Selector]
+                val sel = getStmt(s).asInstanceOf[Selector]
                 val fresh = memoAddInstruction(Application(memoAddInstruction(UserFunction(Util.freshSymbolName(), sel.sort)), List.empty))
                 // now replace all "select s from u" terms with "fresh"
                 val selSfromU = memoAddInstruction(Application(s, List(memoAddInstruction(Application(p, List.empty)))))
@@ -53,29 +53,29 @@ trait Rewritable() extends AbstractTermGraph {
             }
             case _ => List.empty
           }
-          locations.foreach(l => if (stmts(l).isInstanceOf[Ref] || stmts(l).isInstanceOf[Application]) {
-              updateTerm(l, toReplace.toMap)
+          locations.foreach(l => if (getStmt(l).isInstanceOf[Ref] || getStmt(l).isInstanceOf[Application]) {
+              copyUpdateTerm(l, toReplace.toMap)
             })
         }
         case _ => 
       }
     })
-    repair()
   }
 
   def inlineMacros(locations: List[Int], bound: Int): Boolean = {
     var changed = false
     var count = bound
     locations.foreach { p =>
-      stmts(p) match {
+      getStmt(p) match {
         case Application(umacroPos, args)
-            if stmts(umacroPos).isInstanceOf[UserMacro] =>
-          val umacro = stmts(umacroPos).asInstanceOf[UserMacro]
-          val bindings = umacro.params.zip(args).filter((a, b) => a != b).toMap
+            if getStmt(umacroPos).isInstanceOf[UserMacro] =>
+          val umacro = getStmt(umacroPos).asInstanceOf[UserMacro]
+          val bindings = umacro.params.map(p => {
+            memoAddInstruction(Application(p, List.empty))
+          }).zip(args).filter((a, b) => a != b).toMap
           if (!bindings.isEmpty) {
-            val inlined = copyTerm(umacro.body)
-            updateTerm(inlined, bindings)
-            memoUpdateInstruction(p, Ref(inlined, None))
+            val inlined = copyUpdateTerm(umacro.body, bindings)
+            memoUpdateInstruction(p, Ref(inlined))
             changed = true
             count = count - 1
             if (count == 0) {
@@ -85,7 +85,6 @@ trait Rewritable() extends AbstractTermGraph {
         case _ =>
       }
     }
-    repair()
     changed
   }
 
@@ -93,16 +92,16 @@ trait Rewritable() extends AbstractTermGraph {
     var changed = false
     var count = bound
     locations.foreach { p =>
-      stmts(p) match {
+      getStmt(p) match {
         case Application(selRef, app :: Nil)
-            if stmts(selRef).isInstanceOf[Selector] =>
-          stmts(app) match {
+            if getStmt(selRef).isInstanceOf[Selector] =>
+          getStmt(app) match {
             case Application(ctrRef, args)
-                if stmts(ctrRef).isInstanceOf[Constructor] =>
-              val ctr = stmts(ctrRef).asInstanceOf[Constructor]
+                if getStmt(ctrRef).isInstanceOf[Constructor] =>
+              val ctr = getStmt(ctrRef).asInstanceOf[Constructor]
               val index = ctr.selectors.indexOf(selRef)
               if (index >= 0) {
-                memoUpdateInstruction(p, stmts(args(index)))
+                memoUpdateInstruction(p, Ref(args(index)))
                 changed = true
                 count = count - 1
                 if (count == 0) {
@@ -111,15 +110,15 @@ trait Rewritable() extends AbstractTermGraph {
               }
             case r: Ref =>
               var appRef = r.loc
-              while (stmts(appRef).isInstanceOf[Ref])
-                appRef = stmts(appRef).asInstanceOf[Ref].loc
-              stmts(appRef) match {
+              while (getStmt(appRef).isInstanceOf[Ref])
+                appRef = getStmt(appRef).asInstanceOf[Ref].loc
+              getStmt(appRef) match {
                 case Application(ctrRef, args)
-                    if stmts(ctrRef).isInstanceOf[Constructor] =>
-                  val ctr = stmts(ctrRef).asInstanceOf[Constructor]
+                    if getStmt(ctrRef).isInstanceOf[Constructor] =>
+                  val ctr = getStmt(ctrRef).asInstanceOf[Constructor]
                   val index = ctr.selectors.indexOf(selRef)
                   if (index >= 0) {
-                    memoUpdateInstruction(p, stmts(args(index)))
+                    memoUpdateInstruction(p, Ref(args(index)))
                     changed = true
                     count = count - 1
                     if (count == 0) {
@@ -133,59 +132,56 @@ trait Rewritable() extends AbstractTermGraph {
         case _ =>
       }
     }
-    repair()
     changed
   }
 
   def plusMinusZero(): Unit = {
-    (0 to stmts.length - 1).foreach { p =>
-      stmts(p) match {
+    (0 to getStmts().length - 1).foreach { p =>
+      getStmt(p) match {
         case Application(plus, args)
-            if stmts(plus) == TheoryMacro("+", List.empty) =>
+            if getStmt(plus) == TheoryMacro("+", List.empty) =>
           val newArgs: List[Int] = args.foldLeft(List.empty) { (acc, a) =>
-            stmts(a) match {
+            getStmt(a) match {
               case TheoryMacro("0", _) => acc
               case _                   => acc ++ List(a)
             }
           }
           if (newArgs.length == 0) {
-            memoUpdateInstruction(p, TheoryMacro("0", List.empty))
-          } else {
-            memoUpdateInstruction(p, Application(plus, newArgs))
+            memoUpdateInstruction(p, Ref(memoAddInstruction(TheoryMacro("0", List.empty))))
+          } else if (newArgs.length < args.length) {
+            memoUpdateInstruction(p, Ref(memoAddInstruction(Application(plus, newArgs))))
           }
         case Application(minus, x :: y :: Nil)
-            if stmts(minus) == TheoryMacro("-", List.empty) =>
-          if (stmts(x) == TheoryMacro("0", List.empty)) {
-            memoUpdateInstruction(p, Application(minus, y :: Nil))
-          } else if (stmts(y) == TheoryMacro("0", List.empty)) {
-            memoUpdateInstruction(p, stmts(x))
+            if getStmt(minus) == TheoryMacro("-", List.empty) =>
+          if (getStmt(x) == TheoryMacro("0", List.empty)) {
+            memoUpdateInstruction(p, Ref(memoAddInstruction(Application(minus, y :: Nil))))
+          } else if (getStmt(y) == TheoryMacro("0", List.empty)) {
+            memoUpdateInstruction(p, Ref(x))
           }
         case _ =>
       }
     }
-    repair()
   }
 
   def indexOfGTZGadgets(): Unit = {
-
-    (0 to stmts.length - 1).foreach { p =>
-      stmts(p) match {
+    (0 to getStmts().length - 1).foreach { p =>
+      getStmt(p) match {
         // index of c in x >= 0 means x contains c
         case Application(gte, t :: zero :: Nil)
-            if stmts(zero) == TheoryMacro("0", List.empty) =>
-          stmts(gte) match {
+            if getStmt(zero) == TheoryMacro("0", List.empty) =>
+          getStmt(gte) match {
             case TheoryMacro(">=", _) =>
-              stmts(t) match {
+              getStmt(t) match {
                 case Application(indexof, x :: needle :: offset :: Nil)
                     if offset == zero =>
-                  stmts(indexof) match {
+                  getStmt(indexof) match {
                     case TheoryMacro("str.indexof", _) =>
                       val contains = memoAddInstruction(
                         TheoryMacro("str.contains", List.empty)
                       )
                       memoUpdateInstruction(
                         p,
-                        Application(contains, x :: needle :: Nil)
+                        Ref(memoAddInstruction(Application(contains, x :: needle :: Nil)))
                       )
                     case _ =>
                   }
@@ -195,13 +191,13 @@ trait Rewritable() extends AbstractTermGraph {
           }
         // index of c in x < 0 means x does not contain c
         case Application(lt, t :: zero :: Nil)
-            if stmts(zero) == TheoryMacro("0", List.empty) =>
-          stmts(lt) match {
+            if getStmt(zero) == TheoryMacro("0", List.empty) =>
+          getStmt(lt) match {
             case TheoryMacro("<", _) =>
-              stmts(t) match {
+              getStmt(t) match {
                 case Application(indexof, x :: needle :: offset :: Nil)
                     if offset == zero =>
-                  stmts(indexof) match {
+                  getStmt(indexof) match {
                     case TheoryMacro("str.indexof", _) =>
                       val contains = memoAddInstruction(
                         TheoryMacro("str.contains", List.empty)
@@ -213,7 +209,7 @@ trait Rewritable() extends AbstractTermGraph {
                       )
                       memoUpdateInstruction(
                         p,
-                        Application(not, List(containsApp))
+                        Ref(memoAddInstruction(Application(not, List(containsApp))))
                       )
                     case _ =>
                   }
@@ -223,16 +219,16 @@ trait Rewritable() extends AbstractTermGraph {
           }
         // index of c in x = -1 means x does not contain c
         case Application(eq, t :: minusOne :: Nil)
-            if stmts(eq) == TheoryMacro("=") =>
-          stmts(minusOne) match {
+            if getStmt(eq) == TheoryMacro("=") =>
+          getStmt(minusOne) match {
             case Application(minus, one :: Nil)
-                if stmts(minus) == TheoryMacro("-") && stmts(
+                if getStmt(minus) == TheoryMacro("-") && getStmt(
                   one
                 ) == TheoryMacro("1") =>
-              stmts(t) match {
+              getStmt(t) match {
                 case Application(indexof, x :: needle :: zero :: Nil)
-                    if stmts(zero) == TheoryMacro("0", List.empty) =>
-                  stmts(indexof) match {
+                    if getStmt(zero) == TheoryMacro("0", List.empty) =>
+                  getStmt(indexof) match {
                     case TheoryMacro("str.indexof", _) =>
                       val contains = memoAddInstruction(
                         TheoryMacro("str.contains", List.empty)
@@ -244,7 +240,7 @@ trait Rewritable() extends AbstractTermGraph {
                       )
                       memoUpdateInstruction(
                         p,
-                        Application(not, List(containsApp))
+                        Ref(memoAddInstruction(Application(not, List(containsApp))))
                       )
                     case _ =>
                   }
@@ -255,7 +251,6 @@ trait Rewritable() extends AbstractTermGraph {
         case _ =>
       }
     }
-    repair()
   }
 
   def assertionOverConjunction(assertion: Assert): List[Command] = {
@@ -266,9 +261,9 @@ trait Rewritable() extends AbstractTermGraph {
       newCommands = newCommands.foldLeft(List.empty)((acc1, c) =>
         c match {
           case ass: Assert =>
-            stmts(ass.t) match {
+            getStmt(ass.t) match {
               case Application(op, operands) =>
-                stmts(op) match {
+                getStmt(op) match {
                   case TheoryMacro("and", _) =>
                     changeHappened = true
                     acc1 ++ operands.foldLeft(List.empty)((acc2, o) =>
@@ -282,23 +277,22 @@ trait Rewritable() extends AbstractTermGraph {
         }
       )
     }
-    repair()
     newCommands
   }
 
   def containsOverConcat(): Unit = {
-    (0 to stmts.length - 1).foreach { p =>
-      stmts(p) match {
+    (0 to getStmts().length - 1).foreach { p =>
+      getStmt(p) match {
         case Application(contains, haystack :: needle :: Nil)
-            if stmts(needle).isInstanceOf[TheoryMacro] && stmts(needle)
+            if getStmt(needle).isInstanceOf[TheoryMacro] && getStmt(needle)
               .asInstanceOf[TheoryMacro]
               .name
               .length == 3 =>
-          stmts(contains) match {
+          getStmt(contains) match {
             case TheoryMacro("str.contains", _) =>
-              stmts(haystack) match {
+              getStmt(haystack) match {
                 case Application(concat, strings) =>
-                  stmts(concat) match {
+                  getStmt(concat) match {
                     case TheoryMacro("str.++", _) =>
                       // we have a contains over a concat. Make it a disjunction
                       val orRef = memoAddInstruction(TheoryMacro("or"))
@@ -307,7 +301,7 @@ trait Rewritable() extends AbstractTermGraph {
                           Application(contains, List(s, needle))
                         )
                       }
-                      memoUpdateInstruction(p, Application(orRef, components))
+                      memoUpdateInstruction(p, Ref(memoAddInstruction(Application(orRef, components))))
                     case _ =>
                   }
                 case _ =>
@@ -317,64 +311,65 @@ trait Rewritable() extends AbstractTermGraph {
         case _ =>
       }
     }
-    repair()
   }
 
   /** "(replace c1 with c2 in x) contains c3" as "x contains c3" if c1 = c3 and c2 = c3; as "false" if c1 = c3 and c2 != c3; as "x contains c3" if c1 != c3 and c2 != c3; and "x contains c3 or x contains c1" if c1 != c3 and c2 == c3.
     */
   def containsOverReplace(): Unit = {
-    (0 to stmts.length - 1).foreach { p =>
-      stmts(p) match {
+    (0 to getStmts().length - 1).foreach { p =>
+      getStmt(p) match {
         case Application(contains, haystack :: needle :: Nil)
-            if stmts(needle).isInstanceOf[TheoryMacro] && stmts(needle)
+            if getStmt(needle).isInstanceOf[TheoryMacro] && getStmt(needle)
               .asInstanceOf[TheoryMacro]
               .name
               .length == 3 =>
-          stmts(contains) match {
+          getStmt(contains) match {
             case TheoryMacro("str.contains", _) =>
-              stmts(haystack) match {
+              getStmt(haystack) match {
                 case Application(replace, x :: oldChar :: newChar :: Nil)
-                    if stmts(oldChar).isInstanceOf[TheoryMacro] && stmts(
+                    if getStmt(oldChar).isInstanceOf[TheoryMacro] && getStmt(
                       oldChar
-                    ).asInstanceOf[TheoryMacro].name.length == 3 && stmts(
+                    ).asInstanceOf[TheoryMacro].name.length == 3 && getStmt(
                       newChar
-                    ).isInstanceOf[TheoryMacro] && stmts(newChar)
+                    ).isInstanceOf[TheoryMacro] && getStmt(newChar)
                       .asInstanceOf[TheoryMacro]
                       .name
                       .length == 3 =>
-                  stmts(replace) match {
+                  getStmt(replace) match {
                     case TheoryMacro("str.replace", _) =>
                       if (oldChar == needle && newChar != needle) {
                         memoUpdateInstruction(
                           p,
-                          TheoryMacro("false", List.empty)
+                          Ref(memoAddInstruction(TheoryMacro("false", List.empty)))
                         )
                       } else if (oldChar == needle && newChar == needle) {
                         memoUpdateInstruction(
                           p,
-                          Application(contains, List(x, needle))
+                          Ref(memoAddInstruction(Application(contains, List(x, needle))))
                         )
                       } else if (oldChar != needle && newChar == needle) {
                         val orRef = memoAddInstruction(TheoryMacro("or"))
                         memoUpdateInstruction(
                           p,
-                          Application(
-                            orRef,
-                            List(
-                              memoAddInstruction(
-                                Application(contains, List(x, needle))
-                              ),
-                              memoAddInstruction(
-                                Application(contains, List(x, oldChar))
+                          Ref(memoAddInstruction(
+                            Application(
+                              orRef,
+                              List(
+                                memoAddInstruction(
+                                  Application(contains, List(x, needle))
+                                ),
+                                memoAddInstruction(
+                                  Application(contains, List(x, oldChar))
+                                )
                               )
                             )
-                          )
+                          ))
                         )
                       } else {
                         // they are both not equal so just ingore them altogether
                         memoUpdateInstruction(
                           p,
-                          Application(contains, List(x, needle))
+                          Ref(memoAddInstruction(Application(contains, List(x, needle))))
                         )
                       }
                     case _ =>
@@ -386,7 +381,6 @@ trait Rewritable() extends AbstractTermGraph {
         case _ =>
       }
     }
-    repair()
   }
 
   /** Rewrite quantifiers over enums to disjunctions/conjunctions
@@ -401,10 +395,8 @@ trait Rewritable() extends AbstractTermGraph {
     var changeHappened = true
     while (changeHappened) {
       changeHappened = false
-      (0 to stmts.length - 1).foreach { p =>
-        val update = blastEnumQuantifier(p)
-        changeHappened = update || changeHappened
-        repair()
+      (0 to getStmts().length - 1).foreach { p =>
+        changeHappened = blastEnumQuantifier(p) || changeHappened
       }
     }
   }
@@ -417,10 +409,10 @@ trait Rewritable() extends AbstractTermGraph {
     * TODO: handle case where enum quantifier is not in first position
     */
   private def blastEnumQuantifier(app: Int): Boolean = {
-    stmts(app) match {
+    getStmt(app) match {
       case Application(quant, body :: Nil)
-          if stmts(quant).isInstanceOf[TheoryMacro] =>
-        stmts(quant).asInstanceOf[TheoryMacro] match {
+          if getStmt(quant).isInstanceOf[TheoryMacro] =>
+        getStmt(quant).asInstanceOf[TheoryMacro] match {
           case TheoryMacro("forall", v :: vs) =>
             val copies = blastEnumQuantifier(body, v).getOrElse(
               return false
@@ -428,11 +420,12 @@ trait Rewritable() extends AbstractTermGraph {
             val andRef = memoAddInstruction(TheoryMacro("and"))
             val new_body = memoAddInstruction(Application(andRef, copies))
             if (vs.length == 0) {
-              memoUpdateInstruction(app, stmts(new_body))
+              memoUpdateInstruction(app, Ref(new_body))
               return true
             } else {
-              memoUpdateInstruction(quant, TheoryMacro("forall", vs))
-              memoUpdateInstruction(body, stmts(new_body))
+              val newQuant = memoAddInstruction(TheoryMacro("forall", vs))
+              memoUpdateInstruction(body, Ref(new_body))
+              memoUpdateInstruction(app, Ref(memoAddInstruction(Application(newQuant, body :: Nil))))
               return true
             }
           case TheoryMacro("exists", v :: vs) =>
@@ -442,11 +435,12 @@ trait Rewritable() extends AbstractTermGraph {
             val orRef = memoAddInstruction(TheoryMacro("or"))
             val new_body = memoAddInstruction(Application(orRef, copies))
             if (vs.length == 0) {
-              memoUpdateInstruction(app, stmts(new_body))
+              memoUpdateInstruction(app, Ref(new_body))
               return true
             } else {
-              memoUpdateInstruction(quant, TheoryMacro("exists", vs))
-              memoUpdateInstruction(body, stmts(new_body))
+              val newQuant = memoAddInstruction(TheoryMacro("exists", vs))
+              memoUpdateInstruction(body, Ref(new_body))
+              memoUpdateInstruction(app, Ref(memoAddInstruction(Application(newQuant, body :: Nil))))
               return true
             }
           case _ => return false
@@ -465,224 +459,62 @@ trait Rewritable() extends AbstractTermGraph {
     * @return |[some enum]| copies of body, each with a different variant of [some enum] plugged in for v.
     */
   private def blastEnumQuantifier(body: Int, v: Int): Option[List[Int]] = {
-    val param = stmts(v).asInstanceOf[FunctionParameter]
-    val variants = stmts(param.sort) match {
+    val param = getStmt(v).asInstanceOf[FunctionParameter]
+    val variants = getStmt(param.sort) match {
       case DataType(_, constructors) =>
         constructors.map { p =>
-          val ctr = stmts(p).asInstanceOf[Constructor]
+          val ctr = getStmt(p).asInstanceOf[Constructor]
           if (ctr.selectors.length > 0) {
             // not an enum
             return None
           }
-          memoAddInstruction(Application(p, List.empty))
+          p
         }
       case _ => return None
     }
     // make n copies of the body
     val copies = variants.map { x =>
-      val newBody = copyTerm(body)
       // v is the bound variable we want to replace
       // x is the enum variant we want to plug in for v
       val replaceMap = HashMap((v, x))
-      updateTerm(newBody, replaceMap.toMap)
-      newBody
+      copyUpdateTerm(body, replaceMap.toMap)
     }
     Some(copies)
-  }
-
-  /** Add prefix to all names in query
-    *
-    * @param prefix prefix to add to all names
-    */
-  def prefixNames(prefix: String): Unit =
-    (0 to stmts.length - 1).foreach { i =>
-      stmts(i) match {
-        case Constructor(name, sort, selectors) =>
-          memoUpdateInstruction(
-            i,
-            Constructor(name, sort, selectors)
-          )
-        case DataType(name, constructors) =>
-          memoUpdateInstruction(i, DataType(prefix + name, constructors))
-        case FunctionParameter(name, sort) =>
-          memoUpdateInstruction(i, FunctionParameter(prefix + name, sort))
-        case Module(name, ct, init, next, spec) =>
-          memoUpdateInstruction(
-            i,
-            Module(prefix + name, ct, init, next, spec)
-          )
-        case Ref(loc, named) =>
-          named match {
-            case None => memoUpdateInstruction(i, Ref(loc, None))
-            case Some(name) =>
-              memoUpdateInstruction(i, Ref(loc, Some(prefix + name)))
-          }
-        case Selector(name, sort) =>
-          memoUpdateInstruction(i, Selector(prefix + name, sort))
-        case Synthesis(name, sort, params) =>
-          memoUpdateInstruction(
-            i,
-            Synthesis(prefix + name, sort, params)
-          )
-        case UserFunction(name, sort, params) =>
-          memoUpdateInstruction(
-            i,
-            UserFunction(prefix + name, sort, params)
-          )
-        case UserMacro(name, sort, body, params) =>
-          memoUpdateInstruction(
-            i,
-            UserMacro(prefix + name, sort, body, params)
-          )
-        case UserSort(name, arity) =>
-          memoUpdateInstruction(i, UserSort(prefix + name, arity))
-        case _ => // do nothing, instruction doesn't have a name to prefix.
+  }.ensuring(out => {
+    out match {
+      case Some(copies) => {
+        //  get everything reachable from the updated position
+        val marks = terms(copies)
+        // the bound variable should not be reachable
+        !marks(v) 
       }
+      case None => true
     }
-
-  /** Increment all references by ``offset''
-    *
-    * @param offset integer value to increase references by
-    */
-  def incrementRefs(offset: Int): Unit = {
-
-    def bump(r: Int): Int = r + offset
-
-    def bumpList(rs: List[Int]): List[Int] =
-      rs.map(r => bump(r))
-
-    (0 to stmts.length - 1).foreach { i =>
-      stmts(i) match {
-        case Application(caller, args) =>
-          memoUpdateInstruction(
-            i,
-            Application(bump(caller), bumpList(args))
-          )
-        case Constructor(name, sort, selectors) =>
-          memoUpdateInstruction(
-            i,
-            Constructor(name, bump(sort), bumpList(selectors))
-          )
-        case DataType(name, constructors) =>
-          memoUpdateInstruction(
-            i,
-            DataType(name, bumpList(constructors))
-          )
-        case FunctionParameter(name, sort) =>
-          memoUpdateInstruction(
-            i,
-            FunctionParameter(name, bump(sort))
-          )
-        case Module(name, ct, init, next, spec) =>
-          memoUpdateInstruction(
-            i,
-            Module(name, bump(ct), bump(init), bump(next), bump(spec))
-          )
-        case Ref(loc, named) =>
-          memoUpdateInstruction(i, Ref(bump(loc), named))
-        case Selector(name, sort) =>
-          memoUpdateInstruction(i, Selector(name, bump(sort)))
-        case Synthesis(name, sort, params) =>
-          memoUpdateInstruction(
-            i,
-            Synthesis(name, bump(sort), bumpList(params))
-          )
-        case TheoryMacro(name, params) =>
-          memoUpdateInstruction(
-            i,
-            TheoryMacro(name, bumpList(params))
-          )
-        case TheorySort(name, params) =>
-          memoUpdateInstruction(
-            i,
-            TheorySort(name, bumpList(params))
-          )
-        case UserFunction(name, sort, params) =>
-          memoUpdateInstruction(
-            i,
-            UserFunction(name, bump(sort), bumpList(params))
-          )
-        case UserMacro(name, sort, body, params) =>
-          memoUpdateInstruction(
-            i,
-            UserMacro(name, bump(sort), bump(body), bumpList(params))
-          )
-        case _ => // do nothing, no refs to bump
-      }
-    }
-  }
-
-  /** Copy an application term by inserting new copies of all instructions and returning a map describing the copy
-    *
-    * @param pos the starting location
-    * @return the new location
-    */
-  protected def copyTerm(pos: Int): Int = {
-    // assert(
-    //   stmts(pos).isInstanceOf[Application],
-    //   s"should be an application but is ${stmts(pos)}"
-    // )
-    val map = copyTermHelper(pos)
-    if (map.contains(pos)) {
-      updateTerm(map(pos), map.toMap)
-      map(pos)
-    } else {
-      pos
-    }
-  }
-
-  /** Copies the term but instead of updating references, returns a map describing the changes
-    *
-    * @param pos start location of the term
-    * @param map map from locations to locations describing the changes
-    * @return the map describing the term copy
-    */
-  private def copyTermHelper(
-    pos: Int,
-    map: HashMap[Int, Int] = HashMap.empty
-  ): HashMap[Int, Int] = {
-    stmts(pos) match {
-      case Application(caller, args) =>
-        val newArgs = args.map(a => copyTermHelper(a, map).getOrElse(a, a))
-        val newPos: Int = addInstruction(Application(caller, newArgs))
-        map.addOne((pos, newPos))
-      case _ =>
-    }
-    map
-  }
+  })
 
   /** Updates the references in an application using the map
     *
     * @param pos starting location
     * @param map the changes we want to make: whenever we see x we will replace it with map(x)
     */
-  protected def updateTerm(pos: Int, map: Map[Int, Int]): Unit = {
-    assert(stmts(pos).isInstanceOf[Application] || stmts(pos).isInstanceOf[Ref])
+  protected def copyUpdateTerm(pos: Int, map: Map[Int, Int]): Int = {
+    require(map.forall((a, b) => getStmt(a).isInstanceOf[Application] == getStmt(b).isInstanceOf[Application]))
+    // try to rewrite the current position
     map.get(pos) match {
-      case Some(value) =>
-        memoUpdateInstruction(pos, Ref(value, None))
-      case None =>
-        stmts(pos) match {
+      case Some(value) => value
+      case None => {
+        getStmt(pos) match {
           case Application(caller, args) =>
-            args.foreach(a => updateTerm(a, map))
-            map.get(caller) match {
-              case None =>
-              case Some(value) =>
-                if (completeButUnapplied(value)) {
-                  memoUpdateInstruction(pos, Application(value, args))
-                } else {
-                  // we're trying to replace caller---it better not have children
-                  assert(args.length == 0)
-                  memoUpdateInstruction(pos, stmts(value))
-                }
-            }
-          case Ref(loc, named) =>
-            updateTerm(loc, map)
-            map.get(loc) match {
-              case None        =>
-              case Some(value) => memoUpdateInstruction(pos, Ref(value, None))
-            }
+            // pos points to an application, update the children
+            val newArgs = args.map(a => copyUpdateTerm(a, map))
+            val newCaller = copyUpdateTerm(caller, map)
+            memoAddInstruction(Application(newCaller, newArgs))
+          case Ref(loc) =>
+            val newLoc = copyUpdateTerm(loc, map)
+            memoAddInstruction(Ref(newLoc))
+          case _ => pos
         }
+      }
     }
   }
 }
