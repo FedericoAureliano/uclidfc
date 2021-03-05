@@ -385,7 +385,7 @@ object UclidMain {
           println(features.map(f => "-- " + f).mkString("\n"))
         }
         
-        val unmodifiedSMTFile = if (changed) {
+        val unmodifiedSMTFile = if (changed || config.outFile.isDefined) {
           None
         } else {
           Some(f)

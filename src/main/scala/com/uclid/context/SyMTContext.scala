@@ -213,7 +213,12 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
           stack.push(Jump(p))
           stack.push(Direct(" "))
         })
-        stack.push(Direct(s"(${t.name} "))
+        stack.push(Direct(s"${t.name}"))
+        if (t.name == "BitVec") {
+          stack.push(Direct("(_ "))
+        } else {
+          stack.push(Direct("( "))
+        }
       } else {
         stack.push(Direct(t.name))
       }
