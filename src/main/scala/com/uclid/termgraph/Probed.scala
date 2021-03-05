@@ -31,6 +31,38 @@ trait Probed() extends AbstractTermGraph {
   def numberOfMemoEntries(): Int = memo.keys.toList.length
   def numberOfVariables(): Int = getStmts().filter(p => p.isInstanceOf[UserFunction]).length
 
+  // these probes are completely untested.. 
+  def numberOfNullaryVariables(): Int = 
+    getStmts().filter(p => p.isInstanceOf[UserFunction]).filter(p =>
+    p.asInstanceOf[UserFunction].params.size==0).length
+  
+  def numberOfUFs(): Int = 
+    getStmts().filter(p => p.isInstanceOf[UserFunction]).filter(p => 
+    p.asInstanceOf[UserFunction].params.size>0).length
+  
+  def numberOfIntegerLiterals(): Int = 
+    getStmts().filter(p => p.isInstanceOf[TheoryMacro]).filter(p => 
+    p.asInstanceOf[TheoryMacro].name.forall(_.isDigit)).length
+
+  def numerOfUSorts(): Int = getStmts().filter(p => p.isInstanceOf[UserSort]).length
+
+
+  def sumIntegerLiteral(entryPoints: List[Int]): Int = {
+    var sum: Int = 0
+    getStmts()
+      .foreach(inst =>
+        inst match {
+          case TheoryMacro(name, _) =>
+            name.toIntOption match {
+              case Some(value) => sum += value
+              case None =>
+            }
+          case _ =>
+        }
+      )
+    sum
+  }
+
   def largestIntegerLiteral(entryPoints: List[Int]): Option[Int] = {
     var max: Option[Int] = None
     getStmts()
@@ -50,6 +82,7 @@ trait Probed() extends AbstractTermGraph {
     max
   }
 
+  // UF probes
   def maxArity(entryPoints: List[Int]): Int = {
     var max: Option[Int] = None
     getStmts()
@@ -66,15 +99,19 @@ trait Probed() extends AbstractTermGraph {
       max.getOrElse(0)
   }
 
-    def avgArity(entryPoints: List[Int]): Float = {
+
+  def avgArity(entryPoints: List[Int]): Float = {
     var avg: Float = 0.0
     var count: Float = 0.0
     getStmts()
       .foreach(inst =>
         inst match {
           case UserFunction(_, _, params) => {
-            count = count + 1
-            avg = (1 / count) * params.length + ((count - 1) / count) * avg
+            // only count arity of things that have arity > 0
+            if (params.length > 0) {
+              count = count + 1
+              avg = (1 / count) * params.length + ((count - 1) / count) * avg
+            }
           }
           case _ =>
         }
@@ -82,6 +119,7 @@ trait Probed() extends AbstractTermGraph {
       avg
   }
 
+  
   def logicComponents(entryPoints: List[Int]): List[(String, Int)] = {
     var q = 0
     var uf = 0
