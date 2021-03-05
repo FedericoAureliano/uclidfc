@@ -46,6 +46,7 @@ trait Probed() extends AbstractTermGraph {
     var lia = 0
     var nia = 0
     var s = 0
+    var bv = 0
 
     val marks = mark(entryPoints)
 
@@ -71,6 +72,8 @@ trait Probed() extends AbstractTermGraph {
                     } else {
                       lia += 1
                     }
+              
+                  // TODO: add all string ops
                   case TheoryMacro("str.++", _) => s += 1
                   case TheoryMacro("str.indexof", _) => s += 1
                   case TheoryMacro("str.substr", _) => s += 1
@@ -80,6 +83,25 @@ trait Probed() extends AbstractTermGraph {
                   case TheoryMacro("str.suffixof", _) => s += 1
                   case TheoryMacro("str.replace", _) => s += 1
                   case TheoryMacro("str.at", _) => s += 1
+
+                  // TODO: add all bitvector ops
+                  case TheoryMacro("bvadd", _) => bv += 1
+                  case TheoryMacro("bvsub", _) => bv += 1
+                  case TheoryMacro("bvand", _) => bv += 1
+                  case TheoryMacro("bvor", _) => bv += 1
+                  case TheoryMacro("bvmul", _) => bv += 1
+                  case TheoryMacro("bvudiv", _) => bv += 1
+                  case TheoryMacro("bvurem", _) => bv += 1
+                  case TheoryMacro("bvshl", _) => bv += 1
+                  case TheoryMacro("bvlshr", _) => bv += 1
+                  case TheoryMacro("bvnot", _) => bv += 1
+                  case TheoryMacro("bvneg", _) => bv += 1
+                  case TheoryMacro("bvult", _) => bv += 1
+                  case TheoryMacro("concat", _) => bv += 1
+                  case TheoryMacro("extract", _) => bv += 1
+                  case TheoryMacro("bv2nat", _) => bv += 1
+                  case TheoryMacro("nat2bv", _) => bv += 1
+
                   case TheoryMacro("+", _) => lia += 1
                   case TheoryMacro("-", _) => lia += 1
                   case TheoryMacro("forall", _) => q += 1
@@ -104,7 +126,8 @@ trait Probed() extends AbstractTermGraph {
       ("DT", dt),
       ("LIA", lia),
       ("NIA", nia),
-      ("S", s)
+      ("S", s),
+      ("BV", bv)
     )
   }
 
@@ -116,6 +139,7 @@ trait Probed() extends AbstractTermGraph {
     var linear = true
     var qf = true
     var s = false
+    var bv = false
 
     val marks = mark(entryPoints)
 
@@ -150,6 +174,7 @@ trait Probed() extends AbstractTermGraph {
             case TheorySort("Array", _) => a = true
             case TheorySort("Int", _)   => i = true
             case TheorySort("String", _)   => s = true
+            case TheorySort("BitVec", _)   => bv = true
             case Synthesis(_, _, _)     => isSynthesisQuery = true
             case UserSort(_, _) => uf = true
             case _                      =>
@@ -159,6 +184,7 @@ trait Probed() extends AbstractTermGraph {
 
     val out = s"${if (qf && !isSynthesisQuery) { "QF_" }
     else { "" }}${if (uf) { "UF" }
+    else { "" }}${if (bv) { "BV" }
     else { "" }}${if (s) { "S" }
     else { "" }}${if (a) { "A" }
     else { "" }}${if (dt) { "DT" }
