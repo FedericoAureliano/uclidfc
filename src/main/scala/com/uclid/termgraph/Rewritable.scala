@@ -490,17 +490,7 @@ trait Rewritable() extends AbstractTermGraph {
       copyUpdateTerm(body, replaceMap.toMap)
     }
     Some(copies)
-  }.ensuring(out => {
-    out match {
-      case Some(copies) => {
-        //  get everything reachable from the updated position
-        val marks = terms(copies)
-        // the bound variable should not be reachable
-        !marks(v) 
-      }
-      case None => true
-    }
-  })
+  }
 
   /** Updates the references in an application using the map
     *
