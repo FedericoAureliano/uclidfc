@@ -86,8 +86,6 @@ abstract class AbstractTermGraph() {
   ): Unit = {
     // require that at most one instruction points to this address
     require(memo.forall(p => p._2 != r || stmts(r) == p._1))
-    // has to be a reference to something else that is already in the ast
-    require(memo(stmts(newInstruction.loc)) ==  newInstruction.loc)
 
     val old = stmts(r)
     memo.remove(old)

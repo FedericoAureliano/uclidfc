@@ -2,6 +2,7 @@
 // MaxParseTime=1
 // MaxProcessTime=1
 // MaxGenerationTime=1
+// Option=optimize 0
 
 module main {
     var x : integer;

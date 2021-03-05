@@ -8,18 +8,24 @@ trait Rewritable() extends AbstractTermGraph {
 
   def optimizeLevel0(startingPoints: List[Int]): Unit = {
     var inlineResult = true
+    var pushIn = true
     var elimResult = true
     var keepGoing = inlineResult || elimResult
     var locations : List[Int] = terms(startingPoints).zipWithIndex.map((a, b) => if (a) {Some(b)} else {None}).flatten.toList
+
     while (keepGoing) { 
       // do this iteratively in a loop to avoid big blowup from inlining (which creates many destruct/construct applications)
 
       // inline one macro
       inlineResult = inlineMacros(locations, 1)
+
+      // push selections over ITEs in
+      pushIn = selectFromIte(locations, -1)
+
       // reduce all "select y from construct {x=a ... y=b ... z=c}" to "b"
       elimResult = eliminateDestructConstruct(locations, -1)
 
-      keepGoing = inlineResult || elimResult
+      keepGoing = inlineResult || elimResult || pushIn
       locations = terms(startingPoints).zipWithIndex.map((a, b) => if (a) {Some(b)} else {None}).flatten.toList
     }
 
@@ -88,6 +94,29 @@ trait Rewritable() extends AbstractTermGraph {
     changed
   }
 
+  def selectFromIte(locations: List[Int], bound: Int): Boolean = {
+    var changed = false
+    var count = bound
+    locations.foreach { p =>
+      getStmt(p) match {
+        case Application(selRef, app :: Nil)
+            if getStmt(selRef).isInstanceOf[Selector] =>
+          getStmt(app) match {
+            case Application(ite, cond::left::right::Nil)
+                if getStmt(ite).isInstanceOf[TheoryMacro] && getStmt(ite).asInstanceOf[TheoryMacro].name == "ite" =>
+              // we have select a from (ite c x y) and can reduce it to (ite c (select a from x) (select a from y))
+              val newLeft = memoAddInstruction(Application(selRef, left :: Nil))
+              val newRight = memoAddInstruction(Application(selRef, right :: Nil))
+              val newInst = memoAddInstruction(Application(ite, cond :: newLeft :: newRight :: Nil))
+              memoUpdateInstruction(p, Ref(newInst))
+            case _ =>
+          }
+        case _ =>
+      }
+    }
+    changed
+  }
+
   def eliminateDestructConstruct(locations: List[Int], bound: Int): Boolean = {
     var changed = false
     var count = bound
@@ -107,25 +136,6 @@ trait Rewritable() extends AbstractTermGraph {
                 if (count == 0) {
                   return changed
                 }
-              }
-            case r: Ref =>
-              var appRef = r.loc
-              while (getStmt(appRef).isInstanceOf[Ref])
-                appRef = getStmt(appRef).asInstanceOf[Ref].loc
-              getStmt(appRef) match {
-                case Application(ctrRef, args)
-                    if getStmt(ctrRef).isInstanceOf[Constructor] =>
-                  val ctr = getStmt(ctrRef).asInstanceOf[Constructor]
-                  val index = ctr.selectors.indexOf(selRef)
-                  if (index >= 0) {
-                    memoUpdateInstruction(p, Ref(args(index)))
-                    changed = true
-                    count = count - 1
-                    if (count == 0) {
-                      return changed
-                    }
-                  }
-                case _ =>
               }
             case _ =>
           }
