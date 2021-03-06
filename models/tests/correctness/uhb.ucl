@@ -1,0 +1,243 @@
+/* 
+    Copyright (c) 2021 Yatin Manerkar (UC Berkeley/Michigan). All rights reserved. 
+*/
+
+// UCLID TEST
+// Solver=z3
+// Result=Some(false)
+// Option=optimize 0
+// Rewrite=blast-enum-quantifiers
+
+type RANGE = enum {zero, one, two, three};
+
+type uopType_t = enum {Read, Write, Fence};
+
+type uhbNode_t =
+    record
+    {
+        nExists : boolean,
+        nTime : integer
+    };
+
+type microop_t =
+    record
+    {
+        valid : boolean,
+        globalID : integer,
+        coreID : integer,
+        uopType : uopType_t,
+        virtAddr : integer,
+        physAddr : integer,
+        data : integer
+    };
+
+type instrIndex_t = RANGE;
+
+const maxTimestamp : integer = 20;
+
+type test_t = [instrIndex_t]microop_t;
+
+//Uspec primitives.
+define IsLoad (i : microop_t) : boolean = (i.uopType == Read);
+define IsStore (i : microop_t) : boolean = (i.uopType == Write);
+define IsFence (i : microop_t) : boolean = (i.uopType == Fence);
+define AddEdge (src, dest : uhbNode_t) : boolean = (src.nExists == true && dest.nExists == true && src.nTime < dest.nTime);
+define EdgeExists (src, dest : uhbNode_t) : boolean = (AddEdge(src, dest));
+define ProgramOrder (i, j : microop_t) : boolean = (i.globalID < j.globalID && i.coreID == j.coreID);
+define SameCore (i, j : microop_t) : boolean = (i.coreID == j.coreID);
+define SamePhysicalAddress (i, j : microop_t) : boolean = (i.physAddr == j.physAddr);
+define SameData (i, j : microop_t) : boolean = (i.data == j.data);
+define DataFromInitialStateAtPA (i : microop_t) : boolean = (i.data == 0); //We're assuming 0 is the initial state here.
+define SameMicroop (i, j : microop_t) : boolean = (i.globalID == j.globalID);
+
+//Preventing use of invalid uops.
+define IsValid (i : microop_t) : boolean = i.valid;
+define nullified (n : uhbNode_t) : boolean = (n.nExists == false && n.nTime == 0);
+
+type nodeList_t =
+    record
+    {
+        Fetch : uhbNode_t,
+        Execute : uhbNode_t,
+        Writeback : uhbNode_t
+    };
+
+//Now the sourcing.
+define NoWritesBetweenSourceAndRead (ind1 : instrIndex_t, testInstrs : test_t, nodes : [instrIndex_t]nodeList_t) : boolean =
+    exists (indW1 : instrIndex_t) ::
+        IsValid(testInstrs[indW1]) && IsStore(testInstrs[indW1]) && SamePhysicalAddress(testInstrs[ind1], testInstrs[indW1]) &&
+        SameData(testInstrs[ind1], testInstrs[indW1]) && AddEdge(nodes[indW1].Writeback, nodes[ind1].Execute) &&
+        (
+            forall (indW2 : instrIndex_t) ::
+            !(
+                    IsValid(testInstrs[indW2]) && IsStore(testInstrs[indW2]) && SamePhysicalAddress(testInstrs[ind1], testInstrs[indW2]) &&
+                    EdgeExists(nodes[indW1].Writeback, nodes[indW2].Writeback) &&
+                    EdgeExists(nodes[indW2].Writeback, nodes[ind1].Execute)
+                )
+        );
+
+define BeforeOrAfterEveryWriteToSamePA (ind1 : instrIndex_t, testInstrs : test_t, nodes : [instrIndex_t]nodeList_t) : boolean =
+    forall (indW : instrIndex_t) ::
+        IsValid(testInstrs[indW]) ==>
+        (
+            IsStore(testInstrs[indW]) && SamePhysicalAddress(testInstrs[ind1], testInstrs[indW]) ==>
+                AddEdge(nodes[indW].Writeback, nodes[ind1].Execute) ||
+                AddEdge(nodes[ind1].Execute, nodes[indW].Writeback)
+        );
+
+//The parser had some issues with this without the parentheses.
+define BeforeAllWrites (ind1 : instrIndex_t, testInstrs : test_t, nodes : [instrIndex_t]nodeList_t) : boolean =
+(
+    DataFromInitialStateAtPA(testInstrs[ind1]) &&
+    (
+        forall (indW : instrIndex_t) ::
+            IsValid(testInstrs[indW]) ==>
+            (
+                IsStore(testInstrs[indW]) && SamePhysicalAddress(testInstrs[ind1], testInstrs[indW]) ==>
+                    AddEdge(nodes[ind1].Execute, nodes[indW].Writeback)
+            )
+    )
+);
+
+module main {
+    //Litmus test instrs.
+    input testInstrs : test_t;
+
+    //Node definitions.
+    var nodes : [instrIndex_t]nodeList_t;
+
+    axiom positiveTimestamps : forall (ind : instrIndex_t) ::
+        (
+            nodes[ind].Fetch.nTime > 0 &&
+            nodes[ind].Execute.nTime > 0 &&
+            nodes[ind].Writeback.nTime > 0
+        );
+
+    axiom readableTimestamps : forall (ind : instrIndex_t) ::
+        (
+            nodes[ind].Fetch.nTime < maxTimestamp &&
+            nodes[ind].Execute.nTime < maxTimestamp &&
+            nodes[ind].Writeback.nTime < maxTimestamp
+        );
+
+    // axiom TurnOff : forall (ind : instrIndex_t) ::
+    //     (
+    //         testInstrs[ind].valid == false &&
+    //         nullified(nodes[ind].Fetch) &&
+    //         nullified(nodes[ind].Execute) &&
+    //         nullified(nodes[ind].Writeback)
+    //     );
+
+
+    axiom Read_Values : forall (ind1 : instrIndex_t) ::
+        IsValid(testInstrs[ind1]) ==>
+        (
+            IsLoad(testInstrs[ind1]) ==>
+            (
+                (
+                    NoWritesBetweenSourceAndRead(ind1, testInstrs, nodes) &&
+                    BeforeOrAfterEveryWriteToSamePA(ind1, testInstrs, nodes)
+                )
+                ||
+                BeforeAllWrites(ind1, testInstrs, nodes)
+            )
+        );
+
+
+    axiom Load_Path : forall (ind : RANGE) ::
+        IsValid(testInstrs[ind]) ==>
+            (
+                IsLoad(testInstrs[ind]) ==>
+                (
+                    AddEdge(nodes[ind].Fetch, nodes[ind].Execute) &&
+                    AddEdge(nodes[ind].Execute, nodes[ind].Writeback)
+                )
+            );
+
+    axiom Store_Path : forall (ind : RANGE) ::
+        IsValid(testInstrs[ind]) ==>
+            (
+                IsStore(testInstrs[ind]) ==>
+                (
+                    AddEdge(nodes[ind].Fetch, nodes[ind].Execute) &&
+                    AddEdge(nodes[ind].Execute, nodes[ind].Writeback)
+                )
+            );
+
+    axiom PO_Fetch : forall (ind1 : RANGE, ind2 : RANGE) ::
+        (IsValid(testInstrs[ind1]) && IsValid(testInstrs[ind2])) ==>
+            (
+                ProgramOrder(testInstrs[ind1], testInstrs[ind2]) ==>
+                    AddEdge(nodes[ind1].Fetch, nodes[ind2].Fetch)
+            );
+
+    axiom Fetch_In_Order : forall (ind1 : RANGE, ind2 : RANGE) ::
+        (IsValid(testInstrs[ind1]) && IsValid(testInstrs[ind2])) ==>
+            (
+                SameCore(testInstrs[ind1], testInstrs[ind2]) && EdgeExists(nodes[ind1].Fetch, nodes[ind2].Fetch) ==>
+                    AddEdge(nodes[ind1].Execute, nodes[ind2].Execute)
+            );
+
+    axiom Decode_In_Order : forall (ind1 : RANGE, ind2 : RANGE) ::
+        (IsValid(testInstrs[ind1]) && IsValid(testInstrs[ind2])) ==>
+            (
+                SameCore(testInstrs[ind1], testInstrs[ind2]) && EdgeExists(nodes[ind1].Execute, nodes[ind2].Execute) ==>
+                    AddEdge(nodes[ind1].Writeback, nodes[ind2].Writeback)
+            );
+
+    axiom Enforce_Write_Ordering : forall (ind1 : RANGE, ind2 : RANGE) ::
+        (IsValid(testInstrs[ind1]) && IsValid(testInstrs[ind2])) ==>
+            (
+                SameCore(testInstrs[ind1], testInstrs[ind2]) && IsStore(testInstrs[ind1]) && IsLoad(testInstrs[ind1]) &&
+                ProgramOrder(testInstrs[ind1], testInstrs[ind2]) ==>
+                    AddEdge(nodes[ind1].Writeback, nodes[ind2].Execute)
+            );
+
+    axiom Write_Serialization : forall (ind1 : RANGE, ind2 : RANGE) ::
+        (IsValid(testInstrs[ind1]) && IsValid(testInstrs[ind2])) ==>
+            (
+                IsStore(testInstrs[ind1]) && IsStore(testInstrs[ind2]) && !SameMicroop(testInstrs[ind1],testInstrs[ind2]) &&
+                SamePhysicalAddress(testInstrs[ind1], testInstrs[ind2]) ==>
+                (
+                    AddEdge(nodes[ind1].Writeback, nodes[ind2].Writeback) ||
+                    AddEdge(nodes[ind2].Writeback, nodes[ind1].Writeback)
+                )
+            );
+
+    //Litmus test mp.
+    axiom ax1: testInstrs[zero].valid == true;
+    axiom ax2: testInstrs[zero].globalID == 0;
+    axiom ax3: testInstrs[zero].coreID == 0;
+    axiom ax4: testInstrs[zero].uopType == Write;
+    axiom ax5: testInstrs[zero].physAddr == 0; //x
+    axiom ax6: testInstrs[zero].data == 1;
+
+    axiom ax7: testInstrs[one].valid == true;
+    axiom ax8: testInstrs[one].globalID == 1;
+    axiom ax9: testInstrs[one].coreID == 0;
+    axiom ax10: testInstrs[one].uopType == Write;
+    axiom ax11: testInstrs[one].physAddr == 1; //y
+    axiom ax12: testInstrs[one].data == 1;
+
+    axiom ax13: testInstrs[two].valid == true;
+    axiom ax14: testInstrs[two].globalID == 2;
+    axiom ax15: testInstrs[two].coreID == 1;
+    axiom ax16: testInstrs[two].uopType == Read;
+    axiom ax17: testInstrs[two].physAddr == 1; //y
+    axiom ax18: testInstrs[two].data == 1;
+
+    axiom ax19: testInstrs[three].valid == true;
+    axiom ax20: testInstrs[three].globalID == 3;
+    axiom ax21: testInstrs[three].coreID == 1;
+    axiom ax22: testInstrs[three].uopType == Read;
+    axiom ax23: testInstrs[three].physAddr == 0; //x
+    axiom ax24: testInstrs[three].data == 0;
+
+    //Assert false, since we just want to check if there's a SAT assignment.
+    invariant acyclic : false;
+
+    control {
+        unroll(0);
+        check;
+    }
+}

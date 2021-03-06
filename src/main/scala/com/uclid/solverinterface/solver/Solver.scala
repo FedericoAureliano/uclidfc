@@ -31,7 +31,7 @@ abstract class Solver() {
       throw e
     }
     val timetaken = (System.nanoTime - t1) / 1e9d
-    println(s"-- Solver terminated in ${timetaken} seconds.")
+    println(s"-- ${in.split(" ").head} terminated in ${"%.3f".toString.format(timetaken)} seconds.")
 
     (out.reverse, err.reverse, exit.exitValue(), timetaken)
   }
