@@ -4,10 +4,20 @@ import scala.collection.mutable.ArrayBuffer
 
 trait Probed() extends AbstractTermGraph {
 
-  def featuresList(entryPoints: List[Int]): List[String] =
+  private var synthesis : Option[Boolean] = None
+
+  def isSynthesisQuery(entryPoints: List[Int] = List.empty) : Boolean = {
+    if (synthesis.isDefined) {
+      synthesis.get
+    } else {
+      synthesis = Some(logicComponents(entryPoints).toMap.getOrElse("SY", 0) > 0)
+      synthesis.get
+    }
+  }
+
+  def featuresList(entryPoints: List[Int]): List[String] = 
     List(
       "Term graph size: " + numberOfNodes().toString,
-      "Requires synthesis: " + isSynthesisQuery,
       "Number of variables: " + numberOfVariables().toString,
       "Largest integer literal: " + largestIntegerLiteral(entryPoints).toString,
       "Logic components:\n" + logicComponents(entryPoints)
@@ -47,6 +57,7 @@ trait Probed() extends AbstractTermGraph {
     var nia = 0
     var s = 0
     var bv = 0
+    var sy = 0
 
     val marks = mark(entryPoints)
 
@@ -114,12 +125,14 @@ trait Probed() extends AbstractTermGraph {
                   case _                   =>
                 }
               })
+            case _ : Synthesis => sy += 1
             case _ =>
           }
         }
       )
 
     List(
+      ("SY", sy),
       ("Q", q),
       ("UF", uf),
       ("A", a),
@@ -140,6 +153,7 @@ trait Probed() extends AbstractTermGraph {
     var qf = true
     var s = false
     var bv = false
+    var sy = false
 
     val marks = mark(entryPoints)
 
@@ -175,14 +189,14 @@ trait Probed() extends AbstractTermGraph {
             case TheorySort("Int", _)   => i = true
             case TheorySort("String", _)   => s = true
             case TheorySort("BitVec", _)   => bv = true
-            case Synthesis(_, _, _)     => isSynthesisQuery = true
+            case Synthesis(_, _, _)     => sy = true
             case UserSort(_, _) => uf = true
             case _                      =>
           }
         }
       )
 
-    val out = s"${if (qf && !isSynthesisQuery) { "QF_" }
+    val out = s"${if (qf && !sy) { "QF_" }
     else { "" }}${if (uf) { "UF" }
     else { "" }}${if (bv) { "BV" }
     else { "" }}${if (s) { "S" }

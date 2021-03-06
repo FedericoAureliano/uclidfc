@@ -24,8 +24,6 @@ abstract class AbstractTermGraph() {
   protected val memo: HashMap[Instruction, Int] =
     new HashMap().addAll(stmts.zipWithIndex.map(p => (p._1, p._2)))
 
-  var isSynthesisQuery = false
-
   def clear(): Unit = {
     stmts.clear()
     memo.clear()
