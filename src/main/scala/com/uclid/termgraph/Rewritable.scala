@@ -8,7 +8,7 @@ trait Rewritable() extends AbstractTermGraph {
 
   def optimizeLevel0(startingPoints: List[Int]): Unit = {
     var inlineResult = true
-    var pushIn = true
+    var pushInResult = true
     var elimResult = true
     var keepGoing = inlineResult || elimResult
     var locations : List[Int] = terms(startingPoints).zipWithIndex.map((a, b) => if (a) {Some(b)} else {None}).flatten.toList
@@ -20,12 +20,12 @@ trait Rewritable() extends AbstractTermGraph {
       inlineResult = inlineMacros(locations, 1)
 
       // push selections over ITEs in
-      pushIn = selectFromIte(locations, -1)
+      pushInResult = selectFromIte(locations, -1)
 
       // reduce all "select y from construct {x=a ... y=b ... z=c}" to "b"
       elimResult = eliminateDestructConstruct(locations, -1)
 
-      keepGoing = inlineResult || elimResult || pushIn
+      keepGoing = inlineResult || elimResult || pushInResult
       locations = terms(startingPoints).zipWithIndex.map((a, b) => if (a) {Some(b)} else {None}).flatten.toList
     }
 
@@ -34,8 +34,8 @@ trait Rewritable() extends AbstractTermGraph {
   }
 
   def splitRecords(locations: List[Int]): Unit = {
-    locations.foreach(p => {
-      getStmt(p) match {
+    val toReplace = locations.foldLeft(List.empty : List[(Int, Int)])((acc, p) => {
+      val toReplace = getStmt(p) match {
         case u : UserFunction if u.params.length == 0 && getStmt(u.sort).isInstanceOf[AbstractDataType] => {
           val toReplace = getStmt(u.sort) match {
             case DataType(_, ctRef::Nil) if getStmt(ctRef).asInstanceOf[Constructor].selectors.length > 0 => {
@@ -44,7 +44,7 @@ trait Rewritable() extends AbstractTermGraph {
                 val sel = getStmt(s).asInstanceOf[Selector]
                 val fresh = memoAddInstruction(Application(memoAddInstruction(UserFunction(Util.freshSymbolName(), sel.sort)), List.empty))
                 // now replace all "select s from u" terms with "fresh"
-                val selSfromU = memoAddInstruction(Application(s, List(memoAddInstruction(Application(p, List.empty)))))
+                val selSfromU = memoAddInstruction(Application(findTarget(s), List(memoAddInstruction(Application(p, List.empty)))))
                 (selSfromU, fresh)
               })
             }
@@ -54,19 +54,19 @@ trait Rewritable() extends AbstractTermGraph {
                 val sel = getStmt(s).asInstanceOf[Selector]
                 val fresh = memoAddInstruction(Application(memoAddInstruction(UserFunction(Util.freshSymbolName(), sel.sort)), List.empty))
                 // now replace all "select s from u" terms with "fresh"
-                val selSfromU = memoAddInstruction(Application(s, List(memoAddInstruction(Application(p, List.empty)))))
+                val selSfromU = memoAddInstruction(Application(findTarget(s), List(memoAddInstruction(Application(p, List.empty)))))
                 (selSfromU, fresh)
               })
             }
             case _ => List.empty
           }
-          locations.foreach(l => if (getStmt(l).isInstanceOf[Ref] || getStmt(l).isInstanceOf[Application]) {
-              copyUpdateTerm(l, toReplace.toMap)
-            })
+          toReplace
         }
-        case _ => 
+        case _ => List.empty
       }
+      acc ++ toReplace
     })
+    locations.foreach(l => copyUpdateTerm(l, toReplace.toMap))
   }
 
   def inlineMacros(locations: List[Int], bound: Int): Boolean = {
@@ -500,6 +500,8 @@ trait Rewritable() extends AbstractTermGraph {
 
   /** Updates the references in an application using the map
     *
+    * Assumes that the term targets of the rewrite map do not contain the keys of the rewrite map.
+    * 
     * @param pos starting location
     * @param map the changes we want to make: whenever we see x we will replace it with map(x)
     */
@@ -508,18 +510,18 @@ trait Rewritable() extends AbstractTermGraph {
     require(map.forall((a, b) => findTarget(a) == a && findTarget(b) == b))
     // try to rewrite the current position
     map.get(findTarget(pos)) match {
-      case Some(value) => 
-        value
+      case Some(newLoc) => newLoc
       case None => {
         getStmt(pos) match {
           case Application(caller, args) =>
             // pos points to an application, update the children
             val newArgs = args.map(a => copyUpdateTerm(a, map))
             val newCaller = copyUpdateTerm(caller, map)
-            memoAddInstruction(Application(newCaller, newArgs))
+            val newLoc = memoAddInstruction(Application(newCaller, newArgs))
+            map.getOrElse(newLoc, newLoc)
           case Ref(loc) =>
-            val newLoc = copyUpdateTerm(loc, map)
-            memoAddInstruction(Ref(newLoc))
+            val newLoc = memoAddInstruction(Ref(copyUpdateTerm(loc, map)))
+            map.getOrElse(newLoc, newLoc)
           case _ => pos
         }
       }
