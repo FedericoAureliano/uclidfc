@@ -39,7 +39,11 @@ class UclidContext(termgraph: TermGraph) extends Context(termgraph) {
       assertionRefs.addOne(termgraph.memoAddInstruction(Application(falseRef, List.empty)))
     }
 
-    if (negateQuery || termgraph.isSynthesisQuery(entryPoints())) {
+    val isSynthesis = termgraph.isSynthesisQuery(entryPoints())
+
+    assert(!(negateQuery && isSynthesis), "Cannot check-sat for synthesis!")
+
+    if (negateQuery || isSynthesis) {
       // combine all the queries
       val orRef = termgraph.memoAddInstruction(TheoryMacro("or"))
       val asserts = termgraph.memoAddInstruction(Application(orRef, assertionRefs.toList))
