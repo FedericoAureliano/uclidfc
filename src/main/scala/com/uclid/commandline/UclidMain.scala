@@ -402,7 +402,7 @@ object UclidMain {
         val ret = if (ctx.ignoreResult()) {
           UclidResult(ProofResult(None, res._1.messages), parseDuration, processDuration, analysisDuration, res._2, res._3)
         } else {
-          UclidResult(res._1, parseDuration, processDuration, analysisDuration, res._2, res._3)
+          UclidResult(ProofResult(res._1.result, res._1.messages, true), parseDuration, processDuration, analysisDuration, res._2, res._3)
         }
 
         if (config.run) {
