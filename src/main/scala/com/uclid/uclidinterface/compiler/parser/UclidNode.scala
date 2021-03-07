@@ -276,6 +276,7 @@ case class SolverOption(name: String, option: String) extends Command
 
 abstract class SolverCommand extends Command
 case class Check() extends SolverCommand
+case class CheckSat() extends SolverCommand
 case class GetValue(vars: List[Expr]) extends SolverCommand
 
 case class Trace(k: IntLit, init: BoolLit, preInit: BlockStmt)

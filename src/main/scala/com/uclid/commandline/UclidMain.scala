@@ -275,7 +275,14 @@ object UclidMain {
         println(features.map(f => "-- " + f).mkString("\n"))
       }
 
-      val res = solver.solve(config.run, config.timeout, ctx, config.outFile, prettyPrintLevel)
+      val resTmp = solver.solve(config.run, config.timeout, ctx, config.outFile, prettyPrintLevel)
+
+      val res = if (ctx.negateQuery) {
+        (ProofResult(resTmp._1.result, resTmp._1.messages, true), resTmp._2, resTmp._3)
+      } else {
+        resTmp
+      }
+
       val ret = if (ctx.ignoreResult()) {
         UclidResult(ProofResult(None, res._1.messages), parseDuration, processDuration, analysisDuration, res._2, res._3)
       } else {

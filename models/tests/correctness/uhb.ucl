@@ -99,145 +99,177 @@ define BeforeAllWrites (ind1 : instrIndex_t, testInstrs : test_t, nodes : [instr
     )
 );
 
-module main {
-    //Litmus test instrs.
-    input testInstrs : test_t;
+//Litmus test instrs.
+const testInstrs : test_t;
 
-    //Node definitions.
-    var nodes : [instrIndex_t]nodeList_t;
+//Node definitions.
+const nodes : [instrIndex_t]nodeList_t;
 
-    axiom positiveTimestamps : forall (ind : instrIndex_t) ::
+// positiveTimestamps 
+axiom forall (ind : instrIndex_t) ::
+    (
+        nodes[ind].Fetch.nTime > 0 &&
+        nodes[ind].Execute.nTime > 0 &&
+        nodes[ind].Writeback.nTime > 0
+    );
+
+// readableTimestamps 
+axiom forall (ind : instrIndex_t) ::
+    (
+        nodes[ind].Fetch.nTime < maxTimestamp &&
+        nodes[ind].Execute.nTime < maxTimestamp &&
+        nodes[ind].Writeback.nTime < maxTimestamp
+    );
+
+// TurnOff 
+// axiom forall (ind : instrIndex_t) ::
+//     (
+//         testInstrs[ind].valid == false &&
+//         nullified(nodes[ind].Fetch) &&
+//         nullified(nodes[ind].Execute) &&
+//         nullified(nodes[ind].Writeback)
+//     );
+
+
+// Read_Values 
+axiom forall (ind1 : instrIndex_t) ::
+    IsValid(testInstrs[ind1]) ==>
+    (
+        IsLoad(testInstrs[ind1]) ==>
         (
-            nodes[ind].Fetch.nTime > 0 &&
-            nodes[ind].Execute.nTime > 0 &&
-            nodes[ind].Writeback.nTime > 0
-        );
-
-    axiom readableTimestamps : forall (ind : instrIndex_t) ::
-        (
-            nodes[ind].Fetch.nTime < maxTimestamp &&
-            nodes[ind].Execute.nTime < maxTimestamp &&
-            nodes[ind].Writeback.nTime < maxTimestamp
-        );
-
-    // axiom TurnOff : forall (ind : instrIndex_t) ::
-    //     (
-    //         testInstrs[ind].valid == false &&
-    //         nullified(nodes[ind].Fetch) &&
-    //         nullified(nodes[ind].Execute) &&
-    //         nullified(nodes[ind].Writeback)
-    //     );
-
-
-    axiom Read_Values : forall (ind1 : instrIndex_t) ::
-        IsValid(testInstrs[ind1]) ==>
-        (
-            IsLoad(testInstrs[ind1]) ==>
             (
-                (
-                    NoWritesBetweenSourceAndRead(ind1, testInstrs, nodes) &&
-                    BeforeOrAfterEveryWriteToSamePA(ind1, testInstrs, nodes)
-                )
-                ||
-                BeforeAllWrites(ind1, testInstrs, nodes)
+                NoWritesBetweenSourceAndRead(ind1, testInstrs, nodes) &&
+                BeforeOrAfterEveryWriteToSamePA(ind1, testInstrs, nodes)
+            )
+            ||
+            BeforeAllWrites(ind1, testInstrs, nodes)
+        )
+    );
+
+
+// Load_Path 
+axiom forall (ind : RANGE) ::
+    IsValid(testInstrs[ind]) ==>
+        (
+            IsLoad(testInstrs[ind]) ==>
+            (
+                AddEdge(nodes[ind].Fetch, nodes[ind].Execute) &&
+                AddEdge(nodes[ind].Execute, nodes[ind].Writeback)
             )
         );
 
-
-    axiom Load_Path : forall (ind : RANGE) ::
-        IsValid(testInstrs[ind]) ==>
+// Store_Path 
+axiom forall (ind : RANGE) ::
+    IsValid(testInstrs[ind]) ==>
+        (
+            IsStore(testInstrs[ind]) ==>
             (
-                IsLoad(testInstrs[ind]) ==>
-                (
-                    AddEdge(nodes[ind].Fetch, nodes[ind].Execute) &&
-                    AddEdge(nodes[ind].Execute, nodes[ind].Writeback)
-                )
-            );
+                AddEdge(nodes[ind].Fetch, nodes[ind].Execute) &&
+                AddEdge(nodes[ind].Execute, nodes[ind].Writeback)
+            )
+        );
 
-    axiom Store_Path : forall (ind : RANGE) ::
-        IsValid(testInstrs[ind]) ==>
+// PO_Fetch 
+axiom forall (ind1 : RANGE, ind2 : RANGE) ::
+    (IsValid(testInstrs[ind1]) && IsValid(testInstrs[ind2])) ==>
+        (
+            ProgramOrder(testInstrs[ind1], testInstrs[ind2]) ==>
+                AddEdge(nodes[ind1].Fetch, nodes[ind2].Fetch)
+        );
+
+// Fetch_In_Order 
+axiom forall (ind1 : RANGE, ind2 : RANGE) ::
+    (IsValid(testInstrs[ind1]) && IsValid(testInstrs[ind2])) ==>
+        (
+            SameCore(testInstrs[ind1], testInstrs[ind2]) && EdgeExists(nodes[ind1].Fetch, nodes[ind2].Fetch) ==>
+                AddEdge(nodes[ind1].Execute, nodes[ind2].Execute)
+        );
+
+// Decode_In_Order 
+axiom forall (ind1 : RANGE, ind2 : RANGE) ::
+    (IsValid(testInstrs[ind1]) && IsValid(testInstrs[ind2])) ==>
+        (
+            SameCore(testInstrs[ind1], testInstrs[ind2]) && EdgeExists(nodes[ind1].Execute, nodes[ind2].Execute) ==>
+                AddEdge(nodes[ind1].Writeback, nodes[ind2].Writeback)
+        );
+
+// Enforce_Write_Ordering 
+axiom forall (ind1 : RANGE, ind2 : RANGE) ::
+    (IsValid(testInstrs[ind1]) && IsValid(testInstrs[ind2])) ==>
+        (
+            SameCore(testInstrs[ind1], testInstrs[ind2]) && IsStore(testInstrs[ind1]) && IsLoad(testInstrs[ind1]) &&
+            ProgramOrder(testInstrs[ind1], testInstrs[ind2]) ==>
+                AddEdge(nodes[ind1].Writeback, nodes[ind2].Execute)
+        );
+
+// Write_Serialization 
+axiom forall (ind1 : RANGE, ind2 : RANGE) ::
+    (IsValid(testInstrs[ind1]) && IsValid(testInstrs[ind2])) ==>
+        (
+            IsStore(testInstrs[ind1]) && IsStore(testInstrs[ind2]) && !SameMicroop(testInstrs[ind1],testInstrs[ind2]) &&
+            SamePhysicalAddress(testInstrs[ind1], testInstrs[ind2]) ==>
             (
-                IsStore(testInstrs[ind]) ==>
-                (
-                    AddEdge(nodes[ind].Fetch, nodes[ind].Execute) &&
-                    AddEdge(nodes[ind].Execute, nodes[ind].Writeback)
-                )
-            );
+                AddEdge(nodes[ind1].Writeback, nodes[ind2].Writeback) ||
+                AddEdge(nodes[ind2].Writeback, nodes[ind1].Writeback)
+            )
+        );
 
-    axiom PO_Fetch : forall (ind1 : RANGE, ind2 : RANGE) ::
-        (IsValid(testInstrs[ind1]) && IsValid(testInstrs[ind2])) ==>
-            (
-                ProgramOrder(testInstrs[ind1], testInstrs[ind2]) ==>
-                    AddEdge(nodes[ind1].Fetch, nodes[ind2].Fetch)
-            );
+//Litmus test mp.
+// ax1
+axiom testInstrs[zero].valid == true;
+// ax2
+axiom testInstrs[zero].globalID == 0;
+// ax3
+axiom testInstrs[zero].coreID == 0;
+// ax4
+axiom testInstrs[zero].uopType == Write;
+// ax5
+axiom testInstrs[zero].physAddr == 0; //x
+// ax6
+axiom testInstrs[zero].data == 1;
 
-    axiom Fetch_In_Order : forall (ind1 : RANGE, ind2 : RANGE) ::
-        (IsValid(testInstrs[ind1]) && IsValid(testInstrs[ind2])) ==>
-            (
-                SameCore(testInstrs[ind1], testInstrs[ind2]) && EdgeExists(nodes[ind1].Fetch, nodes[ind2].Fetch) ==>
-                    AddEdge(nodes[ind1].Execute, nodes[ind2].Execute)
-            );
+// ax7
+axiom testInstrs[one].valid == true;
+// ax8
+axiom testInstrs[one].globalID == 1;
+// ax9
+axiom testInstrs[one].coreID == 0;
+// ax10
+axiom testInstrs[one].uopType == Write;
+// ax11
+axiom testInstrs[one].physAddr == 1; //y
+// ax12
+axiom testInstrs[one].data == 1;
 
-    axiom Decode_In_Order : forall (ind1 : RANGE, ind2 : RANGE) ::
-        (IsValid(testInstrs[ind1]) && IsValid(testInstrs[ind2])) ==>
-            (
-                SameCore(testInstrs[ind1], testInstrs[ind2]) && EdgeExists(nodes[ind1].Execute, nodes[ind2].Execute) ==>
-                    AddEdge(nodes[ind1].Writeback, nodes[ind2].Writeback)
-            );
+// ax13
+axiom testInstrs[two].valid == true;
+// ax14
+axiom testInstrs[two].globalID == 2;
+// ax15
+axiom testInstrs[two].coreID == 1;
+// ax16
+axiom testInstrs[two].uopType == Read;
+// ax17
+axiom testInstrs[two].physAddr == 1; //y
+// ax18
+axiom testInstrs[two].data == 1;
 
-    axiom Enforce_Write_Ordering : forall (ind1 : RANGE, ind2 : RANGE) ::
-        (IsValid(testInstrs[ind1]) && IsValid(testInstrs[ind2])) ==>
-            (
-                SameCore(testInstrs[ind1], testInstrs[ind2]) && IsStore(testInstrs[ind1]) && IsLoad(testInstrs[ind1]) &&
-                ProgramOrder(testInstrs[ind1], testInstrs[ind2]) ==>
-                    AddEdge(nodes[ind1].Writeback, nodes[ind2].Execute)
-            );
+// ax19
+axiom testInstrs[three].valid == true;
+// ax20
+axiom testInstrs[three].globalID == 3;
+// ax21
+axiom testInstrs[three].coreID == 1;
+// ax22
+axiom testInstrs[three].uopType == Read;
+// ax23
+axiom testInstrs[three].physAddr == 0; //x
+// ax24
+axiom testInstrs[three].data == 0;
 
-    axiom Write_Serialization : forall (ind1 : RANGE, ind2 : RANGE) ::
-        (IsValid(testInstrs[ind1]) && IsValid(testInstrs[ind2])) ==>
-            (
-                IsStore(testInstrs[ind1]) && IsStore(testInstrs[ind2]) && !SameMicroop(testInstrs[ind1],testInstrs[ind2]) &&
-                SamePhysicalAddress(testInstrs[ind1], testInstrs[ind2]) ==>
-                (
-                    AddEdge(nodes[ind1].Writeback, nodes[ind2].Writeback) ||
-                    AddEdge(nodes[ind2].Writeback, nodes[ind1].Writeback)
-                )
-            );
 
-    //Litmus test mp.
-    axiom ax1: testInstrs[zero].valid == true;
-    axiom ax2: testInstrs[zero].globalID == 0;
-    axiom ax3: testInstrs[zero].coreID == 0;
-    axiom ax4: testInstrs[zero].uopType == Write;
-    axiom ax5: testInstrs[zero].physAddr == 0; //x
-    axiom ax6: testInstrs[zero].data == 1;
-
-    axiom ax7: testInstrs[one].valid == true;
-    axiom ax8: testInstrs[one].globalID == 1;
-    axiom ax9: testInstrs[one].coreID == 0;
-    axiom ax10: testInstrs[one].uopType == Write;
-    axiom ax11: testInstrs[one].physAddr == 1; //y
-    axiom ax12: testInstrs[one].data == 1;
-
-    axiom ax13: testInstrs[two].valid == true;
-    axiom ax14: testInstrs[two].globalID == 2;
-    axiom ax15: testInstrs[two].coreID == 1;
-    axiom ax16: testInstrs[two].uopType == Read;
-    axiom ax17: testInstrs[two].physAddr == 1; //y
-    axiom ax18: testInstrs[two].data == 1;
-
-    axiom ax19: testInstrs[three].valid == true;
-    axiom ax20: testInstrs[three].globalID == 3;
-    axiom ax21: testInstrs[three].coreID == 1;
-    axiom ax22: testInstrs[three].uopType == Read;
-    axiom ax23: testInstrs[three].physAddr == 0; //x
-    axiom ax24: testInstrs[three].data == 0;
-
-    //Assert false, since we just want to check if there's a SAT assignment.
-    invariant acyclic : false;
-
+module main {
     control {
-        unroll(0);
-        check;
+        check_sat;
     }
 }

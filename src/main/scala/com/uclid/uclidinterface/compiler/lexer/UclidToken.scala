@@ -101,6 +101,7 @@ case class KWOPTION() extends UclidToken
 case class KWSYNTHESIS() extends UclidToken
 case class KWGETVALUE() extends UclidToken
 case class KWCHECK() extends UclidToken
+case class KWCHECKSAT() extends UclidToken
 case class KWTRACE() extends UclidToken
 case class KWAXIOM() extends UclidToken
 case class KWLET() extends UclidToken
