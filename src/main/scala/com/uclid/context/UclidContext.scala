@@ -39,7 +39,7 @@ class UclidContext(termgraph: TermGraph) extends Context(termgraph) {
       assertionRefs.addOne(termgraph.memoAddInstruction(Application(falseRef, List.empty)))
     }
 
-    if (termgraph.isSynthesisQuery(entryPoints())) {
+    if (negateQuery || termgraph.isSynthesisQuery(entryPoints())) {
       // combine all the queries
       val orRef = termgraph.memoAddInstruction(TheoryMacro("or"))
       val asserts = termgraph.memoAddInstruction(Application(orRef, assertionRefs.toList))
@@ -63,16 +63,10 @@ class UclidContext(termgraph: TermGraph) extends Context(termgraph) {
       innerCtx.toQueries(pp)
     } else {
       assertionRefs.foldLeft(List.empty : List[String])((acc, ass) => {
-        val assertion = if (negateQuery) {
-          val notRef = termgraph.memoAddInstruction(TheoryMacro("not"))
-          termgraph.memoAddInstruction(Application(notRef, List(ass)))
+        var spec = if (axiomRefs.length > 0) {
+          termgraph.memoAddInstruction(Application(andRef, List(axioms, ass)))
         } else {
           ass
-        }
-        var spec = if (axiomRefs.length > 0) {
-          termgraph.memoAddInstruction(Application(andRef, List(axioms, assertion)))
-        } else {
-          assertion
         }
         val innerCtx = new SyMTContext(termgraph)
         options.foreach(o => innerCtx.addOption(o._1, o._2))
