@@ -4,12 +4,12 @@ import com.uclid.termgraph._
 
 import scala.collection.mutable.ListBuffer
 
-class UclidContext(termgraph: TermGraph) extends SyMTContext(termgraph) {
+class UclidContext(termgraph: TermGraph) extends Context(termgraph) {
   protected val assertionRefs = new ListBuffer[Int]()
   protected val axiomRefs = new ListBuffer[Int]()
   var getValues: Option[List[Int]] = None
 
-  override def addAssertion(ass: Int): Unit =
+  def addAssertion(ass: Int): Unit =
     assertionRefs.addOne(ass)
 
   def addAxiom(ax: Int): Unit =
@@ -18,77 +18,52 @@ class UclidContext(termgraph: TermGraph) extends SyMTContext(termgraph) {
   var checkQuery = false
   var traceQuery = false
 
+  protected val options: ListBuffer[(String, String)] =
+    ListBuffer(("produce-assignments", "true"))
+
+  def addOption(option: String, value: String): Unit =
+    options.addOne((option, value))
+
   override def ignoreResult() = traceQuery
 
   override def entryPoints() = assertionRefs.toList ++ axiomRefs ++ getValues.getOrElse(List.empty)
 
-  override def toQuery(prettyPrint: Boolean): String = {
-    if (!prettyPrint) {
-      TAB = ""
-      NEWLINE = " "
-    }
-    alreadyDeclared.clear()
-    val logic = termgraph.queryLogic(entryPoints())
-    val logicString = s"(set-logic ${logic})"
-    val opts = options.map(o => s"(set-option :${o._1} ${o._2})").mkString("\n")
+  override def toQueries(pp: Int): List[String] = {
 
-    val axiomStrings = axiomRefs
-      .map(r => s"${TAB * 1}${programPointToQueryTerm(r, 1)}")
-      .mkString("\n")
-
-    val assertionStrings = assertionRefs
-      .map(r => s"${TAB * 2}${programPointToQueryTerm(r, 2)}")
-      .mkString("\n")
-
-    val spec = (assertionRefs.length > 0, axiomRefs.length > 0) match {
-      case (true, true) =>
-        s"(and\n$axiomStrings\n${TAB * 1}(or\n$assertionStrings))"
-      case (true, false) => s"(or\n$assertionStrings)"
-      case (false, true) => s"(and\n$axiomStrings)"
-      case _             => ""
-    }
-
-    val body: String = if (spec != "") {
-      if (termgraph.isSynthesisQuery) {
-        programToQueryCtx(termgraph.mark(entryPoints())) + "\n(constraint (not " + spec + "))"
+    val andRef = termgraph.memoAddInstruction(TheoryMacro("and"))
+    val axioms = termgraph.memoAddInstruction(Application(andRef, axiomRefs.toList))
+    
+    if (termgraph.isSynthesisQuery(entryPoints())) {
+      // combine all the queries
+      val orRef = termgraph.memoAddInstruction(TheoryMacro("or"))
+      val asserts = termgraph.memoAddInstruction(Application(orRef, assertionRefs.toList))
+      val spec = if (axiomRefs.length > 0) {
+        termgraph.memoAddInstruction(Application(andRef, List(axioms, asserts)))
       } else {
-        programToQueryCtx(termgraph.mark(entryPoints())) + "\n(assert " + spec + ")"
+        asserts
       }
+      val innerCtx = new SyMTContext(termgraph)
+      options.foreach(o => innerCtx.addOption(o._1, o._2))
+      innerCtx.addAssertion(spec)
+      if (checkQuery || traceQuery) {
+        innerCtx.checkSat()
+      }
+      innerCtx.toQueries(pp)
     } else {
-      if (getValues.isDefined) {
-        programToQueryCtx(termgraph.mark(entryPoints()))
-      } else {
-        ""
-      } + "\n; nothing to verify"
-    }
-
-    val postQuery = if (checkQuery || traceQuery) {
-      val model = if (getValues.isDefined) {
-        val cmd = if (getValues.get.length == 0) {
-          "(get-model)"
+      assertionRefs.foldLeft(List.empty : List[String])((acc, ass) => {
+        val spec = if (axiomRefs.length > 0) {
+          termgraph.memoAddInstruction(Application(andRef, List(axioms, ass)))
         } else {
-          s"(get-value (${getValues.get.map(v => programPointToQueryTerm(v, 0, true)).mkString(" ")}))"
+          ass
         }
-        "(echo \"Model\")\n" + cmd
-      } else {
-        ""
-      }
-
-      val proofStatus = if (assertionRefs.length + axiomRefs.length > 0) {
-        "(echo \"Proof Status\")\n(get-assignment)"
-      } else {
-        ""
-      }
-
-      if (termgraph.isSynthesisQuery) {
-        "\n\n(check-synth)"
-      } else {
-        "\n\n(check-sat)\n(echo \"\")\n" + proofStatus + "\n(echo \"\")\n" + model
-      }
-    } else {
-      ""
+        val innerCtx = new SyMTContext(termgraph)
+        options.foreach(o => innerCtx.addOption(o._1, o._2))
+        innerCtx.addAssertion(spec)
+        if (checkQuery || traceQuery) {
+          innerCtx.checkSat()
+        }
+        acc ++ innerCtx.toQueries(pp)
+      })
     }
-
-    s"$logicString\n$opts\n\n$body\n$postQuery"
   }
 }

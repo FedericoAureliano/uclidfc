@@ -19,7 +19,8 @@ lazy val root = project
     ),
     libraryDependencies += ("org.scala-lang.modules" %% "scala-parser-combinators" % "1.2.0-M1"),
     libraryDependencies += ("com.novocode"            % "junit-interface"          % "0.11" % "test"),
-    libraryDependencies += "com.github.scopt"        %% "scopt"                    % "4.0.0",
+    libraryDependencies += ("com.github.scopt"        %% "scopt"                    % "4.0.0"),
+    libraryDependencies += ("org.scala-lang.modules" %% "scala-parallel-collections" % "1.0.1"),
     jacocoReportSettings := JacocoReportSettings(
       "Jacoco Coverage Report",
       Some("shared"),

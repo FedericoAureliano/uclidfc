@@ -17,14 +17,12 @@ abstract class AbstractTermGraph() {
 
   /** The actual graph data structure.
     */
-  val stmts: ArrayBuffer[Instruction] = new ArrayBuffer[Instruction]()
+  private val stmts: ArrayBuffer[Instruction] = new ArrayBuffer[Instruction]()
 
   /** Points an instruction to its address in the term graph.
     */
   protected val memo: HashMap[Instruction, Int] =
     new HashMap().addAll(stmts.zipWithIndex.map(p => (p._1, p._2)))
-
-  var isSynthesisQuery = false
 
   def clear(): Unit = {
     stmts.clear()
@@ -39,10 +37,7 @@ abstract class AbstractTermGraph() {
     * @param toName the Option[String] to name the instruction
     * @return the location of the instruction
     */
-  def memoAddInstruction(
-    inst: Instruction,
-    toName: Option[String] = None
-  ): Int = {
+  def memoAddInstruction(inst: Instruction): Int = {
     inst match {
       case app : Application =>
         app.args.foreach(a => assert(stmts(a).isInstanceOf[Application] || stmts(a).isInstanceOf[Ref]))
@@ -55,15 +50,8 @@ abstract class AbstractTermGraph() {
       case Some(loc) => loc
       case None      => addInstruction(inst)
     }
-    toName match {
-      case Some(name) =>
-        val newLoc = addInstruction(Ref(location, Some(name)))
-        memo.put(inst, newLoc)
-        newLoc
-      case None =>
-        memo.put(inst, location)
-        location
-    }
+    memo.put(inst, location)
+    location
   }
 
   /** Add an instruction to the end of the array buffer representing the term graph WITHOUT ADDING TO MEMO.
@@ -92,33 +80,16 @@ abstract class AbstractTermGraph() {
     */
   def memoUpdateInstruction(
     r: Int,
-    newInstruction: Instruction
+    newInstruction: Ref
   ): Unit = {
     // require that at most one instruction points to this address
     require(memo.forall(p => p._2 != r || stmts(r) == p._1))
-    
-    newInstruction match {
-      case app : Application =>
-        app.args.foreach(a => assert(stmts(a).isInstanceOf[Application] || stmts(a).isInstanceOf[Ref]))
-        assert(!stmts(app.caller).isInstanceOf[Application])
-      case r : Ref => 
-        assert(stmts(r.loc).isInstanceOf[Application] || stmts(r.loc).isInstanceOf[Ref])
-      case _ =>
-    }
 
     val old = stmts(r)
     memo.remove(old)
 
     // update the address r to contain the new instruction
-    stmts.update(
-      r,
-      newInstruction
-    )
-    // make sure the memo map points to this position
-    memo.put(
-      newInstruction,
-      r
-    )
+    stmts(r) = newInstruction
   }
 
   def memoGetInstruction(inst: Instruction): Int =
@@ -139,9 +110,10 @@ abstract class AbstractTermGraph() {
       if (!marks(pos)) {
         marks(pos) = true
         stmts(pos) match {
-          case Ref(i, _)               => frontier.addOne(i)
+          case Ref(i)               => frontier.addOne(i)
           case Application(caller, args) =>
             frontier.addOne(caller); args.foreach(i => frontier.addOne(i))
+          // case UserMacro(_, _, b, _) => frontier.addOne(b)
           case _ =>
         }
       }
@@ -162,7 +134,7 @@ abstract class AbstractTermGraph() {
       if (!marks(pos)) {
         marks(pos) = true
         stmts(pos) match {
-          case Ref(i, _)               => frontier.addOne(i)
+          case Ref(i)               => frontier.addOne(i)
           case Numeral(_)              =>
           case TheorySort(_, p)        => p.foreach(a => frontier.addOne(a))
           case UserSort(_, _)          =>
@@ -199,23 +171,26 @@ abstract class AbstractTermGraph() {
     }
   }
 
+  def findTarget(in: Int) : Int = {
+    var pos = in
+    while (stmts(pos).isInstanceOf[Ref]) {
+      pos = stmts(pos).asInstanceOf[Ref].loc
+    }
+    pos
+  }
+
+  def getStmts() : ArrayBuffer[Instruction] = stmts
+  def getStmt(in: Int) : Instruction = stmts(findTarget(in))
+
   def repair() : Unit = {
     memo.clear()
     val newStmts: ArrayBuffer[Instruction] = stmts.clone()
-
-    def findTarget(in: Int) : Int = {
-      var pos = in
-      while (stmts(pos).isInstanceOf[Ref]) {
-        pos = stmts(pos).asInstanceOf[Ref].loc
-      }
-      pos
-    }
     
     (0 to stmts.length - 1).foreach { p =>
       var pos = findTarget(p)
 
       val newInst = stmts(pos) match {
-        case Ref(i, n) => Ref(findTarget(i), n)
+        case Ref(i) => Ref(findTarget(i))
         case TheorySort(n, p) => TheorySort(n, p.map(a => findTarget(a)))
         case FunctionParameter(n, s) => FunctionParameter(n, findTarget(s))
         case TheoryMacro(n, p) => TheoryMacro(n, p.map(a => findTarget(a)))
@@ -231,7 +206,7 @@ abstract class AbstractTermGraph() {
       }
       
       memo.get(newInst) match {
-        case Some(otherPos) =>  newStmts(p) = Ref(otherPos, None)
+        case Some(otherPos) =>  newStmts(p) = Ref(otherPos)
         case None => {
           newStmts(p) = newInst
           memo.addOne(newInst, p)

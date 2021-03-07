@@ -35,22 +35,24 @@ class Vampire() extends Solver() {
   def getCommand(): String =
     "vampire --mode smtcomp --input_syntax smtlib2 --term_algebra_acyclicity light --term_algebra_rules on --fmb_enumeration_strategy smt"
 
-  def generateQuery(ctx: Context, prettyPrint: Boolean): String = {
-    val query = ctx.toQuery(prettyPrint)
+  def generateQueries(ctx: Context, prettyPrint: Int): List[String] = {
+    val queries = ctx.toQueries(prettyPrint)
 
-    // find the set logic command
-    val pattern = "(?<=\\(set-logic )(.*)(?=\\))".r
-    val logic = pattern.findFirstIn(query)
+    queries.map(query => {
+      // find the set logic command
+      val pattern = "(?<=\\(set-logic )(.*)(?=\\))".r
+      val logic = pattern.findFirstIn(query)
+  
+      if (logic.isDefined && !supportedLogics.contains(logic.get)) {
+        throw new SolverMismatchError(s"Vampire does not support ${logic.get}")
+      }
+  
+      if (ctx.termgraph.isSynthesisQuery()) {
+        throw new SolverMismatchError("Vampire does not support synthesis")
+      }
+    })
 
-    if (logic.isDefined && !supportedLogics.contains(logic.get)) {
-      throw new SolverMismatchError(s"Vampire does not support ${logic.get}")
-    }
-
-    if (ctx.termgraph.isSynthesisQuery) {
-      throw new SolverMismatchError("Vampire does not support synthesis")
-    }
-
-    query
+    queries
   }
 
   def parseAnswer(answer: String): String =

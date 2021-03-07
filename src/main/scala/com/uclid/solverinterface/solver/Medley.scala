@@ -14,7 +14,7 @@ class Medley(choices: List[Solver]) extends Solver() {
   )
 
   def getCommand(): String = solver.getCommand()
-  def generateQuery(ctx: Context, prettyPrint: Boolean): String = solver.generateQuery(ctx, prettyPrint)
+  def generateQueries(ctx: Context, prettyPrint: Int): List[String] = solver.generateQueries(ctx, prettyPrint)
   def parseAnswer(answer: String): String = {
     val parsed = solver.parseAnswer(answer)
 

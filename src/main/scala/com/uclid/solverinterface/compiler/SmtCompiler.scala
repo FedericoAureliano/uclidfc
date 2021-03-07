@@ -52,6 +52,7 @@ object SmtCompiler {
     def parseCommand(): Unit = {
       require(tokens(pos) == "(")
       
+      // we don't need much lookahead: just look at the next 3 tokens at a time
       tokens(pos) :: tokens(pos + 1) :: tokens(pos + 2) :: Nil match {
         case "(" :: "assert" :: _ =>
           pos += 2
@@ -61,6 +62,9 @@ object SmtCompiler {
         case "(" :: "check-sat" :: ")" :: _ =>
           pos += 3
           ctx.checkSat()
+        case "(" :: "set-option" :: optionName :: _ =>
+          pos += 5
+          print(s"Ignoring (set-option $optionName ...) command in query ... ")
         case "(" :: "set-logic" :: logic :: _ =>
           pos += 4 
           print(s"Ignoring (set-logic $logic) command in query ... ")
@@ -87,6 +91,8 @@ object SmtCompiler {
             else if (tokens(pos) == ")") {parentheses -= 1}
             pos += 1
           }
+        case "(" :: "exit" :: ")" :: _ =>
+          pos = tokens.length
         case c =>
           throw new SmtParserError("Unexpected character around: " + c)
       }
@@ -167,11 +173,25 @@ object SmtCompiler {
     }
 
     def parseSort(): Int = {
-      pos += 1
-      if (global.containsKey(tokens(pos - 1))) {
-        global.get(tokens(pos - 1))
-      } else {
-        ctx.termgraph.memoAddInstruction(TheorySort(tokens(pos - 1)))
+      tokens(pos) match {
+        // more complicated sorts
+        case "(" => tokens(pos + 1) :: tokens(pos + 2) :: tokens(pos + 3) :: tokens(pos + 4) :: Nil match {
+          case "_" :: "BitVec" :: width :: ")" :: Nil => {
+            pos += 5
+            val w = ctx.termgraph.memoAddInstruction(Numeral(width.toInt))
+            ctx.termgraph.memoAddInstruction(TheorySort("BitVec", List(w)))
+          }
+          case c => throw new SmtParserError(s"Expected Bitvector, got $c!")
+        }
+        // sorts that are just names
+        case name => {
+          pos += 1
+          if (global.containsKey(name)) {
+            global.get(name)
+          } else {
+            ctx.termgraph.memoAddInstruction(TheorySort(name))
+          }
+        }
       }
     }
 

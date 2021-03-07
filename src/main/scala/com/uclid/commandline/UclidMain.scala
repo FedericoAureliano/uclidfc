@@ -52,6 +52,7 @@ object UclidMain {
     indexOfGTZGadgets: Boolean = false,
     outFile: Option[String] = None,
     prettyPrint: Boolean = false,
+    debugPrint: Boolean = false,
     files: Seq[java.io.File] = Seq()
   )
 
@@ -100,6 +101,10 @@ object UclidMain {
       opt[Unit]("pretty-print")
         .action((_, c) => c.copy(prettyPrint = true))
         .text("Try to make output queries human readable.")
+
+      opt[Unit]("debug-print")
+        .action((_, c) => c.copy(debugPrint = true))
+        .text("Add internal term graph information as SMT comments.")
 
       opt[Unit]("skip-solver")
         .action((_, c) => c.copy(run = false))
@@ -209,6 +214,14 @@ object UclidMain {
     val errorResult =
       new ProofResult()
 
+    val prettyPrintLevel = if (config.debugPrint) {
+      2
+    } else if (config.prettyPrint && !config.debugPrint) {
+      1
+    } else {
+      0
+    }
+
     try {
       print("\nParsing input ... ")
       val startParse = System.nanoTime
@@ -262,7 +275,7 @@ object UclidMain {
         println(features.map(f => "-- " + f).mkString("\n"))
       }
 
-      val res = solver.solve(config.run, config.timeout, ctx, config.outFile, config.prettyPrint)
+      val res = solver.solve(config.run, config.timeout, ctx, config.outFile, prettyPrintLevel)
       val ret = if (ctx.ignoreResult()) {
         UclidResult(ProofResult(None, res._1.messages), parseDuration, processDuration, analysisDuration, res._2, res._3)
       } else {
@@ -300,6 +313,15 @@ object UclidMain {
   }
 
   def runSMTMode(solver: Solver, config: Config) : List[UclidResult] = {
+
+    val prettyPrintLevel = if (config.debugPrint) {
+      2
+    } else if (config.prettyPrint && !config.debugPrint) {
+      1
+    } else {
+      0
+    }
+
     // Must be SMT Language
     val results = config.files.map(f => {
       val errorResult = new ProofResult()
@@ -363,13 +385,13 @@ object UclidMain {
           println(features.map(f => "-- " + f).mkString("\n"))
         }
         
-        val unmodifiedSMTFile = if (changed) {
+        val unmodifiedSMTFile = if (changed || config.outFile.isDefined) {
           None
         } else {
           Some(f)
         }
   
-        val res = solver.solve(config.run, config.timeout, ctx, config.outFile, config.prettyPrint, unmodifiedSMTFile)
+        val res = solver.solve(config.run, config.timeout, ctx, config.outFile, prettyPrintLevel, unmodifiedSMTFile)
         val ret = if (ctx.ignoreResult()) {
           UclidResult(ProofResult(None, res._1.messages), parseDuration, processDuration, analysisDuration, res._2, res._3)
         } else {

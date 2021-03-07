@@ -5,6 +5,7 @@
 // MaxSolveTime=1
 // Solver=z3
 // Result=None
+// Option=optimize 0
 
 module fib
 {

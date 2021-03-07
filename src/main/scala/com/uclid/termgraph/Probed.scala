@@ -4,10 +4,20 @@ import scala.collection.mutable.ArrayBuffer
 
 trait Probed() extends AbstractTermGraph {
 
-  def featuresList(entryPoints: List[Int]): List[String] =
+  private var synthesis : Option[Boolean] = None
+
+  def isSynthesisQuery(entryPoints: List[Int] = List.empty) : Boolean = {
+    if (synthesis.isDefined) {
+      synthesis.get
+    } else {
+      synthesis = Some(logicComponents(entryPoints).toMap.getOrElse("SY", 0) > 0)
+      synthesis.get
+    }
+  }
+
+  def featuresList(entryPoints: List[Int]): List[String] = 
     List(
       "Term graph size: " + numberOfNodes().toString,
-      "Requires synthesis: " + isSynthesisQuery,
       "Number of variables: " + numberOfVariables().toString,
       "Largest integer literal: " + largestIntegerLiteral(entryPoints).toString,
       "Logic components:\n" + logicComponents(entryPoints)
@@ -17,13 +27,13 @@ trait Probed() extends AbstractTermGraph {
       "Avg Arity: " + avgArity(entryPoints).toString
     )
 
-  def numberOfNodes(): Int = stmts.length
+  def numberOfNodes(): Int = getStmts().length
   def numberOfMemoEntries(): Int = memo.keys.toList.length
-  def numberOfVariables(): Int = stmts.filter(p => p.isInstanceOf[UserFunction]).length
+  def numberOfVariables(): Int = getStmts().filter(p => p.isInstanceOf[UserFunction]).length
 
   def largestIntegerLiteral(entryPoints: List[Int]): Option[Int] = {
     var max: Option[Int] = None
-    stmts
+    getStmts()
       .foreach(inst =>
         inst match {
           case TheoryMacro(name, _) =>
@@ -42,7 +52,7 @@ trait Probed() extends AbstractTermGraph {
 
   def maxArity(entryPoints: List[Int]): Int = {
     var max: Option[Int] = None
-    stmts
+    getStmts()
       .foreach(inst =>
         inst match {
           case UserFunction(_, _, params) =>
@@ -59,7 +69,7 @@ trait Probed() extends AbstractTermGraph {
     def avgArity(entryPoints: List[Int]): Float = {
     var avg: Float = 0.0
     var count: Float = 0.0
-    stmts
+    getStmts()
       .foreach(inst =>
         inst match {
           case UserFunction(_, _, params) => {
@@ -80,21 +90,23 @@ trait Probed() extends AbstractTermGraph {
     var lia = 0
     var nia = 0
     var s = 0
+    var bv = 0
+    var sy = 0
 
     val marks = mark(entryPoints)
 
     marks
-      .zip(stmts)
+      .zip(getStmts())
       .foreach((marked, inst) =>
         if (marked) {
           inst match {
             case Application(caller, args) =>
               (caller :: args).foreach(pos => {
-                stmts(pos) match {
+                getStmt(pos) match {
                   case TheoryMacro("*", _) =>
                     if (
                       args.filter { a =>
-                        stmts(a) match {
+                        getStmt(a) match {
                           case TheoryMacro(name, _) =>
                             name.toIntOption.isDefined
                           case _ => false
@@ -105,6 +117,8 @@ trait Probed() extends AbstractTermGraph {
                     } else {
                       lia += 1
                     }
+              
+                  // TODO: add all string ops
                   case TheoryMacro("str.++", _) => s += 1
                   case TheoryMacro("str.indexof", _) => s += 1
                   case TheoryMacro("str.substr", _) => s += 1
@@ -114,6 +128,25 @@ trait Probed() extends AbstractTermGraph {
                   case TheoryMacro("str.suffixof", _) => s += 1
                   case TheoryMacro("str.replace", _) => s += 1
                   case TheoryMacro("str.at", _) => s += 1
+
+                  // TODO: add all bitvector ops
+                  case TheoryMacro("bvadd", _) => bv += 1
+                  case TheoryMacro("bvsub", _) => bv += 1
+                  case TheoryMacro("bvand", _) => bv += 1
+                  case TheoryMacro("bvor", _) => bv += 1
+                  case TheoryMacro("bvmul", _) => bv += 1
+                  case TheoryMacro("bvudiv", _) => bv += 1
+                  case TheoryMacro("bvurem", _) => bv += 1
+                  case TheoryMacro("bvshl", _) => bv += 1
+                  case TheoryMacro("bvlshr", _) => bv += 1
+                  case TheoryMacro("bvnot", _) => bv += 1
+                  case TheoryMacro("bvneg", _) => bv += 1
+                  case TheoryMacro("bvult", _) => bv += 1
+                  case TheoryMacro("concat", _) => bv += 1
+                  case TheoryMacro("extract", _) => bv += 1
+                  case TheoryMacro("bv2nat", _) => bv += 1
+                  case TheoryMacro("nat2bv", _) => bv += 1
+
                   case TheoryMacro("+", _) => lia += 1
                   case TheoryMacro("-", _) => lia += 1
                   case TheoryMacro("forall", _) => q += 1
@@ -126,19 +159,22 @@ trait Probed() extends AbstractTermGraph {
                   case _                   =>
                 }
               })
+            case _ : Synthesis => sy += 1
             case _ =>
           }
         }
       )
 
     List(
+      ("SY", sy),
       ("Q", q),
       ("UF", uf),
       ("A", a),
       ("DT", dt),
       ("LIA", lia),
       ("NIA", nia),
-      ("S", s)
+      ("S", s),
+      ("BV", bv)
     )
   }
 
@@ -150,21 +186,23 @@ trait Probed() extends AbstractTermGraph {
     var linear = true
     var qf = true
     var s = false
+    var bv = false
+    var sy = false
 
     val marks = mark(entryPoints)
 
     marks
-      .zip(stmts)
+      .zip(getStmts())
       .foreach((marked, inst) =>
         if (marked) {
           inst match {
             case _: AbstractDataType => dt = true
             case Application(caller, args) =>
-              stmts(caller) match {
+              getStmt(caller) match {
                 case TheoryMacro("*", _) =>
                   if (
                     args.filter { a =>
-                      stmts(a) match {
+                      getStmt(a) match {
                         case TheoryMacro(name, _) =>
                           name.toIntOption.isDefined
                         case _ => false
@@ -184,15 +222,17 @@ trait Probed() extends AbstractTermGraph {
             case TheorySort("Array", _) => a = true
             case TheorySort("Int", _)   => i = true
             case TheorySort("String", _)   => s = true
-            case Synthesis(_, _, _)     => isSynthesisQuery = true
+            case TheorySort("BitVec", _)   => bv = true
+            case Synthesis(_, _, _)     => sy = true
             case UserSort(_, _) => uf = true
             case _                      =>
           }
         }
       )
 
-    val out = s"${if (qf && !isSynthesisQuery) { "QF_" }
+    val out = s"${if (qf && !sy) { "QF_" }
     else { "" }}${if (uf) { "UF" }
+    else { "" }}${if (bv) { "BV" }
     else { "" }}${if (s) { "S" }
     else { "" }}${if (a) { "A" }
     else { "" }}${if (dt) { "DT" }

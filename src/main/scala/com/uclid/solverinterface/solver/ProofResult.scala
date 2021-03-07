@@ -9,7 +9,7 @@ class ProofResult(
 ) {
 
   override def toString(): String = {
-    val extra = "Detailed Output:" + messages
+    val extra = "Detailed Output: " + messages
     val answer = result match {
       case Some(true)  => "Counterexample!"
       case Some(false) => "Verified!"

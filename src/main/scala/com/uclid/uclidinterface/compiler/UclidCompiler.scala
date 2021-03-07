@@ -72,7 +72,7 @@ object UclidCompiler {
     }
 
     def sortToType(sortRef: Int): InlineType =
-      termgraph.stmts(sortRef) match {
+      termgraph.getStmt(sortRef) match {
         case DataType(name, _)        => NamedType(Identifier(name))
         case Module(name, _, _, _, _) => NamedType(Identifier(name))
         case TheorySort(name, params) =>
@@ -109,16 +109,16 @@ object UclidCompiler {
               stateParam match {
                 case Some(state) =>
                   val ctrRef = termgraph
-                    .stmts(
+                    .getStmt(
                       termgraph.inferTermType(state)
                     )
                     .asInstanceOf[AbstractDataType]
                     .defaultCtr()
                   val selectorsZip = termgraph
-                    .stmts(ctrRef)
+                    .getStmt(ctrRef)
                     .asInstanceOf[Constructor]
                     .selectors
-                    .map(p => (p, termgraph.stmts(p).asInstanceOf[Selector]))
+                    .map(p => (p, termgraph.getStmt(p).asInstanceOf[Selector]))
                   val selRef =
                     selectorsZip.find(p => p._2.name == id.name) match {
                       case Some(value) => value._1
@@ -178,16 +178,16 @@ object UclidCompiler {
             val exprCtrRef = {
               val res = exprToTerm(stateParam, local, exp)
               termgraph
-                .stmts(
+                .getStmt(
                   termgraph.inferTermType(res._1)
                 )
                 .asInstanceOf[AbstractDataType]
                 .defaultCtr()
             }
-            val ctr = termgraph.stmts(exprCtrRef).asInstanceOf[Constructor]
+            val ctr = termgraph.getStmt(exprCtrRef).asInstanceOf[Constructor]
             ctr.selectors
               .find { s =>
-                val sel = termgraph.stmts(s).asInstanceOf[Selector]
+                val sel = termgraph.getStmt(s).asInstanceOf[Selector]
                 sel.name == id.name
               }
               .getOrElse(throw new SemanticError(id.toString))
@@ -319,11 +319,11 @@ object UclidCompiler {
           }
           // get the module it belongs to
           val mod = termgraph
-            .stmts(termgraph.inferTermType(instanceRef))
+            .getStmt(termgraph.inferTermType(instanceRef))
             .asInstanceOf[Module]
           // find next function location
           val nextMacro =
-            termgraph.stmts(mod.next).asInstanceOf[UserMacro]
+            termgraph.getStmt(mod.next).asInstanceOf[UserMacro]
 
           val extraArgs = nextMacro.params.tail
             
@@ -348,11 +348,11 @@ object UclidCompiler {
           }
           // get the module it belongs to
           val mod = termgraph
-            .stmts(termgraph.inferTermType(instanceRef))
+            .getStmt(termgraph.inferTermType(instanceRef))
             .asInstanceOf[Module]
           // find init function location
           val initMacro =
-            termgraph.stmts(mod.init).asInstanceOf[UserMacro]
+            termgraph.getStmt(mod.init).asInstanceOf[UserMacro]
 
           val extraArgs = initMacro.params.tail
 
@@ -401,16 +401,16 @@ object UclidCompiler {
             case id: Identifier =>
               // get the constructor
               val ctr = termgraph
-                .stmts(ctrRef)
+                .getStmt(ctrRef)
                 .asInstanceOf[Constructor]
 
               var found = false
               val components: List[Int] = ctr.selectors.map { s =>
-                val sel = termgraph.stmts(s).asInstanceOf[Selector]
+                val sel = termgraph.getStmt(s).asInstanceOf[Selector]
                 if (id.name == sel.name) {
                   found = true
                   val res = exprToTerm(Some(stateParam), Map.empty, rhs)
-                  assert(res._2.forall(p => termgraph.stmts(p).isInstanceOf[FunctionParameter]))
+                  assert(res._2.forall(p => termgraph.getStmt(p).isInstanceOf[FunctionParameter]))
                   newParams ++= res._2
                   res._1
                 } else {
@@ -449,10 +449,10 @@ object UclidCompiler {
               // first get the constructor for the type of expr
               val exprCtrRef = {
                 val res = exprToTerm(Some(stateParam), Map.empty, expr)
-                assert(res._2.forall(p => termgraph.stmts(p).isInstanceOf[FunctionParameter]))
+                assert(res._2.forall(p => termgraph.getStmt(p).isInstanceOf[FunctionParameter]))
                 newParams ++= res._2
                 termgraph
-                  .stmts(
+                  .getStmt(
                     termgraph.inferTermType(res._1)
                   )
                   .asInstanceOf[AbstractDataType]
@@ -460,11 +460,11 @@ object UclidCompiler {
               }
 
               val exprCtr =
-                termgraph.stmts(exprCtrRef).asInstanceOf[Constructor]
+                termgraph.getStmt(exprCtrRef).asInstanceOf[Constructor]
 
               // now get the components
               val components: List[Expr] = exprCtr.selectors.map { s =>
-                val sel = termgraph.stmts(s).asInstanceOf[Selector]
+                val sel = termgraph.getStmt(s).asInstanceOf[Selector]
                 if (field.name == sel.name) {
                   rhs
                 } else {
@@ -502,7 +502,7 @@ object UclidCompiler {
         },
         newParams
       )
-      assert(ret._2.forall(p => termgraph.stmts(p).isInstanceOf[FunctionParameter]))
+      assert(ret._2.forall(p => termgraph.getStmt(p).isInstanceOf[FunctionParameter]))
       ret
     }
 
@@ -562,14 +562,14 @@ object UclidCompiler {
       val blockRef = termgraph.memoAddInstruction(
         UserMacro(
           s"line${block.pos.line}col${block.pos.column}!${block.astNodeId}",
-          termgraph.stmts(ctrRef).asInstanceOf[Constructor].sort,
+          termgraph.getStmt(ctrRef).asInstanceOf[Constructor].sort,
           bodyRef,
           List(stateParam) ++ newParams
         )
       )
 
       letsMapStack.pop()
-      assert(newParams.forall(p => termgraph.stmts(p).isInstanceOf[FunctionParameter]))
+      assert(newParams.forall(p => termgraph.getStmt(p).isInstanceOf[FunctionParameter]))
       (blockRef, newParams)
     }
 
@@ -607,14 +607,14 @@ object UclidCompiler {
       val macroRef = termgraph.memoAddInstruction(
         UserMacro(
           s"line${ifelse.pos.line}col${ifelse.pos.column}!${ifelse.astNodeId}",
-          termgraph.stmts(ctrRef).asInstanceOf[Constructor].sort,
+          termgraph.getStmt(ctrRef).asInstanceOf[Constructor].sort,
           bodyRef,
           List(stateParam) ++ cond._2 ++ left._2 ++ right._2
         )
       )
 
       val ret = (macroRef, cond._2 ++ left._2 ++ right._2)
-      assert(ret._2.forall(p => termgraph.stmts(p).isInstanceOf[FunctionParameter]))
+      assert(ret._2.forall(p => termgraph.getStmt(p).isInstanceOf[FunctionParameter]))
       ret
     }
 
@@ -650,15 +650,14 @@ object UclidCompiler {
             AssignStmt(n.expr, ModuleNextCallExpr(n.expr))
           )
         case l: LetStatement =>
-          val modRef =
-            termgraph.stmts(stateParam).asInstanceOf[FunctionParameter].sort
+          val modRef = termgraph.inferTermType(stateParam)
           val selRefs = termgraph
-            .stmts(termgraph.stmts(modRef).asInstanceOf[Module].ct)
+            .getStmt(termgraph.getStmt(modRef).asInstanceOf[Module].ct)
             .asInstanceOf[Constructor]
             .selectors
           if (
             selRefs.exists { s =>
-              termgraph.stmts(s).asInstanceOf[Selector].name == l.id.name
+              termgraph.getStmt(s).asInstanceOf[Selector].name == l.id.name
             }
           ) {
             throw new SemanticError(
@@ -680,7 +679,7 @@ object UclidCompiler {
           )
           (macroRef, List.empty)
       }
-      assert(ret._2.forall(p => termgraph.stmts(p).isInstanceOf[FunctionParameter]))
+      assert(ret._2.forall(p => termgraph.getStmt(p).isInstanceOf[FunctionParameter]))
       ret
     }
 
@@ -697,13 +696,13 @@ object UclidCompiler {
         block
       )
 
-      val um = termgraph.stmts(res._1).asInstanceOf[UserMacro]
+      val um = termgraph.getStmt(res._1).asInstanceOf[UserMacro]
 
-      assert(um.params.forall(p => termgraph.stmts(p).isInstanceOf[FunctionParameter]))
+      assert(um.params.forall(p => termgraph.getStmt(p).isInstanceOf[FunctionParameter]))
 
       termgraph.memoUpdateInstruction(
         res._1,
-        UserMacro(funcName, um.sort, um.body, um.params)
+        Ref(termgraph.memoAddInstruction(UserMacro(funcName, um.sort, um.body, um.params)))
       )
 
       res
@@ -747,10 +746,10 @@ object UclidCompiler {
 
       def generateInitVariables(): List[Int] =
         initParams.map { p =>
-          termgraph.stmts(p) match {
+          termgraph.getStmt(p) match {
             case FunctionParameter(_, sort) =>
               val vRef =
-                termgraph.memoAddInstruction(Application(termgraph.addInstruction(UserFunction(Util.freshSymbolName(), sort)), List.empty))
+                termgraph.memoAddInstruction(Application(termgraph.memoAddInstruction(UserFunction(Util.freshSymbolName(), sort)), List.empty))
               vRef
           }
         }
@@ -760,7 +759,7 @@ object UclidCompiler {
         steps.addOne(startRef)
         (1 to k).foreach { i =>
           val args = nextParams.tail.map { p =>
-            termgraph.stmts(p) match {
+            termgraph.getStmt(p) match {
               case FunctionParameter(name, sort) =>
                 val vRef = {
                   termgraph.memoAddInstruction(
@@ -777,8 +776,7 @@ object UclidCompiler {
           }
           steps.addOne(
             termgraph.memoAddInstruction(
-              Application(nextRef, List(steps.last) ++ args),
-              Some(s"State_At_Step!$i")
+              Application(nextRef, List(steps.last) ++ args)
             )
           )
         }
@@ -801,7 +799,7 @@ object UclidCompiler {
                 // get the module declaration
                 val modRef = typeMap(moduleId)
                 val mod = termgraph
-                  .stmts(modRef)
+                  .getStmt(modRef)
                   .asInstanceOf[Module]
                 val initRef = mod.init
                 val nextRef = mod.next
@@ -818,7 +816,7 @@ object UclidCompiler {
                   Application(
                     preInit._1,
                     fuzzed :: preInit._2.map { p =>
-                      termgraph.stmts(p) match {
+                      termgraph.getStmt(p) match {
                         case FunctionParameter(_, sort) =>
                           termgraph.fuzz(sort)
                       }
@@ -827,7 +825,7 @@ object UclidCompiler {
                 )
 
                 val initVariables = startTerm :: initParams.tail.map { p =>
-                  termgraph.stmts(p) match {
+                  termgraph.getStmt(p) match {
                     case FunctionParameter(_, sort) =>
                       termgraph.fuzz(sort)
                   }
@@ -837,8 +835,7 @@ object UclidCompiler {
                   // apply init
                   val initAppRef =
                     termgraph.memoAddInstruction(
-                      Application(initRef, initVariables),
-                      Some("State_After_Init")
+                      Application(initRef, initVariables)
                     )
                   proofStates.addOne(initAppRef)
                   initAppRef
@@ -850,14 +847,13 @@ object UclidCompiler {
                 val k = unwind.literal.toInt
                 (1 to k).foreach { i =>
                   val args = nextParams.tail.map { p =>
-                    termgraph.stmts(p) match {
+                    termgraph.getStmt(p) match {
                       case FunctionParameter(_, sort) =>
                         termgraph.fuzz(sort)
                     }
                   }
                   transRef = termgraph.memoAddInstruction(
-                    Application(nextRef, List(transRef) ++ args),
-                    Some(s"State_At_Step!$i")
+                    Application(nextRef, List(transRef) ++ args)
                   )
                   proofStates.addOne(transRef)
                 }
@@ -878,7 +874,7 @@ object UclidCompiler {
 
                 // get the module declaration
                 val mod = termgraph
-                  .stmts(typeMap(moduleId))
+                  .getStmt(typeMap(moduleId))
                   .asInstanceOf[Module]
                 val initRef = mod.init
                 val nextRef = mod.next
@@ -888,8 +884,7 @@ object UclidCompiler {
                 // apply init
                 val initAppRef =
                   termgraph.memoAddInstruction(
-                    Application(initRef, baseInitVariables),
-                    Some("State_After_Init")
+                    Application(initRef, baseInitVariables)
                   )
                 proofStates.addOne(initAppRef)
 
@@ -903,8 +898,7 @@ object UclidCompiler {
 
                 val baseRef =
                   termgraph.memoAddInstruction(
-                    Application(negRef, List(initSpecRef)),
-                    Some("Counterexample_In_Invariants_BaseCase")
+                    Application(negRef, List(initSpecRef))
                   )
                 ctx.addAssertion(baseRef)
 
@@ -952,8 +946,7 @@ object UclidCompiler {
                 val andRef = termgraph.memoAddInstruction(TheoryMacro("and"))
 
                 val inductiveRef = termgraph.memoAddInstruction(
-                  Application(andRef, List(entryRef, negExitRef)),
-                  Some("Counterexample_In_Invariants_Induction_Step")
+                  Application(andRef, List(entryRef, negExitRef))
                 )
 
                 ctx.addAssertion(inductiveRef)
@@ -964,7 +957,7 @@ object UclidCompiler {
 
                 // get the module declaration
                 val mod = termgraph
-                  .stmts(typeMap(moduleId))
+                  .getStmt(typeMap(moduleId))
                   .asInstanceOf[Module]
                 val initRef = mod.init
                 val nextRef = mod.next
@@ -972,8 +965,7 @@ object UclidCompiler {
 
                 val initAppRef =
                   termgraph.memoAddInstruction(
-                    Application(initRef, initVariables),
-                    Some("State_After_Init")
+                    Application(initRef, initVariables)
                   )
                 proofStates.addOne(initAppRef)
 
@@ -1005,8 +997,7 @@ object UclidCompiler {
                     )
                   val negExitRef =
                     termgraph.memoAddInstruction(
-                      Application(negRef, List(exitRef)),
-                      Some(s"Counterexample_In_Step!${p._2}")
+                      Application(negRef, List(exitRef))
                     )
                   ctx.addAssertion(negExitRef)
                 }
@@ -1101,7 +1092,7 @@ object UclidCompiler {
             }
           case NamedType(id) =>
             val sortRef = typeMap(id)
-            termgraph.stmts(sortRef) match {
+            termgraph.getStmt(sortRef) match {
               case _: Module =>
                 acc ++ List(
                   InnerAxiom(
@@ -1117,10 +1108,10 @@ object UclidCompiler {
                 )
               case adt: AbstractDataType =>
                 val ctr =
-                  termgraph.stmts(adt.defaultCtr()).asInstanceOf[Constructor]
+                  termgraph.getStmt(adt.defaultCtr()).asInstanceOf[Constructor]
 
                 val components = ctr.selectors.map { s =>
-                  val sel = termgraph.stmts(s).asInstanceOf[Selector]
+                  val sel = termgraph.getStmt(s).asInstanceOf[Selector]
                   val newStarter =
                     OperatorApplication(
                       PolymorphicSelect(Identifier(sel.name)),
@@ -1165,7 +1156,7 @@ object UclidCompiler {
               }
               termgraph.memoUpdateInstruction(
                 dtRef,
-                DataType(td.id.name, constructors)
+                Ref(termgraph.memoAddInstruction(DataType(td.id.name, constructors)))
               )
               typeMap.addOne(td.id, dtRef)
           }
@@ -1189,7 +1180,7 @@ object UclidCompiler {
 
               termgraph.memoUpdateInstruction(
                 dtRef,
-                DataType(td.id.name, List(ctrRef))
+                Ref(termgraph.memoAddInstruction(DataType(td.id.name, List(ctrRef))))
               )
 
               typeMap.addOne(td.id, dtRef)
@@ -1310,14 +1301,16 @@ object UclidCompiler {
 
       // update module with constructor; will need to update it fully at the end
       termgraph.memoUpdateInstruction(
-        moduleRef,
-        Module(
-          m.id.name,
-          constructorRef,
-          -1,
-          -1,
-          -1
-        )
+        termgraph.findTarget(moduleRef),
+        Ref(termgraph.memoAddInstruction(
+          Module(
+            m.id.name,
+            constructorRef,
+            -1,
+            -1,
+            -1
+          )
+        ))
       )
 
       val initAssumes = createInitAssumes(fields)
@@ -1363,8 +1356,10 @@ object UclidCompiler {
 
       // fill in placeholder for module
       termgraph.memoUpdateInstruction(
-        moduleRef,
-        Module(m.id.name, constructorRef, initRef, nextRef, specRef)
+        termgraph.findTarget(moduleRef),
+        Ref(termgraph.memoAddInstruction(
+          Module(m.id.name, constructorRef, initRef, nextRef, specRef)
+        ))
       )
 
       if (execute) {
@@ -1377,6 +1372,8 @@ object UclidCompiler {
         )
       }
     } // End Module to Term
+
+    termgraph.repair()
     ctx
   }
 }

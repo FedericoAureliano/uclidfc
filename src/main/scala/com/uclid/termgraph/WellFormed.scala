@@ -8,9 +8,9 @@ Passing semantic checks must gurantee a well formed query
 trait WellFormed() extends AbstractTermGraph {
 
   def checkRefBounds(): Unit = {
-    def checkRef(r: Int): Boolean = r < stmts.length && r >= 0
+    def checkRef(r: Int): Boolean = r < getStmts().length && r >= 0
 
-    stmts.zipWithIndex.foreach { case (s, i) =>
+    getStmts().zipWithIndex.foreach { case (s, i) =>
       val err = s"${i}: ${s} >>> REFERENCE OUT OF BOUNDS!"
       s match {
         case r: Ref =>
@@ -57,16 +57,16 @@ trait WellFormed() extends AbstractTermGraph {
   def inferTermType(
     app: Int
   ): Int =
-    stmts(app) match {
+    var sort = getStmt(app) match {
       case Application(caller, args) =>
-        stmts(caller) match {
+        getStmt(caller) match {
           case TheoryMacro("ite", _) => inferTermType(args.head)
           case TheoryMacro("store", _) =>
             inferTermType(args.head)
           case TheoryMacro("select", _) =>
             val arrayRef = inferTermType(args.head)
             val arraySort =
-              stmts(arrayRef).asInstanceOf[TheorySort]
+              getStmt(arrayRef).asInstanceOf[TheorySort]
             arraySort.params.last
           case _ => inferTermType(caller)
         }
@@ -75,10 +75,12 @@ trait WellFormed() extends AbstractTermGraph {
       case Selector(_, sort)          => sort
       case UserMacro(_, sort, _, _)   => sort
       case UserFunction(_, sort, _)   => sort
-      case Ref(loc, _)                => inferTermType(loc)
+      case Ref(loc)                => inferTermType(loc)
       case _ =>
         throw new IllegalArgumentException(
-          s"type inference not yet supported: ${stmts(app)}"
+          s"type inference not yet supported: ${getStmt(app)}"
         )
     }
+
+    findTarget(sort)
 }
