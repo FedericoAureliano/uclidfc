@@ -787,7 +787,15 @@ object UclidCompiler {
         p match {
           case c: SolverCommand =>
             c match {
-              case Check() => ctx.checkQuery = true
+              case Check() => {
+                assert(!ctx.checkQuery)
+                ctx.checkQuery = true
+              }
+              case CheckSat() => {
+                assert(!ctx.checkQuery)
+                ctx.checkQuery = true
+                ctx.negateQuery = true
+              }
               case GetValue(vars) =>
                 ctx.addOption("produce-models", "true")
                 val vs =
