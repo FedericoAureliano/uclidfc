@@ -1,0 +1,27 @@
+// UCLID TEST
+// Solver=cvc4
+// Solver=z3
+// Result=Some(false)
+// Option=optimize 1
+
+module main {
+  var a, b : integer;
+
+  init {
+    a = 0;
+    b = 1;
+  }
+
+  next {
+    a' = b;
+    b' = a + b;
+  }
+
+  invariant a_le_b: a <= b && a > 0; // there is no model that will work for this because it fails on init
+
+  control {
+    unroll(5);
+    check_sat;
+    print_cex(a, b);
+  }
+}
