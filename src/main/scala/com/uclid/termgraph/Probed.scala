@@ -111,9 +111,10 @@ trait Probed() extends AbstractTermGraph {
           case Application(function, predicate) => 
             getStmt(function)  match {
               case TheoryMacro("forall", _) | TheoryMacro("exists", _) => 
-                sum = sum + countConsecutiveQuantifiers(
-                            getStmt(predicate.head).asInstanceOf[Application], 1, 
+                var num_alternations = countConsecutiveQuantifiers(
+                            getStmt(predicate.head).asInstanceOf[Application], 0, 
                             getStmt(function).asInstanceOf[TheoryMacro].name)
+                sum = sum + num_alternations;
               case _ => sum
             }
           case _ => sum
@@ -130,7 +131,7 @@ trait Probed() extends AbstractTermGraph {
             getStmt(function)  match {
               case TheoryMacro("forall", _) | TheoryMacro("exists", _)=> 
                 var new_alternations = countConsecutiveQuantifiers(
-                                        getStmt(predicate.head).asInstanceOf[Application], 1, 
+                                        getStmt(predicate.head).asInstanceOf[Application], 0, 
                                         getStmt(function).asInstanceOf[TheoryMacro].name)
                 if(new_alternations > max)
                   max = new_alternations
