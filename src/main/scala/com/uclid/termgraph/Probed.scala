@@ -19,7 +19,18 @@ trait Probed() extends AbstractTermGraph {
     List(
       "Term graph size: " + numberOfNodes().toString,
       "Number of variables: " + numberOfVariables(entryPoints).toString,
+      "Number of nullary variables: " + numberOfNullaryVariables().toString,
+      "Number of n-ary variables: " + numberOfUFs().toString,
+      "Number of uninterpreted sorts: " + numerOfUSorts().toString,
       "Largest integer literal: " + largestIntegerLiteral(entryPoints).toString,
+      "Sum of integer literals: " + sumIntegerLiteral(entryPoints).toString,
+      "Number of unique integer literals: " + numberOfIntegerLiterals().toString,
+      "Number of quantifiers: " + numberOfQuantfiers().toString,
+      "Number of exists: " + numberOfExists().toString,
+      "Number of foralls: " + numberOfForalls().toString,
+      "Number of quantified vars: " + numberOfQuantifiedVars().toString,
+      "Number of quantifier alternations: " + sumQuantifierAlternations().toString,
+      "Max consecutive quantifier alternations: " + maxQuantifierAlternations().toString,
       "Logic components:\n" + logicComponents(entryPoints)
         .map((logic, fraction) => s"---- $logic: $fraction")
         .mkString("\n"),
