@@ -20,8 +20,8 @@ trait Probed() extends AbstractTermGraph {
       "Term graph size: " + numberOfNodes().toString,
       "Number of variables: " + numberOfVariables(entryPoints).toString,
       "Number of nullary variables: " + numberOfNullaryVariables().toString,
-      "Number of n-ary variables: " + numberOfUFs().toString,
-      "Number of uninterpreted sorts: " + numerOfUSorts().toString,
+      "Number of multi-ary variables: " + numberOfUFs().toString,
+      "Number of uninterpreted sorts: " + numberOfUSorts().toString,
       "Largest integer literal: " + largestIntegerLiteral(entryPoints).toString,
       "Sum of integer literals: " + sumIntegerLiteral(entryPoints).toString,
       "Number of unique integer literals: " + numberOfIntegerLiterals().toString,
@@ -67,7 +67,7 @@ trait Probed() extends AbstractTermGraph {
   def numberOfQuantfiers(): Int = 
       numberOfForalls() + numberOfExists()
  
-  def numerOfUSorts(): Int = getStmts().filter(p => p.isInstanceOf[UserSort]).length
+  def numberOfUSorts(): Int = getStmts().filter(p => p.isInstanceOf[UserSort]).length
 
   def numberOfQuantifiedVars(): Int = {
     var sum: Int = 0
@@ -141,7 +141,6 @@ trait Probed() extends AbstractTermGraph {
         })
       max
   }   
-
 
   def sumIntegerLiteral(entryPoints: List[Int]): Int = {
     var sum: Int = 0
