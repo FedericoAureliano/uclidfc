@@ -165,8 +165,8 @@ abstract class AbstractTermGraph() {
       case Selector(_, _) => false
       case FunctionParameter(_, _) => true
       case TheoryMacro(name, _) => 
-        // TODO support more than ints, bools, and strings
-        name.toIntOption.isDefined || name == "true" || name == "false" || (name.startsWith("\"") && name.endsWith("\""))
+        // TODO support more than bools, strings, bitvecs, and ints
+        name == "true" || name == "false" || (name.startsWith("\"") && name.endsWith("\"")) || name.startsWith("#") || name.toIntOption.isDefined
       case _ => false
     }
   }

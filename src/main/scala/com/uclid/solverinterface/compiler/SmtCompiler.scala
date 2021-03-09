@@ -111,7 +111,7 @@ object SmtCompiler {
 
       while {
         tokens(pos) match {
-          case "(" => {
+          case "(" if tokens(pos + 1) != "_" => {
             pos += 1
             nest += 1
             val op = parseOperator()
@@ -131,10 +131,18 @@ object SmtCompiler {
           case atom => if (path.size > 0) {
               // add to parent
               val parent = path.pop().asInstanceOf[Application]
-              path.push(Application(parent.caller, parent.args ++ List(parseSymbol())))
+              var child = parseSymbol()
+              if (ctx.termgraph.completeButUnapplied(child)) {
+                child = ctx.termgraph.memoAddInstruction(Application(child, List.empty))
+              }
+              path.push(Application(parent.caller, parent.args ++ List(child)))
             } else {
               // there was no parent so just return 
-              return parseSymbol()
+              var curr = parseSymbol()
+              if (ctx.termgraph.completeButUnapplied(curr)) {
+                curr = ctx.termgraph.memoAddInstruction(Application(curr, List.empty))
+              }
+              return curr
             }
         }
 
@@ -200,26 +208,36 @@ object SmtCompiler {
       * @return the termgraph reference to the parsed symbol
       */ 
     def parseSymbol(): Int = {
-      pos += 1
-      val ret = if (local.size() > 0 && local.containsKey(tokens(pos - 1))) {
-        local.get(tokens(pos - 1))
-      } else if (global.containsKey(tokens(pos - 1))) {
-        global.get(tokens(pos - 1))
-      } else {
-        tokens(pos - 1) match {
-          case other if other.startsWith("\"") && other.endsWith("\"") =>
-            ctx.termgraph.memoAddInstruction(TheoryMacro(other))
-          case other =>
-            ctx.termgraph.memoAddInstruction(TheoryMacro(other))
+      tokens(pos) match {
+        // more complicated symbols like "(_ bv10 32)"
+        case "(" => tokens(pos + 1) :: tokens(pos + 2) :: tokens(pos + 3) :: tokens(pos + 4) :: Nil match {
+          case "_" :: bvexpr :: width :: ")" :: Nil if bvexpr.startsWith("bv") => {
+            pos += 5
+            val dec = bvexpr.drop(2).toInt
+            val digits = width.toInt
+            val binary = "#b" + String.format("%" + digits + "s", dec.toBinaryString).replace(' ', '0')
+            ctx.termgraph.memoAddInstruction(TheoryMacro(binary))
+          }
+          case c => throw new SmtParserError(s"Expected Bitvector, got $c!")
+        }
+        case other => {
+          pos += 1
+          if (local.size() > 0 && local.containsKey(tokens(pos - 1))) {
+            local.get(tokens(pos - 1))
+          } else if (global.containsKey(tokens(pos - 1))) {
+            global.get(tokens(pos - 1))
+          } else {
+            tokens(pos - 1) match {
+              case other if other.startsWith("\"") && other.endsWith("\"") =>
+                ctx.termgraph.memoAddInstruction(TheoryMacro(other))
+              case other =>
+                ctx.termgraph.memoAddInstruction(TheoryMacro(other))
+            }
+          }
         }
       }
-      
-      if (ctx.termgraph.completeButUnapplied(ret)) {
-        ctx.termgraph.memoAddInstruction(Application(ret, List.empty))
-      } else {
-        ret
-      }
     }
+
     ctx
   }
 }
