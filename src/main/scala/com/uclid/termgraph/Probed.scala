@@ -45,7 +45,88 @@ trait Probed() extends AbstractTermGraph {
     getStmts().filter(p => p.isInstanceOf[TheoryMacro]).filter(p => 
     p.asInstanceOf[TheoryMacro].name.forall(_.isDigit)).length
 
+  def numberOfForalls(): Int = 
+      getStmts().filter(p => p.isInstanceOf[TheoryMacro]).filter(p => p.asInstanceOf[TheoryMacro].name == "forall").length
+      
+  def numberOfExists(): Int = 
+      getStmts().filter(p => p.isInstanceOf[TheoryMacro]).filter(p => p.asInstanceOf[TheoryMacro].name == "exists").length
+
+  def numberOfQuantfiers(): Int = 
+      numberOfForalls() + numberOfExists()
+ 
   def numerOfUSorts(): Int = getStmts().filter(p => p.isInstanceOf[UserSort]).length
+
+  def numberOfQuantifiedVars(): Int = {
+    var sum: Int = 0
+    getStmts()
+      .foreach(inst =>
+        inst match {
+          case TheoryMacro("forall", params) => sum += params.length
+          case TheoryMacro("exists", params) => sum += params.length
+          case _ =>
+        }
+      )
+    sum
+  }
+
+  
+  def countConsecutiveQuantifiers(expr: Application, count: Int, previousQuantifier: String): Int = 
+  {
+    var result: Int = count
+    var isQuant: Boolean = false;
+
+    getStmt(expr.caller) match {
+      case TheoryMacro("exists", _) | TheoryMacro("forall", _)=> 
+      {
+        isQuant=true
+        if(previousQuantifier != getStmt(expr.caller).asInstanceOf[TheoryMacro].name)  
+          result +=1;
+      }
+      case _ => isQuant=false
+    }
+    if(isQuant && getStmt(expr.args.head).isInstanceOf[Application])
+      countConsecutiveQuantifiers(getStmt(expr.args.head).asInstanceOf[Application], result, previousQuantifier)
+    else
+      result 
+  }
+
+  def sumQuantifierAlternations(): Int = {
+    var sum: Int = 0
+    getStmts()
+      .foreach(inst =>
+        inst match {
+          case Application(function, predicate) => 
+            getStmt(function)  match {
+              case TheoryMacro("forall", _) | TheoryMacro("exists", _) => 
+                sum = sum + countConsecutiveQuantifiers(
+                            getStmt(predicate.head).asInstanceOf[Application], 1, 
+                            getStmt(function).asInstanceOf[TheoryMacro].name)
+              case _ => sum
+            }
+          case _ => sum
+        })
+      sum
+  }  
+
+  def maxQuantifierAlternations(): Int = {
+    var max: Int = 0
+    getStmts()
+      .foreach(inst =>
+        inst match {
+          case Application(function, predicate) => 
+            getStmt(function)  match {
+              case TheoryMacro("forall", _) | TheoryMacro("exists", _)=> 
+                var new_alternations = countConsecutiveQuantifiers(
+                                        getStmt(predicate.head).asInstanceOf[Application], 1, 
+                                        getStmt(function).asInstanceOf[TheoryMacro].name)
+                if(new_alternations > max)
+                  max = new_alternations
+              case _ => max
+            }
+          case _ => max
+        })
+      max
+  }   
 
 
   def sumIntegerLiteral(entryPoints: List[Int]): Int = {
