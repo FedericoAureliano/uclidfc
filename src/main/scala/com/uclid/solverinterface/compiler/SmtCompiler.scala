@@ -149,7 +149,7 @@ object SmtCompiler {
     def parseSortList(): List[Int] = {
       val saveNest = nest
       val params = new ListBuffer[Int]()
-      while (nest > saveNest || tokens(pos) == "(") {
+      while({
         tokens(pos) match {
           case "(" => {
             nest += 1
@@ -163,7 +163,8 @@ object SmtCompiler {
             params.addOne(parseSort())
           }
         }
-      }
+        ;nest > saveNest
+      }) ()
       params.toList
     }
 
