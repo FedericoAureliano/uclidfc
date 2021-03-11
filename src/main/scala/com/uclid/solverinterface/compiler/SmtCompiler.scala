@@ -93,14 +93,6 @@ object SmtCompiler {
           }
         case "(" :: "exit" :: ")" :: _ =>
           pos = tokens.length
-        case "(" :: "set-info" :: _ =>
-          pos += 2
-          var parentheses = 1
-          while (parentheses > 0) {
-            if (tokens(pos) == "(") {parentheses += 1}
-            else if (tokens(pos) == ")") {parentheses -= 1}
-            pos += 1
-          }
         case c =>
           throw new SmtParserError("Unexpected character around: " + c)
       }

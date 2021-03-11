@@ -158,37 +158,7 @@ trait Probed() extends AbstractTermGraph {
     sum
   }
 
-  // these probes are completely untested.. 
-  def numberOfNullaryVariables(): Int = 
-    getStmts().filter(p => p.isInstanceOf[UserFunction]).filter(p =>
-    p.asInstanceOf[UserFunction].params.size==0).length
-  
-  def numberOfUFs(): Int = 
-    getStmts().filter(p => p.isInstanceOf[UserFunction]).filter(p => 
-    p.asInstanceOf[UserFunction].params.size>0).length
-  
-  def numberOfIntegerLiterals(): Int = 
-    getStmts().filter(p => p.isInstanceOf[TheoryMacro]).filter(p => 
-    p.asInstanceOf[TheoryMacro].name.forall(_.isDigit)).length
-
   def numerOfUSorts(): Int = getStmts().filter(p => p.isInstanceOf[UserSort]).length
-
-
-  def sumIntegerLiteral(entryPoints: List[Int]): Int = {
-    var sum: Int = 0
-    getStmts()
-      .foreach(inst =>
-        inst match {
-          case TheoryMacro(name, _) =>
-            name.toIntOption match {
-              case Some(value) => sum += value
-              case None =>
-            }
-          case _ =>
-        }
-      )
-    sum
-  }
 
   def largestIntegerLiteral(entryPoints: List[Int]): Option[Int] = {
     var max: Option[Int] = None
