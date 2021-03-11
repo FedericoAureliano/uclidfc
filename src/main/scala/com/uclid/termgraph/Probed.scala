@@ -18,8 +18,19 @@ trait Probed() extends AbstractTermGraph {
   def featuresList(entryPoints: List[Int]): List[String] = 
     List(
       "Term graph size: " + numberOfNodes().toString,
-      "Number of variables: " + numberOfVariables().toString,
+      "Number of variables: " + numberOfVariables(entryPoints).toString,
+      "Number of nullary variables: " + numberOfNullaryVariables().toString,
+      "Number of multi-ary variables: " + numberOfUFs().toString,
+      "Number of uninterpreted sorts: " + numberOfUSorts().toString,
       "Largest integer literal: " + largestIntegerLiteral(entryPoints).toString,
+      "Sum of integer literals: " + sumIntegerLiteral(entryPoints).toString,
+      "Number of unique integer literals: " + numberOfIntegerLiterals().toString,
+      "Number of quantifiers: " + numberOfQuantfiers().toString,
+      "Number of exists: " + numberOfExists().toString,
+      "Number of foralls: " + numberOfForalls().toString,
+      "Number of quantified vars: " + numberOfQuantifiedVars().toString,
+      "Number of quantifier alternations: " + sumQuantifierAlternations().toString,
+      "Max consecutive quantifier alternations: " + maxQuantifierAlternations().toString,
       "Logic components:\n" + logicComponents(entryPoints)
         .map((logic, fraction) => s"---- $logic: $fraction")
         .mkString("\n"),
@@ -29,7 +40,123 @@ trait Probed() extends AbstractTermGraph {
 
   def numberOfNodes(): Int = getStmts().length
   def numberOfMemoEntries(): Int = memo.keys.toList.length
-  def numberOfVariables(): Int = getStmts().filter(p => p.isInstanceOf[UserFunction]).length
+  def numberOfVariables(entryPoints: List[Int]): Int = {
+    val marks = mark(entryPoints)
+    getStmts().zipWithIndex.filter((p, i) => marks(i) && p.isInstanceOf[UserFunction]).length
+  }
+
+  // these probes are completely untested.. 
+  def numberOfNullaryVariables(): Int = 
+    getStmts().filter(p => p.isInstanceOf[UserFunction]).filter(p =>
+    p.asInstanceOf[UserFunction].params.size==0).length
+  
+  def numberOfUFs(): Int = 
+    getStmts().filter(p => p.isInstanceOf[UserFunction]).filter(p => 
+    p.asInstanceOf[UserFunction].params.size>0).length
+  
+  def numberOfIntegerLiterals(): Int = 
+    getStmts().filter(p => p.isInstanceOf[TheoryMacro]).filter(p => 
+    p.asInstanceOf[TheoryMacro].name.forall(_.isDigit)).length
+
+  def numberOfForalls(): Int = 
+      getStmts().filter(p => p.isInstanceOf[TheoryMacro]).filter(p => p.asInstanceOf[TheoryMacro].name == "forall").length
+      
+  def numberOfExists(): Int = 
+      getStmts().filter(p => p.isInstanceOf[TheoryMacro]).filter(p => p.asInstanceOf[TheoryMacro].name == "exists").length
+
+  def numberOfQuantfiers(): Int = 
+      numberOfForalls() + numberOfExists()
+ 
+  def numberOfUSorts(): Int = getStmts().filter(p => p.isInstanceOf[UserSort]).length
+
+  def numberOfQuantifiedVars(): Int = {
+    var sum: Int = 0
+    getStmts()
+      .foreach(inst =>
+        inst match {
+          case TheoryMacro("forall", params) => sum += params.length
+          case TheoryMacro("exists", params) => sum += params.length
+          case _ =>
+        }
+      )
+    sum
+  }
+
+  
+  def countConsecutiveQuantifiers(expr: Application, count: Int, previousQuantifier: String): Int = 
+  {
+    var result: Int = count
+    var isQuant: Boolean = false;
+
+    getStmt(expr.caller) match {
+      case TheoryMacro("exists", _) | TheoryMacro("forall", _)=> 
+      {
+        isQuant=true
+        if(previousQuantifier != getStmt(expr.caller).asInstanceOf[TheoryMacro].name)  
+          result +=1;
+      }
+      case _ => isQuant=false
+    }
+    if(isQuant && getStmt(expr.args.head).isInstanceOf[Application])
+      countConsecutiveQuantifiers(getStmt(expr.args.head).asInstanceOf[Application], result, previousQuantifier)
+    else
+      result 
+  }
+
+  def sumQuantifierAlternations(): Int = {
+    var sum: Int = 0
+    getStmts()
+      .foreach(inst =>
+        inst match {
+          case Application(function, predicate) => 
+            getStmt(function)  match {
+              case TheoryMacro("forall", _) | TheoryMacro("exists", _) => 
+                var num_alternations = countConsecutiveQuantifiers(
+                            getStmt(predicate.head).asInstanceOf[Application], 0, 
+                            getStmt(function).asInstanceOf[TheoryMacro].name)
+                sum = sum + num_alternations;
+              case _ => sum
+            }
+          case _ => sum
+        })
+      sum
+  }  
+
+  def maxQuantifierAlternations(): Int = {
+    var max: Int = 0
+    getStmts()
+      .foreach(inst =>
+        inst match {
+          case Application(function, predicate) => 
+            getStmt(function)  match {
+              case TheoryMacro("forall", _) | TheoryMacro("exists", _)=> 
+                var new_alternations = countConsecutiveQuantifiers(
+                                        getStmt(predicate.head).asInstanceOf[Application], 0, 
+                                        getStmt(function).asInstanceOf[TheoryMacro].name)
+                if(new_alternations > max)
+                  max = new_alternations
+              case _ => max
+            }
+          case _ => max
+        })
+      max
+  }   
+
+  def sumIntegerLiteral(entryPoints: List[Int]): Int = {
+    var sum: Int = 0
+    getStmts()
+      .foreach(inst =>
+        inst match {
+          case TheoryMacro(name, _) =>
+            name.toIntOption match {
+              case Some(value) => sum += value
+              case None =>
+            }
+          case _ =>
+        }
+      )
+    sum
+  }
 
   // these probes are completely untested.. 
   def numberOfNullaryVariables(): Int = 

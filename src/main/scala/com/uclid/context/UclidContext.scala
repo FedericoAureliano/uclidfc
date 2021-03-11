@@ -16,6 +16,7 @@ class UclidContext(termgraph: TermGraph) extends Context(termgraph) {
     axiomRefs.addOne(ax)
 
   var checkQuery = false
+  var negateQuery = false
   var traceQuery = false
 
   protected val options: ListBuffer[(String, String)] =
@@ -33,14 +34,29 @@ class UclidContext(termgraph: TermGraph) extends Context(termgraph) {
     val andRef = termgraph.memoAddInstruction(TheoryMacro("and"))
     val axioms = termgraph.memoAddInstruction(Application(andRef, axiomRefs.toList))
     
-    if (termgraph.isSynthesisQuery(entryPoints())) {
+    if (assertionRefs.length == 0) {
+      val falseRef = termgraph.memoAddInstruction(TheoryMacro("false"))
+      assertionRefs.addOne(termgraph.memoAddInstruction(Application(falseRef, List.empty)))
+    }
+
+    val isSynthesis = termgraph.isSynthesisQuery(entryPoints())
+
+    assert(!(negateQuery && isSynthesis), "Cannot check-sat for synthesis!")
+
+    if (negateQuery || isSynthesis) {
       // combine all the queries
       val orRef = termgraph.memoAddInstruction(TheoryMacro("or"))
       val asserts = termgraph.memoAddInstruction(Application(orRef, assertionRefs.toList))
-      val spec = if (axiomRefs.length > 0) {
-        termgraph.memoAddInstruction(Application(andRef, List(axioms, asserts)))
+      val assertion = if (negateQuery) {
+        val notRef = termgraph.memoAddInstruction(TheoryMacro("not"))
+        termgraph.memoAddInstruction(Application(notRef, List(asserts)))
       } else {
         asserts
+      }
+      val spec = if (axiomRefs.length > 0) {
+        termgraph.memoAddInstruction(Application(andRef, List(axioms, assertion)))
+      } else {
+        assertion
       }
       val innerCtx = new SyMTContext(termgraph)
       options.foreach(o => innerCtx.addOption(o._1, o._2))
@@ -51,7 +67,7 @@ class UclidContext(termgraph: TermGraph) extends Context(termgraph) {
       innerCtx.toQueries(pp)
     } else {
       assertionRefs.foldLeft(List.empty : List[String])((acc, ass) => {
-        val spec = if (axiomRefs.length > 0) {
+        var spec = if (axiomRefs.length > 0) {
           termgraph.memoAddInstruction(Application(andRef, List(axioms, ass)))
         } else {
           ass

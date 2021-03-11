@@ -78,7 +78,6 @@ abstract class Solver() {
         // need to call this first before checking if it is a synthesis query
         var queries : List[File] = generateQueries(ctx, prettyPrint).map(q => {
           var query = q
-          assert(query != "", "Empty query!")
           val suffix = if (ctx.termgraph.isSynthesisQuery()) { ".sl" }
           else { 
             ".smt2" 

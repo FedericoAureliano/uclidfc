@@ -567,6 +567,9 @@ object UclidParser extends PackratParsers {
         KWCHECK() <~ SEMICOLON() ^^ { case _ =>
           Check()
         } |
+        KWCHECKSAT() <~ SEMICOLON() ^^ { case _ =>
+          CheckSat()
+        } |
         KWTRACE() ~> LPARENTHESIS() ~> integerParser ~ (COMMA() ~> boolParser).? ~ (COMMA() ~> blkStmtParser).? <~ RPARENTHESIS() <~ SEMICOLON() ^^ {
           case k ~ b ~ e =>
             Trace(

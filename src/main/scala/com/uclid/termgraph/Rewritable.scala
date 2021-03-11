@@ -42,9 +42,9 @@ trait Rewritable() extends AbstractTermGraph {
               val ct = getStmt(ctRef).asInstanceOf[Constructor]
               ct.selectors.map(s => {
                 val sel = getStmt(s).asInstanceOf[Selector]
-                val fresh = memoAddInstruction(Application(memoAddInstruction(UserFunction(Util.freshSymbolName(), sel.sort)), List.empty))
+                val fresh = memoAddInstruction(Application(memoAddInstruction(UserFunction(sel.name + "!" + u.name + "!" + Util.freshSymbolName(), sel.sort)), List.empty))
                 // now replace all "select s from u" terms with "fresh"
-                val selSfromU = memoAddInstruction(Application(findTarget(s), List(memoAddInstruction(Application(p, List.empty)))))
+                val selSfromU = memoAddInstruction(Application(findTarget(s), List(memoAddInstruction(Application(findTarget(p), List.empty)))))
                 (selSfromU, fresh)
               })
             }
@@ -52,9 +52,9 @@ trait Rewritable() extends AbstractTermGraph {
               val ct = getStmt(ctRef).asInstanceOf[Constructor]
               ct.selectors.map(s => {
                 val sel = getStmt(s).asInstanceOf[Selector]
-                val fresh = memoAddInstruction(Application(memoAddInstruction(UserFunction(Util.freshSymbolName(), sel.sort)), List.empty))
+                val fresh = memoAddInstruction(Application(memoAddInstruction(UserFunction(sel.name + "!" + u.name + "!" + Util.freshSymbolName(), sel.sort)), List.empty))
                 // now replace all "select s from u" terms with "fresh"
-                val selSfromU = memoAddInstruction(Application(findTarget(s), List(memoAddInstruction(Application(p, List.empty)))))
+                val selSfromU = memoAddInstruction(Application(findTarget(s), List(memoAddInstruction(Application(findTarget(p), List.empty)))))
                 (selSfromU, fresh)
               })
             }
@@ -66,7 +66,20 @@ trait Rewritable() extends AbstractTermGraph {
       }
       acc ++ toReplace
     })
-    locations.foreach(l => copyUpdateTerm(l, toReplace.toMap))
+    locations.foreach(l => {
+      val cleaned = toReplace.map((a, b) => {
+        val newA = findTarget(a)
+        val newB = findTarget(b)
+        if (newA != newB) {
+          Some((newA, newB))
+        } else {
+          None
+        }}).flatten.toMap
+      val newLoc = copyUpdateTerm(findTarget(l), cleaned)
+      if (l != newLoc) {
+        memoUpdateInstruction(l, Ref(newLoc))
+      }
+    })
   }
 
   def inlineMacros(locations: List[Int], bound: Int): Boolean = {
@@ -80,7 +93,7 @@ trait Rewritable() extends AbstractTermGraph {
           val bindings = umacro.params.map(p => {
             memoAddInstruction(Application(p, List.empty))
           }).zip(args.map(a => findTarget(a))).filter((a, b) => a != b).toMap
-          if (!bindings.isEmpty) {
+          if (!bindings.isEmpty || args.length == 0) {
             val inlined = copyUpdateTerm(umacro.body, bindings)
             memoUpdateInstruction(p, Ref(inlined))
             changed = true

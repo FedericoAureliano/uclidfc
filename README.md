@@ -57,6 +57,7 @@ Basic Usage
   -o, --optimize <level>         Optimization level (none or zero).
   -w, --write <file>             Write query to <file>.
   --pretty-print                 Try to make output queries human readable.
+  --debug-print                  Add internal term graph information as SMT comments.
   --skip-solver                  Don't run the solver.
   <file> ...                     List of input files.
 
@@ -103,7 +104,7 @@ uclidfc-live <uclid files to edit> <query file to watch>
 
 ```
 sbt jacoco
-open jvm/target/scala-2.13/jacoco/report/html/index.html
+open target/scala-3.0.0-M3/jacoco/report/html/index.html
 ```
 
 ### Run JVM
