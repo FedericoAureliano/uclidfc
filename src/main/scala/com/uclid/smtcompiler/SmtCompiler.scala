@@ -176,15 +176,7 @@ object SmtCompiler {
 
       while {
         tokens(pos) match {
-          case "(" if tokens(pos + 1) == "let" => {
-            pos += 2
-            val bindings = parseLetList().toMap
-            local.push(bindings)
-            val t = parseTerm()
-            path.push(ctx.termgraph.getStmt(t))
-            pos += 1 // for close paren
-          }
-          case "(" if tokens(pos + 1) != "_" => {
+          case "(" if tokens(pos + 1) != "_" && tokens(pos + 1) != "!" && tokens(pos + 1) != "let" => {
             pos += 1
             nest += 1
             val (op, bindings) = parseOperator()
@@ -203,24 +195,45 @@ object SmtCompiler {
               // this is the top level, so just let it be
             }
           }
-          case atom => if (path.size > 0) {
+          case atom => {
+            var curr = atom match {
+              case "(" if tokens(pos + 1) == "let" => {
+                pos += 2
+                val bindings = parseLetList().toMap
+                local.push(bindings)
+                val t = parseTerm()
+                pos += 1 // for close paren
+                t
+              }
+              case "(" if tokens(pos + 1) == "!" => {
+                pos += 2
+                val t = parseTerm()
+                assert(tokens(pos) == ":named", s"Expected :named but got ${tokens(pos)}")
+                pos += 1
+                val name = parseName()
+                global.put(name, t)
+                pos += 1 // for close paren
+                t
+              }
+              case _ => parseSymbol()
+            } 
+
+            if (path.size > 0) {
               // add to parent
               val parent = path.pop().asInstanceOf[Application]
-              var child = parseSymbol()
-              if (ctx.termgraph.completeButUnapplied(child)) {
-                child = ctx.termgraph.memoAddInstruction(Application(child, List.empty))
+              if (ctx.termgraph.completeButUnapplied(curr)) {
+                curr = ctx.termgraph.memoAddInstruction(Application(curr, List.empty))
               }
-              path.push(Application(parent.caller, parent.args ++ List(child)))
+              path.push(Application(parent.caller, parent.args ++ List(curr)))
             } else {
               // there was no parent so just return 
-              var curr = parseSymbol()
               if (ctx.termgraph.completeButUnapplied(curr)) {
                 curr = ctx.termgraph.memoAddInstruction(Application(curr, List.empty))
               }
               return curr
             }
+          }
         }
-
         (nest > saveNest)
       } 
       do () 
