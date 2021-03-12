@@ -1,0 +1,17 @@
+// UCLID TEST
+// Option=print-features
+
+type cases = enum {A, B, C};
+
+module main
+{
+    var arr: [cases]integer;
+
+    invariant toblastexists: exists (x : cases, z: cases) :: (forall (y : cases) :: (exists (j : cases) :: arr[y] > 0)) && arr[x] > 0;
+
+    control
+    {
+        induction;
+        check;
+    }
+}

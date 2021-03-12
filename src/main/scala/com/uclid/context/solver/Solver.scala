@@ -46,7 +46,7 @@ abstract class Solver() {
       case Some(value) => {
         val fileName = Paths.get(value).getFileName
         val extension = fileName.toString.split("\\.").last
-        val newName = s"${fileName.toString.split("\\.").dropRight(1).mkString("")}$fileCount.$extension"
+        val newName = s"${value.toString.split("\\.").dropRight(1).mkString("")}$fileCount.$extension"
         new File(newName)
       }
       case None =>

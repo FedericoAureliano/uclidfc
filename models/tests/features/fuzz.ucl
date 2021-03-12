@@ -2,9 +2,14 @@
 // Solver=z3
 // Result=None
 
+type some_enum = enum {A, B, C};
+type userfun;
+
 module main {
     var x : integer;
     var y : boolean;
+    var z : some_enum;
+    var w : userfun;
 
     next {
         havoc y;

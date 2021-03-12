@@ -9,7 +9,7 @@ module main
 {
     var arr: [cases]integer;
 
-    invariant toblastexists: exists (x : cases) :: (forall (y : cases) :: arr[y] > 0) && arr[x] > 0;
+    invariant toblastexists: exists (x : cases, z: cases) :: (forall (y : cases) :: arr[y] > 0) && arr[x] > 0;
 
     control
     {
