@@ -215,6 +215,8 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
           stack.push(Direct(s"(${sel.name} ${programPointToQueryTerm(sel.sort, 0)})"))
         }
         stack.push(Direct(s"${t.name} ("))
+      } else if (t.name.startsWith("bv") && t.name.drop(2).toIntOption.isDefined) {
+        stack.push(Direct(s"(_ ${t.name} ${programPointToQueryTerm(t.params(0), 0)})"))
       } else if (t.name == "as const") {
         stack.push(Direct(s"(${t.name} ${programPointToQueryTerm(t.params(0), 0)})"))
       } else {

@@ -1,4 +1,4 @@
-package com.uclid.solverinterface.compiler
+package com.uclid.smtcompiler
 
 sealed trait SmtCompilationError extends Throwable
 

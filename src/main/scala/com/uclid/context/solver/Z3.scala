@@ -1,4 +1,4 @@
-package com.uclid.solverinterface.solver
+package com.uclid.context.solver
 
 import com.uclid.context.Context
 

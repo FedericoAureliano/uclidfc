@@ -1,11 +1,11 @@
 package com.uclid.commandline
 
 import com.uclid.context.{Check, Command, _}
-import com.uclid.solverinterface.compiler._
-import com.uclid.solverinterface.solver._
+import com.uclid.smtcompiler._
+import com.uclid.context.solver._
 import com.uclid.termgraph
-import com.uclid.uclidinterface.compiler._
-import com.uclid.uclidinterface.compiler.parser._
+import com.uclid.uclidcompiler._
+import com.uclid.uclidcompiler.parser._
 
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -53,6 +53,7 @@ object UclidMain {
     outFile: Option[String] = None,
     prettyPrint: Boolean = false,
     debugPrint: Boolean = false,
+    singleQuery: Boolean = false,
     files: Seq[java.io.File] = Seq()
   )
 
@@ -109,6 +110,10 @@ object UclidMain {
       opt[Unit]("skip-solver")
         .action((_, c) => c.copy(run = false))
         .text("Don't run the solver.")
+
+      opt[Unit]("single-thread")
+        .action((_, c) => c.copy(singleQuery = true))
+        .text("Don't run solvers in parallel.")
 
       arg[java.io.File]("<file> ...")
         .unbounded()
@@ -238,6 +243,11 @@ object UclidMain {
       print("Processing model ... ")
       val startProcess = System.nanoTime
       val ctx = UclidCompiler.process(modules, Some(config.mainModuleName))
+
+      if (config.singleQuery) {
+        ctx.singleQuery = true
+      }
+
       if (config.plusMinusZero) {
         ctx.termgraph.plusMinusZero()
       }

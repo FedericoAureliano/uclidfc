@@ -1,4 +1,4 @@
-package com.uclid.solverinterface.solver
+package com.uclid.context.solver
 
 import java.io.{File, PrintWriter}
 import scala.sys.process._

@@ -5,7 +5,6 @@
 // UCLID TEST
 // Solver=z3
 // Result=Some(false)
-// Option=optimize 0
 // Rewrite=blast-enum-quantifiers
 
 type RANGE = enum {zero, one, two, three};
