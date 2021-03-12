@@ -64,7 +64,7 @@ abstract class Solver() {
   }
 
   def generateQueries(ctx: Context, prettyPrint: Int): List[String]
-  def getCommand(): String
+  def getCommand(ctx: Context): String
   def parseAnswer(answer: String): String
 
   def solve(
@@ -109,7 +109,7 @@ abstract class Solver() {
     }
 
     println("Running solver processes ... ")
-    val results = qfiles.par.map(qfile => runProcess(s"${getCommand()} ${qfile}", timeout))
+    val results = qfiles.par.map(qfile => runProcess(s"${getCommand(ctx)} ${qfile}", timeout))
     val answers = results.map(result => parseAnswer(" " ++ (result._1 ++ result._2).mkString("\n")))
 
     def ternaryCombine(a : Option[Boolean], b : Option[Boolean]) : Option[Boolean] = {
@@ -131,16 +131,15 @@ abstract class Solver() {
     answers.zip(results).foldLeft((new ProofResult(Some(false), ""), generationDuration, 0.0))((acc, pair) => {
       val answer = pair._1
       val result = pair._2
-      if (
-        answer.contains("error") || answer.contains(
-          "unknown"
-        )
-      ) {
-        (new ProofResult(None,  combineStrs(acc._1.messages, answer)), generationDuration, acc._3 + result._4)
-      } else {
-        if ("(\\ssat)".r.findFirstIn(answer).isDefined) {
+
+      answer match {
+        case _ if answer.contains("error") || answer.contains("unknown") => {
+          (new ProofResult(None,  combineStrs(acc._1.messages, answer)), generationDuration, acc._3 + result._4)
+        }
+        case _ if "(\\ssat)".r.findFirstIn(answer).isDefined => {
           (new ProofResult(ternaryCombine(acc._1.result, Some(true)),  combineStrs(acc._1.messages, answer)), generationDuration, acc._3 + result._4)
-        } else {
+        }
+        case _ if "(\\sunsat)".r.findFirstIn(answer).isDefined => {
           if (ctx.termgraph.isSynthesisQuery()) {
             (
               new ProofResult(ternaryCombine(acc._1.result, Some(false)),  combineStrs(acc._1.messages, answer)),
@@ -155,6 +154,7 @@ abstract class Solver() {
             )
           }
         }
+        case _ => (new ProofResult(None,  combineStrs(acc._1.messages, answer)), generationDuration, acc._3 + result._4)
       }
     })
   }

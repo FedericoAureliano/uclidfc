@@ -32,7 +32,7 @@ class Vampire() extends Solver() {
     "UFNIA"
   )
 
-  def getCommand(): String =
+  def getCommand(ctx: Context): String =
     "vampire --mode smtcomp --input_syntax smtlib2 --term_algebra_acyclicity light --term_algebra_rules on --fmb_enumeration_strategy smt"
 
   def generateQueries(ctx: Context, prettyPrint: Int): List[String] = {

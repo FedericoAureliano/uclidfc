@@ -16,27 +16,28 @@ trait Probed() extends AbstractTermGraph {
   }
 
   def featuresList(entryPoints: List[Int]): List[String] = 
-    List(
-      "Term graph size: " + numberOfNodes().toString,
-      "Number of variables: " + numberOfVariables(entryPoints).toString,
-      "Number of nullary variables: " + numberOfNullaryVariables().toString,
-      "Number of multi-ary variables: " + numberOfUFs().toString,
-      "Number of uninterpreted sorts: " + numberOfUSorts().toString,
-      "Largest integer literal: " + largestIntegerLiteral(entryPoints).toString,
-      "Sum of integer literals: " + sumIntegerLiteral(entryPoints).toString,
-      "Number of unique integer literals: " + numberOfIntegerLiterals().toString,
-      "Number of quantifiers: " + numberOfQuantfiers().toString,
-      "Number of exists: " + numberOfExists().toString,
-      "Number of foralls: " + numberOfForalls().toString,
-      "Number of quantified vars: " + numberOfQuantifiedVars().toString,
-      "Number of quantifier alternations: " + sumQuantifierAlternations().toString,
-      "Max consecutive quantifier alternations: " + maxQuantifierAlternations().toString,
-      "Logic components:\n" + logicComponents(entryPoints)
-        .map((logic, fraction) => s"---- $logic: $fraction")
-        .mkString("\n"),
-      "Max Arity: " + maxArity(entryPoints).toString,
-      "Avg Arity: " + avgArity(entryPoints).toString
-    )
+    featureMap(entryPoints).toList.map((k, v) => s"$k: $v")
+
+  def featureMap(entryPoints: List[Int]) : Map[String, String] = {
+    val combinedSeq = (Map(("Term graph size", numberOfNodes().toString),
+      ("Number of variables", numberOfVariables(entryPoints).toString),
+      ("Number of nullary variables", numberOfNullaryVariables().toString),
+      ("Number of multi-ary variables", numberOfUFs().toString),
+      ("Number of uninterpreted sorts", numberOfUSorts().toString),
+      ("Largest integer literal", largestIntegerLiteral(entryPoints).toString),
+      ("Sum of integer literals", sumIntegerLiteral(entryPoints).toString),
+      ("Number of unique integer literals", numberOfIntegerLiterals().toString),
+      ("Number of quantifiers", numberOfQuantfiers().toString),
+      ("Number of exists", numberOfExists().toString),
+      ("Number of foralls", numberOfForalls().toString),
+      ("Number of quantified vars", numberOfQuantifiedVars().toString),
+      ("Number of quantifier alternations", sumQuantifierAlternations().toString),
+      ("Max consecutive quantifier alternations", maxQuantifierAlternations().toString),
+      ("Max Arity", maxArity(entryPoints).toString),
+      ("Avg Arity", avgArity(entryPoints).toString)) ++ logicComponents(entryPoints))
+
+    combinedSeq.map((k, v) => (k, v.toString))
+  }
 
   def numberOfNodes(): Int = getStmts().length
   def numberOfVariables(entryPoints: List[Int]): Int = {
@@ -214,7 +215,7 @@ trait Probed() extends AbstractTermGraph {
   }
 
   
-  def logicComponents(entryPoints: List[Int]): List[(String, Int)] = {
+  def logicComponents(entryPoints: List[Int]): Map[String, Int] = {
     var q = 0
     var uf = 0
     var a = 0
@@ -297,7 +298,7 @@ trait Probed() extends AbstractTermGraph {
         }
       )
 
-    List(
+    Map(
       ("SY", sy),
       ("Q", q),
       ("UF", uf),

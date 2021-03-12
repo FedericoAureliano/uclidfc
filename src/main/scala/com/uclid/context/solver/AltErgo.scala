@@ -6,7 +6,7 @@ import java.io.{File, PrintWriter}
 import scala.sys.process._
 
 class AltErgo() extends Solver() {
-  def getCommand(): String = "alt-ergo -enable-adts-cs"
+  def getCommand(ctx: Context): String = "alt-ergo -enable-adts-cs"
 
   def generateQueries(ctx: Context, prettyPrint: Int): List[String] = {
     // get the query but remove the set logic and set-option commands
