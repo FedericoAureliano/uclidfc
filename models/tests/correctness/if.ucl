@@ -1,7 +1,7 @@
 // UCLID TEST
 // Solver=cvc4
 // Result=Some(false)
-// Option=optimize 1
+// Optimize=1
 
 function f(x : integer) : boolean;
 

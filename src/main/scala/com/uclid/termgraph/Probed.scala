@@ -39,7 +39,6 @@ trait Probed() extends AbstractTermGraph {
     )
 
   def numberOfNodes(): Int = getStmts().length
-  def numberOfMemoEntries(): Int = memo.keys.toList.length
   def numberOfVariables(entryPoints: List[Int]): Int = {
     val marks = mark(entryPoints)
     getStmts().zipWithIndex.filter((p, i) => marks(i) && p.isInstanceOf[UserFunction]).length
@@ -157,8 +156,6 @@ trait Probed() extends AbstractTermGraph {
       )
     sum
   }
-
-  def numerOfUSorts(): Int = getStmts().filter(p => p.isInstanceOf[UserSort]).length
 
   def largestIntegerLiteral(entryPoints: List[Int]): Option[Int] = {
     var max: Option[Int] = None

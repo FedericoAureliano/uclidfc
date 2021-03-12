@@ -1,6 +1,7 @@
 // UCLID TEST
 // Solver=z3
 // Result=Some(false)
+// Option=debug-print
 
 module fib
 {

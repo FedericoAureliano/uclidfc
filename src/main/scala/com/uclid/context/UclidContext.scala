@@ -18,6 +18,7 @@ class UclidContext(termgraph: TermGraph) extends Context(termgraph) {
   var checkQuery = false
   var negateQuery = false
   var traceQuery = false
+  var singleQuery = false
 
   protected val options: ListBuffer[(String, String)] =
     ListBuffer(("produce-assignments", "true"))
@@ -43,7 +44,7 @@ class UclidContext(termgraph: TermGraph) extends Context(termgraph) {
 
     assert(!(negateQuery && isSynthesis), "Cannot check-sat for synthesis!")
 
-    if (negateQuery || isSynthesis) {
+    if (negateQuery || isSynthesis || singleQuery) {
       // combine all the queries
       val orRef = termgraph.memoAddInstruction(TheoryMacro("or"))
       val asserts = termgraph.memoAddInstruction(Application(orRef, assertionRefs.toList))

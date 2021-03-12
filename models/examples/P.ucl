@@ -1,3 +1,8 @@
+// UCLID TEST
+// Result=None
+// Option=print-features
+// Option=blast-enum-quantifiers
+
 // Declare machine reference types
 type AbstractServerMachine_ref_t = enum {s1, s2};
 type ClientMachine_ref_t = enum {c1, c2};

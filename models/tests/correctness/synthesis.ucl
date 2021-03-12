@@ -1,6 +1,7 @@
 // UCLID TEST
 // Solver=cvc4
 // Result=Some(false)
+// Option=print-features
 
 synthesis function h(x : integer, y : integer) : boolean;
 

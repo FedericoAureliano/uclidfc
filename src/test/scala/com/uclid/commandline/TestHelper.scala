@@ -47,10 +47,9 @@ def readTestFile(file: File): Tuple8[
   val rewrites =
     "(?<=Rewrite=)(.*)".r.findAllIn(lines).map(r => "--" + r).toList
   val options =
-    "(?<=Option=)(.* .*)".r.findAllIn(lines).map(r => {
-      val pair = r.split(" ")
-      List("--" + pair(0), pair(1))
-    }).flatten.toList
+    "(?<=Option=)(.*)".r.findAllIn(lines).map(r => "--" + r).toList
+  val optimize =
+    "(?<=Optimize=)(.*)".r.findAllIn(lines).map(r => List("--optimize", r)).flatten.toList
   (
     (
       file.getAbsolutePath(),
@@ -60,7 +59,7 @@ def readTestFile(file: File): Tuple8[
       maxProcessTime,
       maxGenerationTime,
       maxSolveTime,
-      rewrites ++ options
+      rewrites ++ options ++ optimize
     )
   )
 }

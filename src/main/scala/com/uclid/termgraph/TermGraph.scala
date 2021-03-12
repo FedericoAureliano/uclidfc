@@ -24,11 +24,6 @@ abstract class AbstractTermGraph() {
   protected val memo: HashMap[Instruction, Int] =
     new HashMap().addAll(stmts.zipWithIndex.map(p => (p._1, p._2)))
 
-  def clear(): Unit = {
-    stmts.clear()
-    memo.clear()
-  }
-
   /** Add instruction to stmts if it isn't already there, otherwise return its location.
     *
     * If the instruction should be named, then add a reference to it and point to that.
@@ -166,7 +161,7 @@ abstract class AbstractTermGraph() {
       case FunctionParameter(_, _) => true
       case TheoryMacro(name, _) => 
         // TODO support more than bools, strings, bitvecs, and ints
-        name == "true" || name == "false" || (name.startsWith("\"") && name.endsWith("\"")) || name.startsWith("#") || name.toIntOption.isDefined
+        name == "true" || name == "false" || (name.startsWith("\"") && name.endsWith("\"")) || name.startsWith("#") || name.startsWith("bv") || name.toIntOption.isDefined
       case _ => false
     }
   }
