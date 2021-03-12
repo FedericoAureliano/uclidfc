@@ -11,7 +11,8 @@ class Medley(choices: List[Solver]) extends Solver() {
   val random = Random
 
   def pickSolver(features: Map[String, String]) : Solver = {
-    // Very silly rule to demo TODO: do something better
+    // Very silly rule to demo. 
+    // TODO: do something better
     val z3 = Z3()
     if (features("NIA").toInt > 0 && choices.contains(z3)) {
       z3
