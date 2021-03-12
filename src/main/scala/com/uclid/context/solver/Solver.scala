@@ -5,6 +5,7 @@ import com.uclid.context.solver.ProofResult
 import com.uclid.termgraph
 
 import java.io.{File, PrintWriter}
+import java.nio.file.Paths
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent._
 import scala.sys.process._
@@ -42,7 +43,12 @@ abstract class Solver() {
     suffix: String
   ): File = {
     val f = outFile match {
-      case Some(value) => new File(s"$fileCount$value")
+      case Some(value) => {
+        val fileName = Paths.get(value).getFileName
+        val extension = fileName.toString.split("\\.").last
+        val newName = s"${fileName.toString.split("\\.").dropRight(1).mkString("")}$fileCount.$extension"
+        new File(newName)
+      }
       case None =>
         val tempFi = File.createTempFile("tmp", suffix)
         tempFi.deleteOnExit()

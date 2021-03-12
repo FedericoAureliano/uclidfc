@@ -212,6 +212,14 @@ abstract class AbstractTermGraph() {
     stmts.clear()
     stmts.addAll(newStmts)
   }
+
+  def isQuantifier(pos: Int) : Boolean = {
+    getStmt(pos) match {
+      case TheoryMacro("forall", _) => true
+      case TheoryMacro("exists", _) => true
+      case _ => false
+    }
+  }
 }
 
 class TermGraph

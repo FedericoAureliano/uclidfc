@@ -58,7 +58,7 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
           case Assert(t) => if (isSynthesis) {
             s"(constraint (not ${programPointToQueryTerm(t)}))"
           } else {
-            s"(assert ${programPointToQueryTerm(t)})"
+            s"(assert ${programPointToQueryTerm(t, 0, pp == 0)})"
           }
           case Check()   => if (isSynthesis) {
             "(check-synth)"
@@ -86,10 +86,10 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
   protected def programPointToQueryTerm(
     pos: Int,
     indentInput: Int = 0,
-    noMemo: Boolean = false
+    memoizeIn: Boolean = false
   ): String = {
     var indent = indentInput
-
+    var memoize = memoizeIn
     val out = new StringBuilder()
     val stack = new Stack[ToPrint]()
 
@@ -111,6 +111,8 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
       }
     }
 
+    val memo : HashMap[Int, String] = new HashMap()
+
     stack.push(Jump(point))
 
     while (!stack.isEmpty) {
@@ -118,7 +120,18 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
         case Jump(p) => {
           val position = termgraph.findTarget(p)
           termgraph.getStmt(position) match {
-            case a: Application       => applicationToQueryTerm(a)
+            case a: Application       => {
+              if (termgraph.isQuantifier(a.caller)) {
+                // so that we don't get expressions with free variables
+                // need to think of a less cautious way
+                memoize = false 
+              }
+              if (memoize && memo.contains(position)) {
+                stack.push(Direct(memo(position)))
+              } else {
+                applicationToQueryTerm(a)
+              }
+            }
             case c: Constructor       => constructorToQueryTerm(c)
             case d: DataType          => datatypeToQueryTerm(d)
             case f: FunctionParameter => functionparameterToQueryTerm(f)
@@ -148,6 +161,12 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
     // Helper functions that deal with each case
     def applicationToQueryTerm(a: Application): Unit = {
       pushDebugComment(a)
+      if (memoize) {
+        val position = termgraph.memoGetInstruction(a)
+        val name = Util.freshSymbolName()
+        memo(position) = name
+        stack.push(Direct(s" :named ${name})"))
+      }
       if (a.args.length > 1) {
         stack.push(Indent(-1))
         stack.push(Direct(")"))
@@ -180,6 +199,9 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
         } else {
           stack.push(Jump(a.caller))
         }
+      }
+      if (memoize) {
+        stack.push(Direct("(! "))
       }
     }
 
