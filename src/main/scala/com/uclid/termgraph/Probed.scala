@@ -44,14 +44,42 @@ trait Probed() extends AbstractTermGraph {
     getStmts().zipWithIndex.filter((p, i) => marks(i) && p.isInstanceOf[UserFunction]).length
   }
 
-  // these probes are completely untested.. 
-  def numberOfNullaryVariables(): Int = 
-    getStmts().filter(p => p.isInstanceOf[UserFunction]).filter(p =>
+  def numberOfBitVecVariables(entryPoints: List[Int]) : Int = {
+    val marks = mark(entryPoints)
+    getStmts().zipWithIndex.filter((p, i) => marks(i) && p.isInstanceOf[UserFunction]).filter((p,i) =>
+    getStmt(p.asInstanceOf[UserFunction].sort).isInstanceOf[TheorySort]).filter((p,i) =>
+    getStmt(p.asInstanceOf[UserFunction].sort).asInstanceOf[TheorySort].name == "BitVec"
+    ).length
+  }
+
+  def numberOfIntegerVariables(entryPoints: List[Int]) : Int = {
+    val marks = mark(entryPoints)
+    getStmts().zipWithIndex.filter((p, i) => marks(i) && p.isInstanceOf[UserFunction]).filter((p,i) =>
+    getStmt(p.asInstanceOf[UserFunction].sort).isInstanceOf[TheorySort]).filter((p,i) =>
+    getStmt(p.asInstanceOf[UserFunction].sort).asInstanceOf[TheorySort].name == "Int"
+    ).length
+  }
+
+  def numberOfArrayVariables(entryPoints: List[Int]) : Int = {
+    val marks = mark(entryPoints)
+    getStmts().zipWithIndex.filter((p, i) => marks(i) && p.isInstanceOf[UserFunction]).filter((p,i) =>
+    getStmt(p.asInstanceOf[UserFunction].sort).isInstanceOf[TheorySort]).filter((p,i) =>
+    getStmt(p.asInstanceOf[UserFunction].sort).asInstanceOf[TheorySort].name == "Array"
+    ).length
+  }
+
+ 
+  def numberOfNullaryVariables(entryPoints: List[Int]) : Int = {
+    val marks = mark(entryPoints)
+    getStmts().zipWithIndex.filter((p, i) => marks(i) && p.isInstanceOf[UserFunction]).filter((p,i) =>
     p.asInstanceOf[UserFunction].params.size==0).length
+  }
   
-  def numberOfUFs(): Int = 
-    getStmts().filter(p => p.isInstanceOf[UserFunction]).filter(p => 
+  def numberOfUFs(entryPoints: List[Int]): Int = {
+    val marks = mark(entryPoints)
+    getStmts().zipWithIndex.filter((p, i) => marks(i) && p.isInstanceOf[UserFunction]).filter((p,i) => 
     p.asInstanceOf[UserFunction].params.size>0).length
+  }
   
   def numberOfIntegerLiterals(): Int = 
     getStmts().filter(p => p.isInstanceOf[TheoryMacro]).filter(p => 
@@ -80,6 +108,38 @@ trait Probed() extends AbstractTermGraph {
       )
     sum
   }
+
+// // returns -1 if type has infinite number of values
+//   def getMaxOfType(sort: TheorySort): Some(Int) = {
+//     sort.name match{
+//       case "Array" => 
+//       case "BitVec" => scala math.getStmt(sort.params.head).toInt
+//       case "Integer" => -1
+//       case "Bool" => 2
+//       case _ => 
+//     }
+//   }
+
+  // def maxArraySize(): Some(Int) = {
+  //   var max: Option[Int] = None
+  //   getStmts()
+  //     .foreach(inst =>
+  //       inst match {
+  //         case UserFunction(_, sort, _) =>
+  //           //value = # args to function
+  //           if (getStmt(sort).isInstanceOf[TheorySort])
+  //             if (getStmt(sort).asInstanceOf[TheorySort].name=="Array")
+  //             {
+  //               val size = getStmt(getStmt(sort).asInstanceOf[TheorySort].params.head)
+                
+  //             }
+  //             max = Some(params.length)
+  //           }
+  //         case _ =>
+  //       }
+  //     )
+  //     max.getOrElse(0)
+  // }
 
   
   def countConsecutiveQuantifiers(expr: Instruction, count: Int, previousQuantifier: String): Int = {
