@@ -526,10 +526,10 @@ trait Rewritable() extends AbstractTermGraph {
       case Some(newLoc) => newLoc
       case None => {
         getStmt(pos) match {
-          case Application(caller, args) =>
+          case Application(function, args) =>
             // pos points to an application, update the children
             val newArgs = args.map(a => copyUpdateTerm(a, map))
-            val newCaller = copyUpdateTerm(caller, map)
+            val newCaller = copyUpdateTerm(function, map)
             val newLoc = memoAddInstruction(Application(newCaller, newArgs))
             map.getOrElse(newLoc, newLoc)
           case Ref(loc) =>
