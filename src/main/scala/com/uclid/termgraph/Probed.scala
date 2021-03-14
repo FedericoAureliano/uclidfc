@@ -21,8 +21,11 @@ trait Probed() extends AbstractTermGraph {
   def featureMap(entryPoints: List[Int]) : Map[String, String] = {
     val combinedSeq = (Map(("Term graph size", numberOfNodes().toString),
       ("Number of variables", numberOfVariables(entryPoints).toString),
-      ("Number of nullary variables", numberOfNullaryVariables().toString),
-      ("Number of multi-ary variables", numberOfUFs().toString),
+      ("Number of Integer variables", numberOfIntegerVariables(entryPoints).toString),
+      ("Number of Bitvector variables", numberOfBitVecVariables(entryPoints).toString),
+      ("Number of Array variables", numberOfBitVecVariables(entryPoints).toString),
+      ("Number of nullary variables", numberOfNullaryVariables(entryPoints).toString),
+      ("Number of multi-ary variables", numberOfUFs(entryPoints).toString),
       ("Number of uninterpreted sorts", numberOfUSorts().toString),
       ("Largest integer literal", largestIntegerLiteral(entryPoints).toString),
       ("Sum of integer literals", sumIntegerLiteral(entryPoints).toString),
@@ -68,7 +71,6 @@ trait Probed() extends AbstractTermGraph {
     ).length
   }
 
- 
   def numberOfNullaryVariables(entryPoints: List[Int]) : Int = {
     val marks = mark(entryPoints)
     getStmts().zipWithIndex.filter((p, i) => marks(i) && p.isInstanceOf[UserFunction]).filter((p,i) =>
@@ -109,16 +111,16 @@ trait Probed() extends AbstractTermGraph {
     sum
   }
 
-// // returns -1 if type has infinite number of values
-//   def getMaxOfType(sort: TheorySort): Some(Int) = {
-//     sort.name match{
-//       case "Array" => 
-//       case "BitVec" => scala math.getStmt(sort.params.head).toInt
-//       case "Integer" => -1
-//       case "Bool" => 2
-//       case _ => 
-//     }
-//   }
+// returns -1 if type has infinite number of values
+  // def getMaxOfType(sort: TheorySort): Some(Int) = {
+  //   sort.name match{
+  //     case "Array" => 
+  //     case "BitVec" => getStmt(sort.params.head).toInt
+  //     case "Integer" => -1
+  //     case "Bool" => 2
+  //     case _ => 
+  //   }
+  // }
 
   // def maxArraySize(): Some(Int) = {
   //   var max: Option[Int] = None
