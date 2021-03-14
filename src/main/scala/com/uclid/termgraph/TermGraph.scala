@@ -36,7 +36,7 @@ abstract class AbstractTermGraph() {
     inst match {
       case app : Application =>
         app.args.foreach(a => assert(stmts(a).isInstanceOf[Application] || stmts(a).isInstanceOf[Ref]))
-        assert(!stmts(app.caller).isInstanceOf[Application])
+        assert(!stmts(app.function).isInstanceOf[Application])
       case r : Ref => 
         assert(stmts(r.loc).isInstanceOf[Application] || stmts(r.loc).isInstanceOf[Ref])
       case _ =>
@@ -58,7 +58,7 @@ abstract class AbstractTermGraph() {
     inst match {
       case app : Application =>
         app.args.foreach(a => assert(stmts(a).isInstanceOf[Application] || stmts(a).isInstanceOf[Ref]))
-        assert(!stmts(app.caller).isInstanceOf[Application])
+        assert(!stmts(app.function).isInstanceOf[Application])
       case r : Ref => 
         assert(stmts(r.loc).isInstanceOf[Application] || stmts(r.loc).isInstanceOf[Ref])
       case _ =>
@@ -106,8 +106,8 @@ abstract class AbstractTermGraph() {
         marks(pos) = true
         stmts(pos) match {
           case Ref(i)               => frontier.addOne(i)
-          case Application(caller, args) =>
-            frontier.addOne(caller); args.foreach(i => frontier.addOne(i))
+          case Application(function, args) =>
+            frontier.addOne(function); args.foreach(i => frontier.addOne(i))
           // case UserMacro(_, _, b, _) => frontier.addOne(b)
           case _ =>
         }
@@ -144,8 +144,8 @@ abstract class AbstractTermGraph() {
           case DataType(_, p)        => p.foreach(a => frontier.addOne(a))
           case Module(_, d, _, _, _) =>
             frontier.addOne(d)
-          case Application(caller, args) =>
-            frontier.addOne(caller); args.foreach(i => frontier.addOne(i))
+          case Application(function, args) =>
+            frontier.addOne(function); args.foreach(i => frontier.addOne(i))
         }
       }
     }
@@ -196,7 +196,7 @@ abstract class AbstractTermGraph() {
         case Selector(n, s) => Selector(n, findTarget(s))
         case DataType(n, p) => DataType(n, p.map(a => findTarget(a)))
         case Module(n, d, i, x, s) => Module(n, findTarget(d), findTarget(i), findTarget(x), findTarget(s))
-        case Application(caller, args) => Application(findTarget(caller), args.map(a => findTarget(a)))
+        case Application(function, args) => Application(findTarget(function), args.map(a => findTarget(a)))
         case other => other
       }
       

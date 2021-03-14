@@ -121,7 +121,7 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
           val position = termgraph.findTarget(p)
           termgraph.getStmt(position) match {
             case a: Application       => {
-              if (termgraph.isQuantifier(a.caller)) {
+              if (termgraph.isQuantifier(a.function)) {
                 // so that we don't get expressions with free variables
                 // need to think of a less cautious way
                 memoize = false 
@@ -176,9 +176,9 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
               stack.push(NewLine())
             }
             // if we have a constructor lets label the arguments
-            if (termgraph.getStmt(a.caller).isInstanceOf[Constructor]) {
+            if (termgraph.getStmt(a.function).isInstanceOf[Constructor]) {
               //get the ith selector
-              val ctr = termgraph.getStmt(a.caller).asInstanceOf[Constructor]
+              val ctr = termgraph.getStmt(a.function).asInstanceOf[Constructor]
               stack.push(Jump(p._1))
               pushAssignmentComment(ctr.selectors.reverse(p._2))
             } else {
@@ -187,17 +187,17 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
           }
         stack.push(NewLine())
         stack.push(Indent(1))
-        stack.push(Jump(a.caller))
+        stack.push(Jump(a.function))
         stack.push(Direct("("))
       } else {
         if (a.args.length == 1) {
           stack.push(Direct(")"))
           stack.push(Jump(a.args(0)))
           stack.push(Direct(" "))
-          stack.push(Jump(a.caller))
+          stack.push(Jump(a.function))
           stack.push(Direct("("))
         } else {
-          stack.push(Jump(a.caller))
+          stack.push(Jump(a.function))
         }
       }
       if (memoize) {
@@ -319,7 +319,7 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
           case m: Module   => Some(moduleToQueryCtx(m))
           case a: Application =>
             val dispatched =
-              (List(a.caller) ++ a.args).map(a => dispatch(a)).flatten
+              (List(a.function) ++ a.args).map(a => dispatch(a)).flatten
             if (dispatched.length > 0) {
               Some(dispatched.mkString(s"${newline()}"))
             } else {

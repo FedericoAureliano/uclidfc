@@ -190,7 +190,7 @@ object SmtCompiler {
             if (path.size > 1) {
               val mostRecent = ctx.termgraph.memoAddInstruction(path.pop())
               val parent = path.pop().asInstanceOf[Application]
-              path.push(Application(parent.caller, parent.args ++ List(mostRecent)))
+              path.push(Application(parent.function, parent.args ++ List(mostRecent)))
             } else {
               // this is the top level, so just let it be
             }
@@ -224,7 +224,7 @@ object SmtCompiler {
               if (ctx.termgraph.completeButUnapplied(curr)) {
                 curr = ctx.termgraph.memoAddInstruction(Application(curr, List.empty))
               }
-              path.push(Application(parent.caller, parent.args ++ List(curr)))
+              path.push(Application(parent.function, parent.args ++ List(curr)))
             } else {
               // there was no parent so just return 
               if (ctx.termgraph.completeButUnapplied(curr)) {

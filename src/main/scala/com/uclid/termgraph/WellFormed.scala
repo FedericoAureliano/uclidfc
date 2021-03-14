@@ -45,8 +45,8 @@ trait WellFormed() extends AbstractTermGraph {
           assert(checkRef(in))
           assert(checkRef(x))
           assert(checkRef(v))
-        case Application(caller, p) =>
-          assert(checkRef(caller))
+        case Application(function, p) =>
+          assert(checkRef(function))
           p.foreach(a => assert(checkRef(a)))
       }
     }
@@ -58,8 +58,8 @@ trait WellFormed() extends AbstractTermGraph {
     app: Int
   ): Int =
     var sort = getStmt(app) match {
-      case Application(caller, args) =>
-        getStmt(caller) match {
+      case Application(function, args) =>
+        getStmt(function) match {
           case TheoryMacro("ite", _) => inferTermType(args.head)
           case TheoryMacro("store", _) =>
             inferTermType(args.head)
@@ -68,7 +68,7 @@ trait WellFormed() extends AbstractTermGraph {
             val arraySort =
               getStmt(arrayRef).asInstanceOf[TheorySort]
             arraySort.params.last
-          case _ => inferTermType(caller)
+          case _ => inferTermType(function)
         }
       case Constructor(_, sort, _)    => sort
       case FunctionParameter(_, sort) => sort

@@ -146,11 +146,11 @@ trait Probed() extends AbstractTermGraph {
     var maxIncrement: Int = 0;
     if(expr.isInstanceOf[Application])
     {
-      getStmt(expr.asInstanceOf[Application].caller) match {
+      getStmt(expr.asInstanceOf[Application].function) match {
         case TheoryMacro("exists", _) | TheoryMacro("forall", _)=> 
         {
-          maxIncrement = countConsecutiveQuantifiers(getStmt(expr.asInstanceOf[Application].args.head), count, getStmt(expr.asInstanceOf[Application].caller).asInstanceOf[TheoryMacro].name);
-          if(previousQuantifier != getStmt(expr.asInstanceOf[Application].caller).asInstanceOf[TheoryMacro].name)  
+          maxIncrement = countConsecutiveQuantifiers(getStmt(expr.asInstanceOf[Application].args.head), count, getStmt(expr.asInstanceOf[Application].function).asInstanceOf[TheoryMacro].name);
+          if(previousQuantifier != getStmt(expr.asInstanceOf[Application].function).asInstanceOf[TheoryMacro].name)  
             maxIncrement= maxIncrement+1;
         }
         case _ => 
@@ -282,8 +282,8 @@ trait Probed() extends AbstractTermGraph {
       .foreach((marked, inst) =>
         if (marked) {
           inst match {
-            case Application(caller, args) =>
-              (caller :: args).foreach(pos => {
+            case Application(function, args) =>
+              (function :: args).foreach(pos => {
                 getStmt(pos) match {
                   case TheoryMacro("*", _) =>
                     if (
@@ -379,8 +379,8 @@ trait Probed() extends AbstractTermGraph {
         if (marked) {
           inst match {
             case _: AbstractDataType => dt = true
-            case Application(caller, args) =>
-              getStmt(caller) match {
+            case Application(function, args) =>
+              getStmt(function) match {
                 case TheoryMacro("*", _) =>
                   if (
                     args.filter { a =>

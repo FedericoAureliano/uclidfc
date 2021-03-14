@@ -117,4 +117,4 @@ case class Module(name: String, ct: Int, init: Int, next: Int, spec: Int)
   override def defaultCtr(): Int = ct
 }
 
-case class Application(caller: Int, args: List[Int]) extends Instruction {}
+case class Application(function: Int, args: List[Int]) extends Instruction {}
