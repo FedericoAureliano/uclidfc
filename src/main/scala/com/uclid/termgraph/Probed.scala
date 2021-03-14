@@ -23,7 +23,7 @@ trait Probed() extends AbstractTermGraph {
       ("Number of variables", numberOfVariables(entryPoints).toString),
       ("Number of Integer variables", numberOfIntegerVariables(entryPoints).toString),
       ("Number of Bitvector variables", numberOfBitVecVariables(entryPoints).toString),
-      ("Number of Array variables", numberOfBitVecVariables(entryPoints).toString),
+      ("Number of Array variables", numberOfArrayVariables(entryPoints).toString),
       ("Number of nullary variables", numberOfNullaryVariables(entryPoints).toString),
       ("Number of multi-ary variables", numberOfUFs(entryPoints).toString),
       ("Number of uninterpreted sorts", numberOfUSorts().toString),
