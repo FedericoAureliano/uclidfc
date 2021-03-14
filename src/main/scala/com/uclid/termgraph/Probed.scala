@@ -31,7 +31,6 @@ trait Probed() extends AbstractTermGraph {
       ("Number of exists", numberOfExists().toString),
       ("Number of foralls", numberOfForalls().toString),
       ("Number of quantified vars", numberOfQuantifiedVars().toString),
-      ("Number of quantifier alternations", sumQuantifierAlternations().toString),
       ("Max consecutive quantifier alternations", maxQuantifierAlternations().toString),
       ("Max Arity", maxArity(entryPoints).toString),
       ("Avg Arity", avgArity(entryPoints).toString)) ++ logicComponents(entryPoints))
@@ -83,44 +82,34 @@ trait Probed() extends AbstractTermGraph {
   }
 
   
-  def countConsecutiveQuantifiers(expr: Application, count: Int, previousQuantifier: String): Int = 
-  {
-    var result: Int = count
-    var isQuant: Boolean = false;
-
-    getStmt(expr.caller) match {
-      case TheoryMacro("exists", _) | TheoryMacro("forall", _)=> 
-      {
-        isQuant=true
-        if(previousQuantifier != getStmt(expr.caller).asInstanceOf[TheoryMacro].name)  
-          result +=1;
+  def countConsecutiveQuantifiers(expr: Instruction, count: Int, previousQuantifier: String): Int = {
+    var maxIncrement: Int = 0;
+    if(expr.isInstanceOf[Application])
+    {
+      getStmt(expr.asInstanceOf[Application].caller) match {
+        case TheoryMacro("exists", _) | TheoryMacro("forall", _)=> 
+        {
+          maxIncrement = countConsecutiveQuantifiers(getStmt(expr.asInstanceOf[Application].args.head), count, getStmt(expr.asInstanceOf[Application].caller).asInstanceOf[TheoryMacro].name);
+          if(previousQuantifier != getStmt(expr.asInstanceOf[Application].caller).asInstanceOf[TheoryMacro].name)  
+            maxIncrement= maxIncrement+1;
+        }
+        case _ => 
+        {
+          if(expr.asInstanceOf[Application].args.isEmpty)
+            maxIncrement=0
+          else
+          {
+            maxIncrement = expr.asInstanceOf[Application].args.filter(p => getStmt(p).isInstanceOf[Application]).map(arg 
+              => countConsecutiveQuantifiers(getStmt(arg).asInstanceOf[Application], count, previousQuantifier)).max
+          }
+        }
       }
-      case _ => isQuant=false
+      count + maxIncrement
     }
-    if(isQuant && getStmt(expr.args.head).isInstanceOf[Application])
-      countConsecutiveQuantifiers(getStmt(expr.args.head).asInstanceOf[Application], result, previousQuantifier)
     else
-      result 
+      count  
   }
 
-  def sumQuantifierAlternations(): Int = {
-    var sum: Int = 0
-    getStmts()
-      .foreach(inst =>
-        inst match {
-          case Application(function, predicate) => 
-            getStmt(function)  match {
-              case TheoryMacro("forall", _) | TheoryMacro("exists", _) => 
-                var num_alternations = countConsecutiveQuantifiers(
-                            getStmt(predicate.head).asInstanceOf[Application], 0, 
-                            getStmt(function).asInstanceOf[TheoryMacro].name)
-                sum = sum + num_alternations;
-              case _ => sum
-            }
-          case _ => sum
-        })
-      sum
-  }  
 
   def maxQuantifierAlternations(): Int = {
     var max: Int = 0
@@ -131,7 +120,7 @@ trait Probed() extends AbstractTermGraph {
             getStmt(function)  match {
               case TheoryMacro("forall", _) | TheoryMacro("exists", _)=> 
                 var new_alternations = countConsecutiveQuantifiers(
-                                        getStmt(predicate.head).asInstanceOf[Application], 0, 
+                                        getStmt(predicate.head), 0, 
                                         getStmt(function).asInstanceOf[TheoryMacro].name)
                 if(new_alternations > max)
                   max = new_alternations
