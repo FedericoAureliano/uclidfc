@@ -426,6 +426,12 @@ object SmtCompiler {
             val w = ctx.termgraph.memoAddInstruction(Numeral(width.toInt))
             ctx.termgraph.memoAddInstruction(TheoryMacro(bvexpr, List(w)))
           }
+          case "_" :: "extract" :: in_width  :: out_width :: Nil => {
+            pos += 6
+            val w = ctx.termgraph.memoAddInstruction(Numeral(in_width.toInt))
+            val v = ctx.termgraph.memoAddInstruction(Numeral(out_width.toInt))
+            ctx.termgraph.memoAddInstruction(TheoryMacro("extract", List(w, v)))
+          }
           case c => throw new SmtParserError(s"Expected bit-vector literal, got $c!")
         }
         case other => {
