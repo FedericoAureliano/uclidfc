@@ -421,7 +421,7 @@ object SmtCompiler {
       tokens(pos) match {
         // more complicated symbols like "(_ bv10 32)"
         case "(" => tokens(pos + 1) :: tokens(pos + 2) :: tokens(pos + 3) :: tokens(pos + 4) :: Nil match {
-          case "_" :: bvexpr :: width :: ")" :: Nil if bvexpr.startsWith("bv") => {
+          case "_" :: bvexpr :: width :: ")" :: Nil if (bvexpr.startsWith("bv") || bvexpr.endsWith("extend")) => {
             pos += 5
             val w = ctx.termgraph.memoAddInstruction(Numeral(width.toInt))
             ctx.termgraph.memoAddInstruction(TheoryMacro(bvexpr, List(w)))
