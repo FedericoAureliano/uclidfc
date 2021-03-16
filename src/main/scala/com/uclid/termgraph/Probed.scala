@@ -118,18 +118,18 @@ trait Probed() extends AbstractTermGraph {
     sum
   }
 
-  def BVString2Value(bitvec: String): Option[Int] = {
+  def BVString2Value(bitvec: String): Option[Long] = {
       if (bitvec.startsWith("bv")){
-        bitvec.stripPrefix("bv").toIntOption
+        bitvec.stripPrefix("bv").toLongOption
       } else if (bitvec.startsWith("#b")) {
         try {
-          Some(Integer.parseInt(bitvec.stripPrefix("#b"),2))
+          Some(java.lang.Long.parseUnsignedLong(bitvec.stripPrefix("#b"),2))
         } catch {
           case _ => None
         }
       } else if (bitvec.startsWith("#x")) {
         try {
-          Some(Integer.parseInt(bitvec.stripPrefix("#x"),16))
+          Some(java.lang.Long.parseUnsignedLong(bitvec.stripPrefix("#x"),16))
         } catch {
           case _ => None
         }
@@ -239,8 +239,8 @@ trait Probed() extends AbstractTermGraph {
     sum
   }
 
-  def sumBVliteral(entryPoints: List[Int]): Int = {
-    var sum: Int = 0
+  def sumBVliteral(entryPoints: List[Int]): Long = {
+    var sum: Long = 0
     getStmts()
       .foreach(inst =>
         inst match {
@@ -255,8 +255,8 @@ trait Probed() extends AbstractTermGraph {
     sum
   }
 
-  def largestBVliteral(entryPoints: List[Int]): Option[Int] = {
-    var max: Option[Int] = None
+  def largestBVliteral(entryPoints: List[Int]): Option[Long] = {
+    var max: Option[Long] = None
     getStmts()
       .foreach(inst =>
         inst match {
