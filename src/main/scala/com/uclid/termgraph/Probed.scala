@@ -29,7 +29,10 @@ trait Probed() extends AbstractTermGraph {
       ("Number of uninterpreted sorts", numberOfUSorts().toString),
       ("Largest integer literal", largestIntegerLiteral(entryPoints).toString),
       ("Sum of integer literals", sumIntegerLiteral(entryPoints).toString),
+      ("Largest BitVec literal", largestBVliteral(entryPoints).toString),
+      ("Sum of BitVec literals", sumBVliteral(entryPoints).toString),
       ("Number of unique integer literals", numberOfIntegerLiterals().toString),
+      ("Number of unique BV literals", numberOfBVLiterals().toString),
       ("Number of quantifiers", numberOfQuantfiers().toString),
       ("Number of exists", numberOfExists().toString),
       ("Number of foralls", numberOfForalls().toString),
@@ -87,6 +90,10 @@ trait Probed() extends AbstractTermGraph {
     getStmts().filter(p => p.isInstanceOf[TheoryMacro]).filter(p => 
     p.asInstanceOf[TheoryMacro].name.forall(_.isDigit)).length
 
+  def numberOfBVLiterals(): Int = 
+    getStmts().filter(p => p.isInstanceOf[TheoryMacro]).filter(p => 
+    BVString2Value(p.asInstanceOf[TheoryMacro].name)!=None).length
+
   def numberOfForalls(): Int = 
       getStmts().filter(p => p.isInstanceOf[TheoryMacro]).filter(p => p.asInstanceOf[TheoryMacro].name == "forall").length
       
@@ -111,10 +118,25 @@ trait Probed() extends AbstractTermGraph {
     sum
   }
 
+  def BVString2Value(bitvec: String): Option[Int] = {
+      if (bitvec.startsWith("bv")){
+        bitvec.stripPrefix("bv").toIntOption
+      } else if (bitvec.startsWith("#b")) {
+        Some(Integer.parseInt(bitvec.stripPrefix("#b"),2))
+      } else if (bitvec.startsWith("#x")) {
+        Some(Integer.parseInt(bitvec.stripPrefix("#x"),8))
+      } else {
+        None;
+      }
+  }
+
+
 // returns -1 if type has infinite number of values
   // def getMaxOfType(sort: TheorySort): Some(Int) = {
   //   sort.name match{
-  //     case "Array" => 
+  //     case "Array" => {
+  //       getMaxOfType(getStmt(sort.args.head)) + getMaxOfType(getStmt(sort.args.)) 
+  //     }
   //     case "BitVec" => getStmt(sort.params.head).toInt
   //     case "Integer" => -1
   //     case "Bool" => 2
@@ -207,6 +229,41 @@ trait Probed() extends AbstractTermGraph {
         }
       )
     sum
+  }
+
+  def sumBVliteral(entryPoints: List[Int]): Int = {
+    var sum: Int = 0
+    getStmts()
+      .foreach(inst =>
+        inst match {
+          case TheoryMacro(name, _) =>
+            BVString2Value(name) match {
+              case Some(value) => sum += value
+              case None =>
+            }
+          case _ =>
+        }
+      )
+    sum
+  }
+
+  def largestBVliteral(entryPoints: List[Int]): Option[Int] = {
+    var max: Option[Int] = None
+    getStmts()
+      .foreach(inst =>
+        inst match {
+          case TheoryMacro(name, _) =>
+            BVString2Value(name) match {
+              case Some(value) =>
+                if (value >= max.getOrElse(value)) {
+                  max = Some(value)
+                }
+              case None =>
+            }
+          case _ =>
+        }
+      )
+    max
   }
 
   def largestIntegerLiteral(entryPoints: List[Int]): Option[Int] = {
