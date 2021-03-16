@@ -434,35 +434,10 @@ object SmtCompiler {
       tokens(pos) match {
         // more complicated symbols like "(_ bv10 32)"
         case "(" => tokens(pos + 1) :: tokens(pos + 2) :: tokens(pos + 3) :: tokens(pos + 4) :: Nil match {
-          case "_" :: bvexpr :: width :: ")" :: Nil if (bvexpr.startsWith("bv") || bvexpr.endsWith("extend")) => {
+          case "_" :: bvexpr :: width :: ")" :: Nil if (bvexpr.startsWith("bv") || bvexpr == "zero_extend" || bvexpr == "sign_extend" || bvexpr == "rotate_left" || bvexpr == "rotate_right" || bvexpr == "repeat")  => {
             pos += 5
             val w = ctx.termgraph.memoAddInstruction(Numeral(width.toInt))
             ctx.termgraph.memoAddInstruction(TheoryMacro(bvexpr, List(w)))
-          }
-          case "_" :: "zero_extend" :: i :: ")" :: Nil => {
-            pos += 5
-            val w = ctx.termgraph.memoAddInstruction(Numeral(i.toInt))
-            ctx.termgraph.memoAddInstruction(TheoryMacro("zero_extend", List(w)))
-          }
-          case "_" :: "sign_extend" :: i :: ")" :: Nil => {
-            pos += 5
-            val w = ctx.termgraph.memoAddInstruction(Numeral(i.toInt))
-            ctx.termgraph.memoAddInstruction(TheoryMacro("sign_extend", List(w)))
-          }
-          case "_" :: "rotate_left" :: i :: ")" :: Nil => {
-            pos += 5
-            val w = ctx.termgraph.memoAddInstruction(Numeral(i.toInt))
-            ctx.termgraph.memoAddInstruction(TheoryMacro("rotate_left", List(w)))
-          }
-          case "_" :: "rotate_right" :: i :: ")" :: Nil => {
-            pos += 5
-            val w = ctx.termgraph.memoAddInstruction(Numeral(i.toInt))
-            ctx.termgraph.memoAddInstruction(TheoryMacro("rotate_right", List(w)))
-          }
-          case "_" :: "repeat" :: i :: ")" :: Nil => {
-            pos += 5
-            val w = ctx.termgraph.memoAddInstruction(Numeral(i.toInt))
-            ctx.termgraph.memoAddInstruction(TheoryMacro("repeat", List(w)))
           }
           case "_" :: "extract" :: in_width  :: out_width :: Nil => {
             pos += 6
