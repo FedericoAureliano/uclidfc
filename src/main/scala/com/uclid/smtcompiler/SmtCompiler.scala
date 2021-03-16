@@ -176,12 +176,19 @@ object SmtCompiler {
 
       while {
         tokens(pos) match {
-          case "(" if tokens(pos + 1) != "_" && tokens(pos + 1) != "!" && tokens(pos + 1) != "let" => {
-            pos += 1
-            nest += 1
-            val (op, bindings) = parseOperator()
-            local.push(bindings)
-            path.push(Application(op, List.empty))
+          case "(" if tokens(pos + 1) != "_" && tokens(pos + 1) != "!" => {
+            if (tokens(pos + 1) == "let") {
+              pos += 2
+              nest += 1
+              val bindings = parseLetList().toMap
+              local.push(bindings)
+            } else {
+              pos += 1
+              nest += 1
+              val (op, bindings) = parseOperator()
+              local.push(bindings)
+              path.push(Application(op, List.empty))
+            }
           }
           case ")" => {
             pos += 1
@@ -197,14 +204,6 @@ object SmtCompiler {
           }
           case atom => {
             var curr = atom match {
-              case "(" if tokens(pos + 1) == "let" => {
-                pos += 2
-                val bindings = parseLetList().toMap
-                local.push(bindings)
-                val t = parseTerm()
-                pos += 1 // for close paren
-                t
-              }
               case "(" if tokens(pos + 1) == "!" => {
                 pos += 2
                 val t = parseTerm()
