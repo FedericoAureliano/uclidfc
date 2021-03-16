@@ -333,6 +333,7 @@ trait Probed() extends AbstractTermGraph {
     var s = 0
     var bv = 0
     var sy = 0
+    var p = 0
 
     val marks = mark(entryPoints)
 
@@ -364,9 +365,6 @@ trait Probed() extends AbstractTermGraph {
                   case TheoryMacro("str.indexof", _) => s += 1
                   case TheoryMacro("str.substr", _) => s += 1
                   case TheoryMacro("str.len", _) => s += 1
-                  case TheoryMacro("str.contains", _) => s += 1
-                  case TheoryMacro("str.prefixof", _) => s += 1
-                  case TheoryMacro("str.suffixof", _) => s += 1
                   case TheoryMacro("str.replace", _) => s += 1
                   case TheoryMacro("str.at", _) => s += 1
 
@@ -375,28 +373,63 @@ trait Probed() extends AbstractTermGraph {
                   case TheoryMacro("bvsub", _) => bv += 1
                   case TheoryMacro("bvand", _) => bv += 1
                   case TheoryMacro("bvor", _) => bv += 1
+                  case TheoryMacro("bvxor", _) => bv += 1
                   case TheoryMacro("bvmul", _) => bv += 1
+                  case TheoryMacro("bvsdiv", _) => bv += 1
                   case TheoryMacro("bvudiv", _) => bv += 1
                   case TheoryMacro("bvurem", _) => bv += 1
+                  case TheoryMacro("bvsrem", _) => bv += 1
+                  case TheoryMacro("bvumod", _) => bv += 1
+                  case TheoryMacro("bvsmod", _) => bv += 1
                   case TheoryMacro("bvshl", _) => bv += 1
                   case TheoryMacro("bvlshr", _) => bv += 1
+                  case TheoryMacro("bvashr", _) => bv += 1
                   case TheoryMacro("bvnot", _) => bv += 1
                   case TheoryMacro("bvneg", _) => bv += 1
-                  case TheoryMacro("bvult", _) => bv += 1
                   case TheoryMacro("concat", _) => bv += 1
                   case TheoryMacro("extract", _) => bv += 1
                   case TheoryMacro("bv2nat", _) => bv += 1
                   case TheoryMacro("nat2bv", _) => bv += 1
+                  case TheoryMacro("zero_extend", _) => bv + 1 
+                  case TheoryMacro("sign_extend", _) => bv + 1 
+                  case TheoryMacro("rotate_left", _) => bv + 1 
+                  case TheoryMacro("rotate_right", _) => bv + 1 
+                  case TheoryMacro("repeat", _) => bv + 1
 
                   case TheoryMacro("+", _) => lia += 1
                   case TheoryMacro("-", _) => lia += 1
+                  
                   case TheoryMacro("forall", _) => q += 1
                   case TheoryMacro("exists", _) => q += 1
+
                   case TheoryMacro("select", _) => a += 1
                   case TheoryMacro("store", _) => a += 1
+                  
                   case UserFunction(_, _, args) => if (args.length > 0) uf += 1
                   case Constructor(_, _, _) => dt += 1
                   case Selector(_, _) => dt += 1
+
+                  case TheoryMacro("bvult", _) => p += 1
+                  case TheoryMacro("bvslt", _) => p += 1
+                  case TheoryMacro("bvule", _) => p += 1
+                  case TheoryMacro("bvsle", _) => p += 1
+                  case TheoryMacro("bvugt", _) => p += 1
+                  case TheoryMacro("bvsgt", _) => p += 1
+                  case TheoryMacro("bvuge", _) => p += 1
+                  case TheoryMacro("bvsge", _) => p += 1
+                  case TheoryMacro("str.contains", _) => p += 1
+                  case TheoryMacro("str.prefixof", _) => p += 1
+                  case TheoryMacro("str.suffixof", _) => p += 1
+                  case TheoryMacro("=", _) => p += 1
+                  case TheoryMacro(">=", _) => p += 1
+                  case TheoryMacro(">", _) => p += 1
+                  case TheoryMacro("<=", _) => p += 1
+                  case TheoryMacro("<", _) => p += 1
+                  case TheoryMacro("=>", _) => p += 1
+                  case TheoryMacro("and", _) => p += 1
+                  case TheoryMacro("or", _) => p += 1
+                  case TheoryMacro("not", _) => p += 1
+
                   case _                   =>
                 }
               })
@@ -415,7 +448,8 @@ trait Probed() extends AbstractTermGraph {
       ("LIA", lia),
       ("NIA", nia),
       ("S", s),
-      ("BV", bv)
+      ("BV", bv),
+      ("B", p)
     )
   }
 
