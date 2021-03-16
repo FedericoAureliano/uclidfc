@@ -439,6 +439,37 @@ object SmtCompiler {
             val w = ctx.termgraph.memoAddInstruction(Numeral(width.toInt))
             ctx.termgraph.memoAddInstruction(TheoryMacro(bvexpr, List(w)))
           }
+          case "_" :: "zero_extend" :: i :: ")" :: Nil => {
+            pos += 5
+            val w = ctx.termgraph.memoAddInstruction(Numeral(i.toInt))
+            ctx.termgraph.memoAddInstruction(TheoryMacro("zero_extend", List(w)))
+          }
+          case "_" :: "sign_extend" :: i :: ")" :: Nil => {
+            pos += 5
+            val w = ctx.termgraph.memoAddInstruction(Numeral(i.toInt))
+            ctx.termgraph.memoAddInstruction(TheoryMacro("sign_extend", List(w)))
+          }
+          case "_" :: "rotate_left" :: i :: ")" :: Nil => {
+            pos += 5
+            val w = ctx.termgraph.memoAddInstruction(Numeral(i.toInt))
+            ctx.termgraph.memoAddInstruction(TheoryMacro("rotate_left", List(w)))
+          }
+          case "_" :: "rotate_right" :: i :: ")" :: Nil => {
+            pos += 5
+            val w = ctx.termgraph.memoAddInstruction(Numeral(i.toInt))
+            ctx.termgraph.memoAddInstruction(TheoryMacro("rotate_right", List(w)))
+          }
+          case "_" :: "repeat" :: i :: ")" :: Nil => {
+            pos += 5
+            val w = ctx.termgraph.memoAddInstruction(Numeral(i.toInt))
+            ctx.termgraph.memoAddInstruction(TheoryMacro("repeat", List(w)))
+          }
+          case "_" :: "extract" :: i :: j :: Nil => {
+            pos += 6
+            val w = ctx.termgraph.memoAddInstruction(Numeral(i.toInt))
+            val v = ctx.termgraph.memoAddInstruction(Numeral(j.toInt))
+            ctx.termgraph.memoAddInstruction(TheoryMacro("extract", List(w, v)))
+          }
           case c => throw new SmtParserError(s"Expected bit-vector literal, got $c!")
         }
         case other => {
