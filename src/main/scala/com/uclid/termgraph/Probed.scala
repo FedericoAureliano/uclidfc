@@ -122,9 +122,17 @@ trait Probed() extends AbstractTermGraph {
       if (bitvec.startsWith("bv")){
         bitvec.stripPrefix("bv").toIntOption
       } else if (bitvec.startsWith("#b")) {
-        Some(Integer.parseInt(bitvec.stripPrefix("#b"),2))
+        try {
+          Some(Integer.parseInt(bitvec.stripPrefix("#b"),2))
+        } catch {
+          case _ => None
+        }
       } else if (bitvec.startsWith("#x")) {
-        Some(Integer.parseInt(bitvec.stripPrefix("#x"),8))
+        try {
+          Some(Integer.parseInt(bitvec.stripPrefix("#x"),16))
+        } catch {
+          case _ => None
+        }
       } else {
         None;
       }
