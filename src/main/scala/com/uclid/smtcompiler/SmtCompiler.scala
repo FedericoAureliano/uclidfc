@@ -156,6 +156,14 @@ object SmtCompiler {
             else if (tokens(pos) == ")") {parentheses -= 1}
             pos += 1
           }
+        case "(" :: "get-info" :: _ =>
+          pos += 2
+          var parentheses = 1
+          while (parentheses > 0) {
+            if (tokens(pos) == "(") {parentheses += 1}
+            else if (tokens(pos) == ")") {parentheses -= 1}
+            pos += 1
+          }
         case "(" :: "exit" :: ")" :: _ =>
           pos = tokens.length
         case c =>
