@@ -95,7 +95,6 @@ trait Probed() extends AbstractTermGraph {
  
   def numberOfUSorts(): Int = getStmts().filter(p => p.isInstanceOf[UserSort]).length
 
-
   def BVString2Value(bitvec: String): Option[Long] = {
       if (bitvec.startsWith("bv")){
         bitvec.stripPrefix("bv").toLongOption
@@ -118,7 +117,6 @@ trait Probed() extends AbstractTermGraph {
 
 
 
-// number of nested stores 
 // number of free bits
 // theory macro with name as const, param0 is thing, param1 is 
 
@@ -379,6 +377,7 @@ trait Probed() extends AbstractTermGraph {
     var quantified: Int = 0;
     var select: Int = 0;
     var store: Int = 0;
+    var asConst: Int = 0;
     
     val marks = mark(entryPoints)
     marks
@@ -393,6 +392,7 @@ trait Probed() extends AbstractTermGraph {
                   case TheoryMacro("exists", params ) => { exists +=1; quants+=1; quantified +=params.size;} 
                   case TheoryMacro("store", params ) => store +=1;
                   case TheoryMacro("select", params ) => select +=1;
+                  case TheoryMacro("as const", params ) => select +=1;
                   case _ => 
                 }
               })
@@ -404,7 +404,8 @@ trait Probed() extends AbstractTermGraph {
       ("Number of quantifiers", quants),
       ("Number of quantified variables", quantified),
       ("Number of selects", select),
-      ("Number of stores", store)
+      ("Number of stores", store),
+      ("Number of as consts", asConst)
     )
   }
 
