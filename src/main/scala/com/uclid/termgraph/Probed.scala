@@ -21,6 +21,7 @@ trait Probed() extends AbstractTermGraph {
   def featureMap(entryPoints: List[Int]) : Map[String, String] = {
     val combinedSeq = (Map(("Term graph size", numberOfNodes().toString),
       ("Number of variables", numberOfVariables(entryPoints).toString),
+      ("Number of free bits", numberOfBits(entryPoints).toString),
       ("Number of Integer variables", numberOfIntegerVariables(entryPoints).toString),
       ("Number of Bitvector variables", numberOfBitVecVariables(entryPoints).toString),
       ("Number of Array variables", numberOfArrayVariables(entryPoints).toString),
@@ -33,13 +34,9 @@ trait Probed() extends AbstractTermGraph {
       ("Sum of BitVec literals", sumBVliteral(entryPoints).toString),
       ("Number of unique integer literals", numberOfIntegerLiterals().toString),
       ("Number of unique BV literals", numberOfBVLiterals().toString),
-      ("Number of quantifiers", numberOfQuantfiers().toString),
-      ("Number of exists", numberOfExists().toString),
-      ("Number of foralls", numberOfForalls().toString),
-      ("Number of quantified vars", numberOfQuantifiedVars().toString),
       ("Max consecutive quantifier alternations", maxQuantifierAlternations().toString),
       ("Max Arity", maxArity(entryPoints).toString),
-      ("Avg Arity", avgArity(entryPoints).toString)) ++ logicComponents(entryPoints))
+      ("Avg Arity", avgArity(entryPoints).toString)) ++ logicComponents(entryPoints) ++ countOperators(entryPoints))
 
     combinedSeq.map((k, v) => (k, v.toString))
   }
@@ -94,29 +91,9 @@ trait Probed() extends AbstractTermGraph {
     getStmts().filter(p => p.isInstanceOf[TheoryMacro]).filter(p => 
     BVString2Value(p.asInstanceOf[TheoryMacro].name)!=None).length
 
-  def numberOfForalls(): Int = 
-      getStmts().filter(p => p.isInstanceOf[TheoryMacro]).filter(p => p.asInstanceOf[TheoryMacro].name == "forall").length
-      
-  def numberOfExists(): Int = 
-      getStmts().filter(p => p.isInstanceOf[TheoryMacro]).filter(p => p.asInstanceOf[TheoryMacro].name == "exists").length
-
-  def numberOfQuantfiers(): Int = 
-      numberOfForalls() + numberOfExists()
  
   def numberOfUSorts(): Int = getStmts().filter(p => p.isInstanceOf[UserSort]).length
 
-  def numberOfQuantifiedVars(): Int = {
-    var sum: Int = 0
-    getStmts()
-      .foreach(inst =>
-        inst match {
-          case TheoryMacro("forall", params) => sum += params.length
-          case TheoryMacro("exists", params) => sum += params.length
-          case _ =>
-        }
-      )
-    sum
-  }
 
   def BVString2Value(bitvec: String): Option[Long] = {
       if (bitvec.startsWith("bv")){
@@ -139,40 +116,58 @@ trait Probed() extends AbstractTermGraph {
   }
 
 
-// returns -1 if type has infinite number of values
-  // def getMaxOfType(sort: TheorySort): Some(Int) = {
-  //   sort.name match{
-  //     case "Array" => {
-  //       getMaxOfType(getStmt(sort.args.head)) + getMaxOfType(getStmt(sort.args.)) 
-  //     }
-  //     case "BitVec" => getStmt(sort.params.head).toInt
-  //     case "Integer" => -1
-  //     case "Bool" => 2
-  //     case _ => 
-  //   }
-  // }
 
-  // def maxArraySize(): Some(Int) = {
-  //   var max: Option[Int] = None
-  //   getStmts()
-  //     .foreach(inst =>
-  //       inst match {
-  //         case UserFunction(_, sort, _) =>
-  //           //value = # args to function
-  //           if (getStmt(sort).isInstanceOf[TheorySort])
-  //             if (getStmt(sort).asInstanceOf[TheorySort].name=="Array")
-  //             {
-  //               val size = getStmt(getStmt(sort).asInstanceOf[TheorySort].params.head)
-                
-  //             }
-  //             max = Some(params.length)
-  //           }
-  //         case _ =>
-  //       }
-  //     )
-  //     max.getOrElse(0)
-  // }
+// number of nested stores 
+// number of free bits
+// theory macro with name as const, param0 is thing, param1 is 
 
+// Application(TheoryMacro(“as const”, TYPE), BODY)
+// Type is the type of the constant
+// Body is a literal constant
+
+
+
+// returns None if type has infinite number of values, Probably doesn't work for datatypes
+  def getBitsInType(sort: Instruction): Option[Int] = {
+    sort match {
+      case TheorySort => {
+        sort.asInstanceOf[TheorySort].name match{
+          case "Array" => 
+          {
+            val indexMax = getBitsInType(getStmt(sort.asInstanceOf[TheorySort].params(0))) 
+            val elementMax  =  getBitsInType(getStmt(sort.asInstanceOf[TheorySort].params(1))) 
+            if(indexMax==None || elementMax == None){None}
+            else {Some(indexMax.getOrElse(0) * elementMax.getOrElse(0))}
+          }
+          case "BitVec" =>  Some(getStmt(sort.asInstanceOf[TheorySort].params.head).asInstanceOf[Numeral].value)
+          case "Integer" => None
+          case "Bool" => Some(2)
+          case _ => None
+        }
+      }
+      case UserSort => Some(sort.asInstanceOf[UserSort].arity.value)
+      case _ => None
+    }
+  }
+
+  def numberOfBits(entryPoints: List[Int]): Int = {
+    var sum: Int = 0
+    getStmts()
+      .foreach(inst =>
+        inst match {
+          case UserFunction(name, sort, params) =>
+           if(params.size==0)
+           {
+              getBitsInType(getStmt(sort)) match {
+                case Some(value) => sum += value
+                case None =>
+             }
+           }
+          case _ =>
+        }
+      )
+    sum
+  }
   
   def countConsecutiveQuantifiers(expr: Instruction, count: Int, previousQuantifier: String): Int = {
     var maxIncrement: Int = 0;
@@ -329,6 +324,44 @@ trait Probed() extends AbstractTermGraph {
       )
       avg
   }
+
+  def countOperators(entryPoints: List[Int]): Map[String, Int]  = 
+  {
+    var foralls: Int = 0;
+    var exists: Int = 0;
+    var quants: Int = 0;
+    var quantified: Int = 0;
+    var select: Int = 0;
+    var store: Int = 0;
+    
+    val marks = mark(entryPoints)
+    marks
+      .zip(getStmts())
+      .foreach((marked, inst) =>
+        if (marked) {
+          inst match {
+            case Application(function, args) =>
+              (function :: args).foreach(pos => {
+                getStmt(pos) match {
+                  case TheoryMacro("forall", params ) => { foralls +=1; quants+=1; quantified +=params.size;}
+                  case TheoryMacro("exists", params ) => { exists +=1; quants+=1; quantified +=params.size;} 
+                  case TheoryMacro("store", params ) => store +=1;
+                  case TheoryMacro("select", params ) => select +=1;
+                  case _ => 
+                }
+              })
+            case _ => 
+      }})
+      Map(
+      ("Number of foralls", foralls),
+      ("Number of exists", exists),
+      ("Number of quantifiers", quants),
+      ("Number of quantified variables", quantified),
+      ("Number of selects", select),
+      ("Number of stores", store)
+    )
+  }
+
 
   
   def logicComponents(entryPoints: List[Int]): Map[String, Int] = {
