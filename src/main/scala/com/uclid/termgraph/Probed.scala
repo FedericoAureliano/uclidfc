@@ -35,6 +35,7 @@ trait Probed() extends AbstractTermGraph {
       ("Number of unique integer literals", numberOfIntegerLiterals().toString),
       ("Number of unique BV literals", numberOfBVLiterals().toString),
       ("Max consecutive quantifier alternations", maxQuantifierAlternations().toString),
+      ("Max nested stores", maxNestedStores().toString),
       ("Max Arity", maxArity(entryPoints).toString),
       ("Avg Arity", avgArity(entryPoints).toString)) ++ logicComponents(entryPoints) ++ countOperators(entryPoints))
 
@@ -216,7 +217,52 @@ trait Probed() extends AbstractTermGraph {
           case _ => max
         })
       max
-  }   
+  }
+
+  def countNestedStores(expr: Instruction, count: Int): Int = {  
+    var maxIncrement: Int = 0;
+    if(expr.isInstanceOf[Application])
+    {
+      getStmt(expr.asInstanceOf[Application].function) match {
+        case TheoryMacro("store", _) => 
+        {
+          maxIncrement = expr.asInstanceOf[Application].args.filter(p => getStmt(p).isInstanceOf[Application]).map(arg 
+            => countNestedStores(getStmt(arg).asInstanceOf[Application], count)).max + 1
+        }
+        case _ => 
+        {
+          if(expr.asInstanceOf[Application].args.isEmpty)
+            maxIncrement=0
+          else
+          {
+            maxIncrement = expr.asInstanceOf[Application].args.filter(p => getStmt(p).isInstanceOf[Application]).map(arg 
+              => countNestedStores(getStmt(arg).asInstanceOf[Application], count)).max
+          }
+        }
+      }
+      count + maxIncrement
+    }
+    else
+      count  
+  }
+
+  def maxNestedStores(): Int = {
+    var max: Int = 0
+    getStmts()
+      .foreach(inst =>
+        inst match {
+          case Application(function, predicate) => 
+            getStmt(function)  match {
+              case TheoryMacro("store", _) => 
+                var newNestings = countNestedStores(getStmt(predicate.head), 1)
+                if(newNestings > max)
+                  max = newNestings
+              case _ => max
+            }
+          case _ => max
+        })
+      max
+  }
 
   def sumIntegerLiteral(entryPoints: List[Int]): Int = {
     var sum: Int = 0
