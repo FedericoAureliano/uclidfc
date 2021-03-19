@@ -20,6 +20,7 @@ trait Probed() extends AbstractTermGraph {
 
   def featureMap(entryPoints: List[Int]) : Map[String, String] = {
     val combinedSeq = (Map(("Term graph size", numberOfNodes().toString),
+      ("Number of asserts", entryPoints.size),
       ("Number of variables", numberOfVariables(entryPoints).toString),
       ("Number of free bits", numberOfBits(entryPoints).toString),
       ("Number of Integer variables", numberOfIntegerVariables(entryPoints).toString),
@@ -34,6 +35,7 @@ trait Probed() extends AbstractTermGraph {
       ("Sum of BitVec literals", sumBVliteral(entryPoints).toString),
       ("Number of unique integer literals", numberOfIntegerLiterals().toString),
       ("Number of unique BV literals", numberOfBVLiterals().toString),
+      ("Number of free bits", numberOfBits(entryPoints).toString),
       ("Max consecutive quantifier alternations", maxQuantifierAlternations().toString),
       ("Max nested stores", maxNestedStores().toString),
       ("Max Arity", maxArity(entryPoints).toString),
