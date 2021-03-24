@@ -77,5 +77,5 @@ jobs:
         path: ~/.sbt
         key: ${{ runner.os }}-sbt-${{ hashFiles('**/build.sbt') }}
 
-    - name: Test
-      run: sbt test
+    - name: Coverage
+      run: sbt jacoco
