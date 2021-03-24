@@ -112,7 +112,7 @@ case class DataType(name: String, constructors: List[Int])
 /*
 A module is a record with associated init function, next function, and spec function.
  */
-case class Module(name: String, ct: Int, init: Int, next: Int, spec: Int)
+case class Module(name: String, ct: Int, init: Int, next: Int, spec: List[Int])
     extends AbstractDataType {
   override def defaultCtr(): Int = ct
 }

@@ -436,9 +436,9 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
       indent -= 1
       val init = dispatch(m.init)
       val next = dispatch(m.next)
-      val spec = dispatch(m.spec)
+      val specs = m.spec.map(s => dispatch(s))
 
-      tmp ++= List(init, next, spec).flatten.mkString(s"${newline()}")
+      tmp ++= (init :: next :: specs).flatten.mkString(s"${newline()}")
       indent -= 1
       if (prettyPrint > 0) {tmp ++= s"${TAB * indent}\n; done declaring module ${m.name}\n"}
 

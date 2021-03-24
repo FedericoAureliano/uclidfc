@@ -886,78 +886,94 @@ object UclidCompiler {
                   .asInstanceOf[Module]
                 val initRef = mod.init
                 val nextRef = mod.next
-                val specRef = mod.spec
-
-                // base case
-                // apply init
-                val initAppRef =
-                  termgraph.memoAddInstruction(
-                    Application(initRef, baseInitVariables)
-                  )
-                proofStates.addOne(initAppRef)
-
-                // apply spec to result of init
-                val initSpecRef =
-                  termgraph.memoAddInstruction(
-                    Application(specRef, List(initAppRef))
-                  )
-
-                val negRef = termgraph.memoAddInstruction(TheoryMacro("not"))
-
-                val baseRef =
-                  termgraph.memoAddInstruction(
-                    Application(negRef, List(initSpecRef))
-                  )
-                ctx.addAssertion(baseRef)
-
-                // induction step
-                // holds on entry
-                // create all the variables you need
-                val inductiveInitVariables = generateInitVariables()
-                val inductiveAxioms = axioms.filter(p => p.invariant)
-                if (inductiveAxioms.length > 0) {
-                  // all inductiveAxioms should hold before inductive case
-                  val axiomRef =
-                    getAxiomRef(inductiveInitVariables.head, inductiveAxioms)
-                  ctx.addAxiom(axiomRef)
-                }
-                proofStates.addOne(inductiveInitVariables.head)
-                val entryRef =
-                  termgraph.memoAddInstruction(
-                    Application(specRef, List(inductiveInitVariables.head))
-                  )
-                // we can borrow the nondet state from init since we pop between asserts (this lets us just generate the auxiliary arguments when applying next)
-
-                // Take k steps
-                val k = unwind.getOrElse(IntLit(1)).literal.toInt
-                val states = stepKTimes(k, inductiveInitVariables.head, nextRef)
-                proofStates.addAll(states)
-                if (inductiveAxioms.length > 0) {
-                  // inductiveAxioms hold on every inner step
-                  states.foreach { s =>
-                    val axiomRef = getAxiomRef(s, inductiveAxioms)
-                    ctx.addAxiom(axiomRef)
-                  }
-                }
-
-                // holds on exit
-                val exitRef =
-                  termgraph.memoAddInstruction(
-                    Application(specRef, List(states.last))
-                  )
-
-                val negExitRef =
-                  termgraph.memoAddInstruction(
-                    Application(negRef, List(exitRef))
-                  )
+                val specRefs = mod.spec
 
                 val andRef = termgraph.memoAddInstruction(TheoryMacro("and"))
+                val negRef = termgraph.memoAddInstruction(TheoryMacro("not"))
+                
+                (0 to specRefs.length - 1).foreach(i => {
+                  val specRef = specRefs(i)
+                  val others = specRefs.filter(p => p != specRefs(i))
 
-                val inductiveRef = termgraph.memoAddInstruction(
-                  Application(andRef, List(entryRef, negExitRef))
-                )
+                  // base case
+                  // apply init
+                  val initAppRef =
+                    termgraph.memoAddInstruction(
+                      Application(initRef, baseInitVariables)
+                    )
+                  proofStates.addOne(initAppRef)
+  
+                  // apply spec to result of init
+                  val main = termgraph.memoAddInstruction(
+                    Application(specRef, List(initAppRef))
+                  )
+                  val aux = others.map { spec =>
+                      termgraph.memoAddInstruction(
+                        Application(spec, List(initAppRef))
+                      )
+                    }                    
+                  val initSpecRef = termgraph.memoAddInstruction(Application(negRef, List(main)))
+            
+                  val baseRef =
+                    termgraph.memoAddInstruction(
+                      Application(andRef, initSpecRef :: aux)
+                    )
+                  ctx.addAssertion(baseRef)
+  
+                  // induction step
+                  // holds on entry
+                  // create all the variables you need
+                  val inductiveInitVariables = generateInitVariables()
+                  val inductiveAxioms = axioms.filter(p => p.invariant)
+                  if (inductiveAxioms.length > 0) {
+                    // all inductiveAxioms should hold before inductive case
+                    val axiomRef =
+                      getAxiomRef(inductiveInitVariables.head, inductiveAxioms)
+                    ctx.addAxiom(axiomRef)
+                  }
+                  proofStates.addOne(inductiveInitVariables.head)
 
-                ctx.addAssertion(inductiveRef)
+                  val entryRefMain =
+                    termgraph.memoAddInstruction(
+                      Application(specRef, List(inductiveInitVariables.head))
+                    )
+                  val auxEntry = others.map { spec =>
+                      termgraph.memoAddInstruction(
+                        Application(spec, List(inductiveInitVariables.head))
+                      )
+                    }
+
+                  // we can borrow the nondet state from init since we pop between asserts (this lets us just generate the auxiliary arguments when applying next)
+  
+                  // Take k steps
+                  val k = unwind.getOrElse(IntLit(1)).literal.toInt
+                  val states = stepKTimes(k, inductiveInitVariables.head, nextRef)
+                  proofStates.addAll(states)
+                  if (inductiveAxioms.length > 0) {
+                    // inductiveAxioms hold on every inner step
+                    states.foreach { s =>
+                      val axiomRef = getAxiomRef(s, inductiveAxioms)
+                      ctx.addAxiom(axiomRef)
+                    }
+                  }
+  
+                  // holds on exit
+                  val exitRefMain =
+                    termgraph.memoAddInstruction(
+                      Application(specRef, List(states.last))
+                    )
+  
+                  val negExitRef =
+                    termgraph.memoAddInstruction(
+                      Application(negRef, List(exitRefMain))
+                    )
+  
+                  val inductiveRef = termgraph.memoAddInstruction(
+                    Application(andRef, entryRefMain :: negExitRef :: auxEntry)
+                  )
+  
+                  ctx.addAssertion(inductiveRef)
+                })
 
               case "unroll" =>
                 // create all the variables you need
@@ -969,97 +985,80 @@ object UclidCompiler {
                   .asInstanceOf[Module]
                 val initRef = mod.init
                 val nextRef = mod.next
-                val specRef = mod.spec
+                val specRefs = mod.spec
 
-                val initAppRef =
-                  termgraph.memoAddInstruction(
-                    Application(initRef, initVariables)
-                  )
-                proofStates.addOne(initAppRef)
-
-                // apply axiom after init so that fresh variables don't cause problems when unrolling
-                if (axioms.length > 0) {
-                  val axiomRef = getAxiomRef(initAppRef, axioms)
-                  ctx.addAxiom(axiomRef)
-                }
-
-                val negRef = termgraph.memoAddInstruction(TheoryMacro("not"))
-
-                // Take k steps
-                val k = unwind.getOrElse(IntLit(1)).literal.toInt
-                val states = initAppRef :: stepKTimes(k, initAppRef, nextRef)
-                proofStates.addAll(states)
-                val inductiveAxioms = axioms.filter(p => p.invariant)
-                if (inductiveAxioms.length > 0) {
-                  // inductiveAxioms hold on every inner step
-                  states.foreach { s =>
-                    val axiomRef = getAxiomRef(s, inductiveAxioms)
+                (0 to specRefs.length - 1).foreach(i => {
+                  val specRef = specRefs(i)
+                  val initAppRef =
+                    termgraph.memoAddInstruction(
+                      Application(initRef, initVariables)
+                    )
+                  proofStates.addOne(initAppRef)
+  
+                  // apply axiom after init so that fresh variables don't cause problems when unrolling
+                  if (axioms.length > 0) {
+                    val axiomRef = getAxiomRef(initAppRef, axioms)
                     ctx.addAxiom(axiomRef)
                   }
-                }
-
-                states.zipWithIndex.foreach { p =>
-                  val exitRef =
-                    termgraph.memoAddInstruction(
-                      Application(specRef, List(p._1))
-                    )
-                  val negExitRef =
-                    termgraph.memoAddInstruction(
-                      Application(negRef, List(exitRef))
-                    )
-                  ctx.addAssertion(negExitRef)
-                }
+  
+                  val negRef = termgraph.memoAddInstruction(TheoryMacro("not"))
+  
+                  // Take k steps
+                  val k = unwind.getOrElse(IntLit(1)).literal.toInt
+                  val states = initAppRef :: stepKTimes(k, initAppRef, nextRef)
+                  proofStates.addAll(states)
+                  val inductiveAxioms = axioms.filter(p => p.invariant)
+                  if (inductiveAxioms.length > 0) {
+                    // inductiveAxioms hold on every inner step
+                    states.foreach { s =>
+                      val axiomRef = getAxiomRef(s, inductiveAxioms)
+                      ctx.addAxiom(axiomRef)
+                    }
+                  }
+  
+                  states.zipWithIndex.foreach { p =>
+                    val exitRef =
+                      termgraph.memoAddInstruction(
+                        Application(specRef, List(p._1))
+                      )
+                    val negExitRef =
+                      termgraph.memoAddInstruction(
+                        Application(negRef, List(exitRef))
+                      )
+                    ctx.addAssertion(negExitRef)
+                  }
+                })
             }
         }
       )
     }
 
     // get all the specs and create a function from them
-    def specsToTerm(
-      funcName: String,
+    def specsToTerms(
+      funcPrefix: String,
       stateParam: Int,
       params: List[Int],
       properties: List[SpecDecl]
-    ): Int = {
+    ): List[Int] = {
       // spec needs Bool, so add Bool if it's not already there
       val boolRef = termgraph.memoAddInstruction(TheorySort("Bool"))
-
-      val specConjuncts = new ListBuffer[Int]()
-
-      val bodyRef = if (properties.length > 1) {
-        val andRef = termgraph.memoAddInstruction(TheoryMacro("and"))
-        properties.foreach { d =>
-          val t =
-            exprToTerm(
-              Some(stateParam),
-              Map.empty,
-              d.expr
-            )._1 //specs shouldn't create new nondets
-          specConjuncts.addOne(t)
-          t
-        }
-        termgraph.memoAddInstruction(Application(andRef, specConjuncts.toList))
-      } else if (properties.length == 1) {
-        exprToTerm(
-          Some(stateParam),
-          Map.empty,
-          properties(0).expr
-        )._1 //specs shouldn't create new nondets
-      } else {
-        val trueRef = termgraph.memoAddInstruction(Application(termgraph.memoAddInstruction(TheoryMacro("true")), List.empty))
-        trueRef
-      }
-
-      val specRef = termgraph.memoAddInstruction(
-        UserMacro(
-          funcName,
-          boolRef,
-          bodyRef,
-          params
+      properties.map(prop => {
+        val body =
+          exprToTerm(
+            Some(stateParam),
+            Map.empty,
+            prop.expr
+          )._1 //specs shouldn't create new nondets
+        val specRef = termgraph.memoAddInstruction(
+          UserMacro(
+            funcPrefix + "!" + prop.id.name,
+            boolRef,
+            body,
+            params
+          )
         )
-      )
-
-      specRef
+        specRef
+      })
     } // end helper specsToTerm
 
     // for every variable, if it contains first class modules then make sure they are inited.
@@ -1273,7 +1272,7 @@ object UclidCompiler {
           -1,
           -1,
           -1,
-          -1
+          List.empty
         )
       )
 
@@ -1316,7 +1315,7 @@ object UclidCompiler {
             constructorRef,
             -1,
             -1,
-            -1
+            List.empty
           )
         ))
       )
@@ -1355,7 +1354,7 @@ object UclidCompiler {
       }
 
       // Add spec function
-      val specRef = specsToTerm(
+      val specRefs = specsToTerms(
         m.id.name + "!spec",
         inputStateRef,
         List(inputStateRef),
@@ -1366,7 +1365,7 @@ object UclidCompiler {
       termgraph.memoUpdateInstruction(
         termgraph.findTarget(moduleRef),
         Ref(termgraph.memoAddInstruction(
-          Module(m.id.name, constructorRef, initRef, nextRef, specRef)
+          Module(m.id.name, constructorRef, initRef, nextRef, specRefs)
         ))
       )
 

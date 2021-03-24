@@ -195,7 +195,7 @@ abstract class AbstractTermGraph() {
         case Constructor(n, s, p) => Constructor(n, findTarget(s), p.map(a => findTarget(a)))
         case Selector(n, s) => Selector(n, findTarget(s))
         case DataType(n, p) => DataType(n, p.map(a => findTarget(a)))
-        case Module(n, d, i, x, s) => Module(n, findTarget(d), findTarget(i), findTarget(x), findTarget(s))
+        case Module(n, d, i, x, s) => Module(n, findTarget(d), findTarget(i), findTarget(x), s.map(spec => findTarget(spec)))
         case Application(function, args) => Application(findTarget(function), args.map(a => findTarget(a)))
         case other => other
       }

@@ -40,11 +40,11 @@ trait WellFormed() extends AbstractTermGraph {
           assert(checkRef(sr))
         case DataType(_, p) =>
           p.foreach(a => assert(checkRef(a)))
-        case Module(_, d, in, x, v) =>
+        case Module(_, d, in, x, s) =>
           assert(checkRef(d))
           assert(checkRef(in))
           assert(checkRef(x))
-          assert(checkRef(v))
+          s.foreach(v => assert(checkRef(v)))
         case Application(function, p) =>
           assert(checkRef(function))
           p.foreach(a => assert(checkRef(a)))

@@ -79,8 +79,8 @@ abstract class Solver() {
     print("Generating query ... ")
     val t1 = System.nanoTime
     val qfiles : List[File] = unmodifiedSMTFile match {
-      case Some(value) => List(value)
-      case None => {
+      case Some(value) if prettyPrint == 0 => List(value)
+      case _ => {
         // need to call this first before checking if it is a synthesis query
         var queries : List[File] = generateQueries(ctx, prettyPrint).map(q => {
           var query = q
