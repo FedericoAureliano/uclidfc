@@ -7,7 +7,7 @@ import java.io.File
 class Correctness {
 
   @Test def testCorrectness(): Unit = {
-    val tests = (new File("models/tests/correctness").listFiles ++ new File(
+    val tests = (new File("models/tests/ucl").listFiles ++ new File(
       "models/examples"
     ).listFiles)
       .filter(_.isFile)
