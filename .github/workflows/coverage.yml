@@ -1,4 +1,4 @@
-name: Build, Tests, and Check Coverage
+name: Coverage
 
 on:
   push:
