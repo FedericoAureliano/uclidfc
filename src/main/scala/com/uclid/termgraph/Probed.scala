@@ -20,7 +20,9 @@ trait Probed() extends AbstractTermGraph {
 
   def featureMap(entryPoints: List[Int]) : Map[String, String] = {
     val combinedSeq = (Map(("Term graph size", numberOfNodes().toString),
+      ("Number of asserts", entryPoints.size),
       ("Number of variables", numberOfVariables(entryPoints).toString),
+      ("Number of free bits", numberOfBits(entryPoints).toString),
       ("Number of Integer variables", numberOfIntegerVariables(entryPoints).toString),
       ("Number of Bitvector variables", numberOfBitVecVariables(entryPoints).toString),
       ("Number of Array variables", numberOfArrayVariables(entryPoints).toString),
@@ -29,14 +31,15 @@ trait Probed() extends AbstractTermGraph {
       ("Number of uninterpreted sorts", numberOfUSorts().toString),
       ("Largest integer literal", largestIntegerLiteral(entryPoints).toString),
       ("Sum of integer literals", sumIntegerLiteral(entryPoints).toString),
+      ("Largest BitVec literal", largestBVliteral(entryPoints).toString),
+      ("Sum of BitVec literals", sumBVliteral(entryPoints).toString),
       ("Number of unique integer literals", numberOfIntegerLiterals().toString),
-      ("Number of quantifiers", numberOfQuantfiers().toString),
-      ("Number of exists", numberOfExists().toString),
-      ("Number of foralls", numberOfForalls().toString),
-      ("Number of quantified vars", numberOfQuantifiedVars().toString),
+      ("Number of unique BV literals", numberOfBVLiterals().toString),
+      ("Number of free bits", numberOfBits(entryPoints).toString),
       ("Max consecutive quantifier alternations", maxQuantifierAlternations().toString),
+      ("Max nested stores", maxNestedStores().toString),
       ("Max Arity", maxArity(entryPoints).toString),
-      ("Avg Arity", avgArity(entryPoints).toString)) ++ logicComponents(entryPoints))
+      ("Avg Arity", avgArity(entryPoints).toString)) ++ logicComponents(entryPoints) ++ countOperators(entryPoints))
 
     combinedSeq.map((k, v) => (k, v.toString))
   }
@@ -87,62 +90,85 @@ trait Probed() extends AbstractTermGraph {
     getStmts().filter(p => p.isInstanceOf[TheoryMacro]).filter(p => 
     p.asInstanceOf[TheoryMacro].name.forall(_.isDigit)).length
 
-  def numberOfForalls(): Int = 
-      getStmts().filter(p => p.isInstanceOf[TheoryMacro]).filter(p => p.asInstanceOf[TheoryMacro].name == "forall").length
-      
-  def numberOfExists(): Int = 
-      getStmts().filter(p => p.isInstanceOf[TheoryMacro]).filter(p => p.asInstanceOf[TheoryMacro].name == "exists").length
+  def numberOfBVLiterals(): Int = 
+    getStmts().filter(p => p.isInstanceOf[TheoryMacro]).filter(p => 
+    BVString2Value(p.asInstanceOf[TheoryMacro].name)!=None).length
 
-  def numberOfQuantfiers(): Int = 
-      numberOfForalls() + numberOfExists()
  
   def numberOfUSorts(): Int = getStmts().filter(p => p.isInstanceOf[UserSort]).length
 
-  def numberOfQuantifiedVars(): Int = {
+  def BVString2Value(bitvec: String): Option[Long] = {
+      if (bitvec.startsWith("bv")){
+        bitvec.stripPrefix("bv").toLongOption
+      } else if (bitvec.startsWith("#b")) {
+        try {
+          Some(java.lang.Long.parseUnsignedLong(bitvec.stripPrefix("#b"),2))
+        } catch {
+          case _ => None
+        }
+      } else if (bitvec.startsWith("#x")) {
+        try {
+          Some(java.lang.Long.parseUnsignedLong(bitvec.stripPrefix("#x"),16))
+        } catch {
+          case _ => None
+        }
+      } else {
+        None;
+      }
+  }
+
+
+
+// number of free bits
+// theory macro with name as const, param0 is thing, param1 is 
+
+// Application(TheoryMacro(“as const”, TYPE), BODY)
+// Type is the type of the constant
+// Body is a literal constant
+
+
+
+// returns None if type has infinite number of values, Probably doesn't work for datatypes
+  def getBitsInType(sort: Instruction): Option[Int] = {
+    sort match {
+      case TheorySort => {
+        sort.asInstanceOf[TheorySort].name match{
+          case "Array" => 
+          {
+            val indexMax = getBitsInType(getStmt(sort.asInstanceOf[TheorySort].params(0))) 
+            val elementMax  =  getBitsInType(getStmt(sort.asInstanceOf[TheorySort].params(1))) 
+            if(indexMax==None || elementMax == None){None}
+            else {Some(indexMax.getOrElse(0) * elementMax.getOrElse(0))}
+          }
+          case "BitVec" =>  Some(getStmt(sort.asInstanceOf[TheorySort].params.head).asInstanceOf[Numeral].value)
+          case "Integer" => None
+          case "Bool" => Some(2)
+          case _ => None
+        }
+      }
+      case UserSort => Some(sort.asInstanceOf[UserSort].arity.value)
+      case _ => None
+    }
+  }
+
+  def numberOfBits(entryPoints: List[Int]): Int = {
     var sum: Int = 0
     getStmts()
       .foreach(inst =>
         inst match {
-          case TheoryMacro("forall", params) => sum += params.length
-          case TheoryMacro("exists", params) => sum += params.length
+          case UserFunction(name, sort, params) =>
+           if(params.size==0)
+           {
+              getBitsInType(getStmt(sort)) match {
+                case Some(value) => sum += value
+                case None =>
+             }
+           }
           case _ =>
         }
       )
     sum
   }
-
-// returns -1 if type has infinite number of values
-  // def getMaxOfType(sort: TheorySort): Some(Int) = {
-  //   sort.name match{
-  //     case "Array" => 
-  //     case "BitVec" => getStmt(sort.params.head).toInt
-  //     case "Integer" => -1
-  //     case "Bool" => 2
-  //     case _ => 
-  //   }
-  // }
-
-  // def maxArraySize(): Some(Int) = {
-  //   var max: Option[Int] = None
-  //   getStmts()
-  //     .foreach(inst =>
-  //       inst match {
-  //         case UserFunction(_, sort, _) =>
-  //           //value = # args to function
-  //           if (getStmt(sort).isInstanceOf[TheorySort])
-  //             if (getStmt(sort).asInstanceOf[TheorySort].name=="Array")
-  //             {
-  //               val size = getStmt(getStmt(sort).asInstanceOf[TheorySort].params.head)
-                
-  //             }
-  //             max = Some(params.length)
-  //           }
-  //         case _ =>
-  //       }
-  //     )
-  //     max.getOrElse(0)
-  // }
-
   
   def countConsecutiveQuantifiers(expr: Instruction, count: Int, previousQuantifier: String): Int = {
     var maxIncrement: Int = 0;
@@ -191,7 +217,52 @@ trait Probed() extends AbstractTermGraph {
           case _ => max
         })
       max
-  }   
+  }
+
+  def countNestedStores(expr: Instruction, count: Int): Int = {  
+    var maxIncrement: Int = 0;
+    if(expr.isInstanceOf[Application])
+    {
+      getStmt(expr.asInstanceOf[Application].function) match {
+        case TheoryMacro("store", _) => 
+        {
+          maxIncrement = expr.asInstanceOf[Application].args.filter(p => getStmt(p).isInstanceOf[Application]).map(arg 
+            => countNestedStores(getStmt(arg).asInstanceOf[Application], count)).max + 1
+        }
+        case _ => 
+        {
+          if(expr.asInstanceOf[Application].args.isEmpty)
+            maxIncrement=0
+          else
+          {
+            maxIncrement = expr.asInstanceOf[Application].args.filter(p => getStmt(p).isInstanceOf[Application]).map(arg 
+              => countNestedStores(getStmt(arg).asInstanceOf[Application], count)).max
+          }
+        }
+      }
+      count + maxIncrement
+    }
+    else
+      count  
+  }
+
+  def maxNestedStores(): Int = {
+    var max: Int = 0
+    getStmts()
+      .foreach(inst =>
+        inst match {
+          case Application(function, predicate) => 
+            getStmt(function)  match {
+              case TheoryMacro("store", _) => 
+                var newNestings = countNestedStores(getStmt(predicate.head), 1)
+                if(newNestings > max)
+                  max = newNestings
+              case _ => max
+            }
+          case _ => max
+        })
+      max
+  }
 
   def sumIntegerLiteral(entryPoints: List[Int]): Int = {
     var sum: Int = 0
@@ -207,6 +278,41 @@ trait Probed() extends AbstractTermGraph {
         }
       )
     sum
+  }
+
+  def sumBVliteral(entryPoints: List[Int]): Long = {
+    var sum: Long = 0
+    getStmts()
+      .foreach(inst =>
+        inst match {
+          case TheoryMacro(name, _) =>
+            BVString2Value(name) match {
+              case Some(value) => sum += value
+              case None =>
+            }
+          case _ =>
+        }
+      )
+    sum
+  }
+
+  def largestBVliteral(entryPoints: List[Int]): Option[Long] = {
+    var max: Option[Long] = None
+    getStmts()
+      .foreach(inst =>
+        inst match {
+          case TheoryMacro(name, _) =>
+            BVString2Value(name) match {
+              case Some(value) =>
+                if (value >= max.getOrElse(value)) {
+                  max = Some(value)
+                }
+              case None =>
+            }
+          case _ =>
+        }
+      )
+    max
   }
 
   def largestIntegerLiteral(entryPoints: List[Int]): Option[Int] = {
@@ -265,6 +371,47 @@ trait Probed() extends AbstractTermGraph {
       avg
   }
 
+  def countOperators(entryPoints: List[Int]): Map[String, Int]  = 
+  {
+    var foralls: Int = 0;
+    var exists: Int = 0;
+    var quants: Int = 0;
+    var quantified: Int = 0;
+    var select: Int = 0;
+    var store: Int = 0;
+    var asConst: Int = 0;
+    
+    val marks = mark(entryPoints)
+    marks
+      .zip(getStmts())
+      .foreach((marked, inst) =>
+        if (marked) {
+          inst match {
+            case Application(function, args) =>
+              (function :: args).foreach(pos => {
+                getStmt(pos) match {
+                  case TheoryMacro("forall", params ) => { foralls +=1; quants+=1; quantified +=params.size;}
+                  case TheoryMacro("exists", params ) => { exists +=1; quants+=1; quantified +=params.size;} 
+                  case TheoryMacro("store", params ) => store +=1;
+                  case TheoryMacro("select", params ) => select +=1;
+                  case TheoryMacro("as const", params ) => select +=1;
+                  case _ => 
+                }
+              })
+            case _ => 
+      }})
+      Map(
+      ("Number of foralls", foralls),
+      ("Number of exists", exists),
+      ("Number of quantifiers", quants),
+      ("Number of quantified variables", quantified),
+      ("Number of selects", select),
+      ("Number of stores", store),
+      ("Number of as consts", asConst)
+    )
+  }
+
+
   
   def logicComponents(entryPoints: List[Int]): Map[String, Int] = {
     var q = 0
@@ -276,6 +423,7 @@ trait Probed() extends AbstractTermGraph {
     var s = 0
     var bv = 0
     var sy = 0
+    var p = 0
 
     val marks = mark(entryPoints)
 
@@ -307,9 +455,6 @@ trait Probed() extends AbstractTermGraph {
                   case TheoryMacro("str.indexof", _) => s += 1
                   case TheoryMacro("str.substr", _) => s += 1
                   case TheoryMacro("str.len", _) => s += 1
-                  case TheoryMacro("str.contains", _) => s += 1
-                  case TheoryMacro("str.prefixof", _) => s += 1
-                  case TheoryMacro("str.suffixof", _) => s += 1
                   case TheoryMacro("str.replace", _) => s += 1
                   case TheoryMacro("str.at", _) => s += 1
 
@@ -318,28 +463,63 @@ trait Probed() extends AbstractTermGraph {
                   case TheoryMacro("bvsub", _) => bv += 1
                   case TheoryMacro("bvand", _) => bv += 1
                   case TheoryMacro("bvor", _) => bv += 1
+                  case TheoryMacro("bvxor", _) => bv += 1
                   case TheoryMacro("bvmul", _) => bv += 1
+                  case TheoryMacro("bvsdiv", _) => bv += 1
                   case TheoryMacro("bvudiv", _) => bv += 1
                   case TheoryMacro("bvurem", _) => bv += 1
+                  case TheoryMacro("bvsrem", _) => bv += 1
+                  case TheoryMacro("bvumod", _) => bv += 1
+                  case TheoryMacro("bvsmod", _) => bv += 1
                   case TheoryMacro("bvshl", _) => bv += 1
                   case TheoryMacro("bvlshr", _) => bv += 1
+                  case TheoryMacro("bvashr", _) => bv += 1
                   case TheoryMacro("bvnot", _) => bv += 1
                   case TheoryMacro("bvneg", _) => bv += 1
-                  case TheoryMacro("bvult", _) => bv += 1
                   case TheoryMacro("concat", _) => bv += 1
                   case TheoryMacro("extract", _) => bv += 1
                   case TheoryMacro("bv2nat", _) => bv += 1
                   case TheoryMacro("nat2bv", _) => bv += 1
+                  case TheoryMacro("zero_extend", _) => bv + 1 
+                  case TheoryMacro("sign_extend", _) => bv + 1 
+                  case TheoryMacro("rotate_left", _) => bv + 1 
+                  case TheoryMacro("rotate_right", _) => bv + 1 
+                  case TheoryMacro("repeat", _) => bv + 1
 
                   case TheoryMacro("+", _) => lia += 1
                   case TheoryMacro("-", _) => lia += 1
+                  
                   case TheoryMacro("forall", _) => q += 1
                   case TheoryMacro("exists", _) => q += 1
+
                   case TheoryMacro("select", _) => a += 1
                   case TheoryMacro("store", _) => a += 1
+                  
                   case UserFunction(_, _, args) => if (args.length > 0) uf += 1
                   case Constructor(_, _, _) => dt += 1
                   case Selector(_, _) => dt += 1
+
+                  case TheoryMacro("bvult", _) => p += 1
+                  case TheoryMacro("bvslt", _) => p += 1
+                  case TheoryMacro("bvule", _) => p += 1
+                  case TheoryMacro("bvsle", _) => p += 1
+                  case TheoryMacro("bvugt", _) => p += 1
+                  case TheoryMacro("bvsgt", _) => p += 1
+                  case TheoryMacro("bvuge", _) => p += 1
+                  case TheoryMacro("bvsge", _) => p += 1
+                  case TheoryMacro("str.contains", _) => p += 1
+                  case TheoryMacro("str.prefixof", _) => p += 1
+                  case TheoryMacro("str.suffixof", _) => p += 1
+                  case TheoryMacro("=", _) => p += 1
+                  case TheoryMacro(">=", _) => p += 1
+                  case TheoryMacro(">", _) => p += 1
+                  case TheoryMacro("<=", _) => p += 1
+                  case TheoryMacro("<", _) => p += 1
+                  case TheoryMacro("=>", _) => p += 1
+                  case TheoryMacro("and", _) => p += 1
+                  case TheoryMacro("or", _) => p += 1
+                  case TheoryMacro("not", _) => p += 1
+
                   case _                   =>
                 }
               })
@@ -358,7 +538,8 @@ trait Probed() extends AbstractTermGraph {
       ("LIA", lia),
       ("NIA", nia),
       ("S", s),
-      ("BV", bv)
+      ("BV", bv),
+      ("B", p)
     )
   }
 

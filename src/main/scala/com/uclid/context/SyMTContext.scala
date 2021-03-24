@@ -239,6 +239,10 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
         stack.push(Direct(s"${t.name} ("))
       } else if (t.name.startsWith("bv") && t.name.drop(2).toIntOption.isDefined) {
         stack.push(Direct(s"(_ ${t.name} ${programPointToQueryTerm(t.params(0), 0)})"))
+      } else if (t.name == "zero_extend" || t.name == "zero_extend" || t.name == "sign_extend" || t.name == "rotate_left" || t.name == "rotate_right" || t.name == "repeat") {
+        stack.push(Direct(s"(_ ${t.name} ${programPointToQueryTerm(t.params(0), 0)})"))
+      } else if (t.name == "extract") {
+        stack.push(Direct(s"(_ ${t.name} ${programPointToQueryTerm(t.params(0), 0)} ${programPointToQueryTerm(t.params(1), 0)})"))
       } else if (t.name == "as const") {
         stack.push(Direct(s"(${t.name} ${programPointToQueryTerm(t.params(0), 0)})"))
       } else {

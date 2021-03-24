@@ -156,6 +156,14 @@ object SmtCompiler {
             else if (tokens(pos) == ")") {parentheses -= 1}
             pos += 1
           }
+        case "(" :: "get-info" :: _ =>
+          pos += 2
+          var parentheses = 1
+          while (parentheses > 0) {
+            if (tokens(pos) == "(") {parentheses += 1}
+            else if (tokens(pos) == ")") {parentheses -= 1}
+            pos += 1
+          }
         case "(" :: "exit" :: ")" :: _ =>
           pos = tokens.length
         case c =>
@@ -176,12 +184,19 @@ object SmtCompiler {
 
       while {
         tokens(pos) match {
-          case "(" if tokens(pos + 1) != "_" && tokens(pos + 1) != "!" && tokens(pos + 1) != "let" => {
-            pos += 1
-            nest += 1
-            val (op, bindings) = parseOperator()
-            local.push(bindings)
-            path.push(Application(op, List.empty))
+          case "(" if tokens(pos + 1) != "_" && tokens(pos + 1) != "!" => {
+            if (tokens(pos + 1) == "let") {
+              pos += 2
+              nest += 1
+              val bindings = parseLetList().toMap
+              local.push(bindings)
+            } else {
+              pos += 1
+              nest += 1
+              val (op, bindings) = parseOperator()
+              local.push(bindings)
+              path.push(Application(op, List.empty))
+            }
           }
           case ")" => {
             pos += 1
@@ -197,14 +212,6 @@ object SmtCompiler {
           }
           case atom => {
             var curr = atom match {
-              case "(" if tokens(pos + 1) == "let" => {
-                pos += 2
-                val bindings = parseLetList().toMap
-                local.push(bindings)
-                val t = parseTerm()
-                pos += 1 // for close paren
-                t
-              }
               case "(" if tokens(pos + 1) == "!" => {
                 pos += 2
                 val t = parseTerm()
@@ -434,10 +441,16 @@ object SmtCompiler {
       tokens(pos) match {
         // more complicated symbols like "(_ bv10 32)"
         case "(" => tokens(pos + 1) :: tokens(pos + 2) :: tokens(pos + 3) :: tokens(pos + 4) :: Nil match {
-          case "_" :: bvexpr :: width :: ")" :: Nil if bvexpr.startsWith("bv") => {
+          case "_" :: bvexpr :: width :: ")" :: Nil if (bvexpr.startsWith("bv") || bvexpr == "zero_extend" || bvexpr == "sign_extend" || bvexpr == "rotate_left" || bvexpr == "rotate_right" || bvexpr == "repeat")  => {
             pos += 5
             val w = ctx.termgraph.memoAddInstruction(Numeral(width.toInt))
             ctx.termgraph.memoAddInstruction(TheoryMacro(bvexpr, List(w)))
+          }
+          case "_" :: "extract" :: in_width  :: out_width :: Nil => {
+            pos += 6
+            val w = ctx.termgraph.memoAddInstruction(Numeral(in_width.toInt))
+            val v = ctx.termgraph.memoAddInstruction(Numeral(out_width.toInt))
+            ctx.termgraph.memoAddInstruction(TheoryMacro("extract", List(w, v)))
           }
           case c => throw new SmtParserError(s"Expected bit-vector literal, got $c!")
         }
