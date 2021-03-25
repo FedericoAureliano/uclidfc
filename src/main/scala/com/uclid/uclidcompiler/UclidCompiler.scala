@@ -999,18 +999,13 @@ object UclidCompiler {
                   val main = termgraph.memoAddInstruction(
                     Application(specRef, List(initAppRef))
                   )
-                  val aux = axiomRef ++ others.map { spec =>
-                    termgraph.memoAddInstruction(
-                      Application(spec, List(initAppRef))
-                    )
-                  }
                   val initSpecRef = termgraph.memoAddInstruction(
                     Application(negRef, List(main))
                   )
 
                   val baseRef =
                     termgraph.memoAddInstruction(
-                      Application(andRef, initSpecRef :: (aux ++ outers))
+                      Application(andRef, initSpecRef :: (axiomRef ++ outers))
                     )
                   ctx.addAssertion(baseRef)
 
