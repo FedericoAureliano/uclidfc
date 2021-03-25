@@ -10,25 +10,25 @@ import scala.util.Random
 class Medley(choices: List[Solver]) extends Solver() {
   val random = Random
 
-  def pickSolver(features: Map[String, String]) : Solver = {
-    // Very silly rule to demo. 
+  def pickSolver(features: Map[String, String]): Solver = {
+    // Very silly rule to demo.
     // TODO: do something better
     val z3 = Z3()
-    if (features("NIA").toInt > 0 && choices.contains(z3)) {
+    if features("NIA").toInt > 0 && choices.contains(z3) then {
       z3
     } else {
       choices(random.nextInt(choices.length))
     }
   }
 
-  def getCommand(ctx: Context): String = {
+  def getCommand(ctx: Context): String =
     pickSolver(ctx.termgraph.featureMap(ctx.entryPoints())).getCommand(ctx)
-  }
-  
+
   def generateQueries(ctx: Context, prettyPrint: Int): List[String] = {
     val query = ctx.toQueries(prettyPrint)
     query
   }
 
-  def parseAnswer(answer: String): String = SmtCompiler.removeComments(answer).replace("unsupported", "")
+  def parseAnswer(answer: String): String =
+    SmtCompiler.removeComments(answer).replace("unsupported", "")
 }

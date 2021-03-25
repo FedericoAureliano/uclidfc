@@ -23,7 +23,7 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
 
   protected var prettyPrint = 0;
 
-  def newline() = if (prettyPrint > 0) {"\n"} else {" "}
+  def newline() = if prettyPrint > 0 then {"\n"} else {" "}
 
   override def entryPoints() = script.foldLeft(List.empty)((acc, c) => {
     c match {
@@ -45,7 +45,7 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
     val logic = s"(set-logic ${termgraph.queryLogic(entryPoints())})"
     val opts = options.map(o => s"(set-option :${o._1} ${o._2})").mkString(s"${newline()}")
     
-    val info = if (isSynthesis) {
+    val info = if isSynthesis then {
       logic
     } else {
       List("(set-info :smt-lib-version 2.6)", logic, "(set-info :category \"industrial\")", "(set-info :source |Generator: Uclid5.|)", "(set-info :status unknown)").mkString("\n")
@@ -55,12 +55,12 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
     val body = script
       .map { c =>
         c match {
-          case Assert(t) => if (isSynthesis) {
+          case Assert(t) => if isSynthesis then {
             s"(constraint (not ${programPointToQueryTerm(t)}))"
           } else {
             s"(assert ${programPointToQueryTerm(t, 0, pp == 0)})"
           }
-          case Check()   => if (isSynthesis) {
+          case Check()   => if isSynthesis then {
             "(check-synth)"
           } else {
             "(check-sat)"
@@ -69,7 +69,7 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
       }
       .mkString(s"${newline()}")
 
-    val internal = if (prettyPrint > 1) {
+    val internal = if prettyPrint > 1 then {
       "\n\n; " + termgraph.getStmts().zipWithIndex.map((inst, i) => s"${i}: ${inst}").mkString("\n; ")
     } else {
       ""
@@ -96,7 +96,7 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
     val point = termgraph.findTarget(pos)
 
     def pushAssignmentComment(sel: Int) = {
-      if (prettyPrint > 0) {
+      if prettyPrint > 0 then {
         stack.push(NewLine())
         stack.push(Direct(s"; assigning to ${termgraph.getStmt(sel).asInstanceOf[Selector].name}"))
       } else {
@@ -105,7 +105,7 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
     }
 
     def pushDebugComment(inst: Instruction) = {
-      if (prettyPrint > 1) {
+      if prettyPrint > 1 then {
         stack.push(NewLine())
         stack.push(Direct(s"; Instruction: ${inst} @${termgraph.memoGetInstruction(inst)}"))
       }
@@ -115,18 +115,18 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
 
     stack.push(Jump(point))
 
-    while (!stack.isEmpty) {
+    while !stack.isEmpty do {
       stack.pop() match {
         case Jump(p) => {
           val position = termgraph.findTarget(p)
           termgraph.getStmt(position) match {
             case a: Application       => {
-              if (termgraph.isQuantifier(a.function)) {
+              if termgraph.isQuantifier(a.function) then {
                 // so that we don't get expressions with free variables
                 // need to think of a less cautious way
                 memoize = false 
               }
-              if (memoize && memo.contains(position)) {
+              if memoize && memo.contains(position) then {
                 stack.push(Direct(memo(position)))
               } else {
                 applicationToQueryTerm(a)
@@ -149,7 +149,7 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
         }
         case Direct(str) => out.addAll(str)
         case Indent(change) => indent += change
-        case NewLine() => if (prettyPrint > 0) {
+        case NewLine() => if prettyPrint > 0 then {
           out.addAll(s"\n${TAB * indent}")
         } else {
           out.addAll(" ")
@@ -161,22 +161,22 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
     // Helper functions that deal with each case
     def applicationToQueryTerm(a: Application): Unit = {
       pushDebugComment(a)
-      if (memoize) {
+      if memoize then {
         val position = termgraph.memoGetInstruction(a)
         val name = Util.freshSymbolName()
         memo(position) = name
         stack.push(Direct(s" :named ${name})"))
       }
-      if (a.args.length > 1) {
+      if a.args.length > 1 then {
         stack.push(Indent(-1))
         stack.push(Direct(")"))
         a.args.reverse.zipWithIndex
           .foreach { p =>
-            if (p._2 != 0) {
+            if p._2 != 0 then {
               stack.push(NewLine())
             }
             // if we have a constructor lets label the arguments
-            if (termgraph.getStmt(a.function).isInstanceOf[Constructor]) {
+            if termgraph.getStmt(a.function).isInstanceOf[Constructor] then {
               //get the ith selector
               val ctr = termgraph.getStmt(a.function).asInstanceOf[Constructor]
               stack.push(Jump(p._1))
@@ -190,7 +190,7 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
         stack.push(Jump(a.function))
         stack.push(Direct("("))
       } else {
-        if (a.args.length == 1) {
+        if a.args.length == 1 then {
           stack.push(Direct(")"))
           stack.push(Jump(a.args(0)))
           stack.push(Direct(" "))
@@ -200,7 +200,7 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
           stack.push(Jump(a.function))
         }
       }
-      if (memoize) {
+      if memoize then {
         stack.push(Direct("(! "))
       }
     }
@@ -230,20 +230,20 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
 
     def theorymacroToQueryTerm(t: TheoryMacro): Unit = {
       pushDebugComment(t)
-      if (t.name == "forall" || t.name == "exists") {
+      if t.name == "forall" || t.name == "exists" then {
         stack.push(Direct(")"))
         t.params.reverse.foreach { s =>
           val sel = termgraph.getStmt(s).asInstanceOf[FunctionParameter]
           stack.push(Direct(s"(${sel.name} ${programPointToQueryTerm(sel.sort, 0)})"))
         }
         stack.push(Direct(s"${t.name} ("))
-      } else if (t.name.startsWith("bv") && t.name.drop(2).toIntOption.isDefined) {
+      } else if t.name.startsWith("bv") && t.name.drop(2).toIntOption.isDefined then {
         stack.push(Direct(s"(_ ${t.name} ${programPointToQueryTerm(t.params(0), 0)})"))
-      } else if (t.name == "zero_extend" || t.name == "zero_extend" || t.name == "sign_extend" || t.name == "rotate_left" || t.name == "rotate_right" || t.name == "repeat") {
+      } else if t.name == "zero_extend" || t.name == "zero_extend" || t.name == "sign_extend" || t.name == "rotate_left" || t.name == "rotate_right" || t.name == "repeat" then {
         stack.push(Direct(s"(_ ${t.name} ${programPointToQueryTerm(t.params(0), 0)})"))
-      } else if (t.name == "extract") {
+      } else if t.name == "extract" then {
         stack.push(Direct(s"(_ ${t.name} ${programPointToQueryTerm(t.params(0), 0)} ${programPointToQueryTerm(t.params(1), 0)})"))
-      } else if (t.name == "as const") {
+      } else if t.name == "as const" then {
         stack.push(Direct(s"(${t.name} ${programPointToQueryTerm(t.params(0), 0)})"))
       } else {
         stack.push(Direct(t.name))
@@ -252,14 +252,14 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
 
     def theorysortToQueryTerm(t: TheorySort): Unit = {
       pushDebugComment(t)
-      if (t.params.length > 0) {
+      if t.params.length > 0 then {
         stack.push(Direct(")"))
         t.params.reverse.foreach(p => {
           stack.push(Jump(p))
           stack.push(Direct(" "))
         })
         stack.push(Direct(s"${t.name}"))
-        if (t.name == "BitVec") {
+        if t.name == "BitVec" then {
           stack.push(Direct("(_ "))
         } else {
           stack.push(Direct("( "))
@@ -280,7 +280,7 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
     }
     def synthesisToQueryTerm(s: Synthesis): Unit = {
       pushDebugComment(s)
-      if (!termgraph.isSynthesisQuery()) {
+      if !termgraph.isSynthesisQuery() then {
         throw new SemanticError("Must be a synthesis query!")
       }
       stack.push(Direct(s.name))
@@ -304,7 +304,7 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
 
     def dispatch(pos: Int): Option[String] =
       val position = termgraph.findTarget(pos)
-      if (toDeclare(position)) {
+      if toDeclare(position) then {
         toDeclare.update(position, false)
         termgraph.getStmt(position) match {
           case r: Ref          => dispatch(r.loc)
@@ -314,7 +314,7 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
           case u: UserMacro =>
             val dispatched =
               List(dispatch(u.body), Some(usermacroToQueryCtx(u))).flatten
-            if (dispatched.length > 0) {
+            if dispatched.length > 0 then {
               Some(dispatched.mkString(s"${newline()}"))
             } else {
               None
@@ -324,7 +324,7 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
           case a: Application =>
             val dispatched =
               (List(a.function) ++ a.args).map(a => dispatch(a)).flatten
-            if (dispatched.length > 0) {
+            if dispatched.length > 0 then {
               Some(dispatched.mkString(s"${newline()}"))
             } else {
               None
@@ -362,8 +362,8 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
 
     def userfunctionToQueryCtx(u: UserFunction): String = {
       val tmp = new StringBuilder()
-      if (u.params.length > 0) {
-        if (termgraph.isSynthesisQuery()) {
+      if u.params.length > 0 then {
+        if termgraph.isSynthesisQuery() then {
           throw new SemanticError(
             "Uninterpreted functions are not supported for synthesis"
           )
@@ -372,7 +372,7 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
           .map(p => s"${programPointToQueryTerm(p, indent)}")
           .mkString(" ")}) "
       } else {
-        if (termgraph.isSynthesisQuery()) {
+        if termgraph.isSynthesisQuery() then {
           tmp ++= s"${TAB * indent}(declare-var ${u.name} "
         } else {
           tmp ++= s"${TAB * indent}(declare-const ${u.name} "
@@ -401,7 +401,7 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
     }
 
     def synthesisToQueryCtx(u: Synthesis): String = {
-      if (!termgraph.isSynthesisQuery()) {
+      if !termgraph.isSynthesisQuery() then {
         throw new SemanticError("Must be a synthesis query!")
       }
       val tmp = new StringBuilder()
@@ -423,7 +423,7 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
     def moduleToQueryCtx(m: Module): String = {
       val tmp = new StringBuilder()
       val ctr = termgraph.getStmt(m.ct).asInstanceOf[Constructor]
-      if (prettyPrint > 0) {tmp ++= s"${TAB * indent}; declaring module ${m.name}\n"}
+      if prettyPrint > 0 then {tmp ++= s"${TAB * indent}; declaring module ${m.name}\n"}
       indent += 1
       tmp ++= s"${TAB * indent}(declare-datatypes ((${m.name} 0)) (((${ctr.name}"
       indent += 1
@@ -440,7 +440,7 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
 
       tmp ++= (init :: next :: specs).flatten.mkString(s"${newline()}")
       indent -= 1
-      if (prettyPrint > 0) {tmp ++= s"${TAB * indent}\n; done declaring module ${m.name}\n"}
+      if prettyPrint > 0 then {tmp ++= s"${TAB * indent}\n; done declaring module ${m.name}\n"}
 
       tmp.toString()
     }

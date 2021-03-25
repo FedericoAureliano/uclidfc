@@ -38,19 +38,19 @@ class Vampire() extends Solver() {
   def generateQueries(ctx: Context, prettyPrint: Int): List[String] = {
     val queries = ctx.toQueries(prettyPrint)
 
-    queries.map(query => {
+    queries.map { query =>
       // find the set logic command
       val pattern = "(?<=\\(set-logic )(.*)(?=\\))".r
       val logic = pattern.findFirstIn(query)
-  
-      if (logic.isDefined && !supportedLogics.contains(logic.get)) {
+
+      if logic.isDefined && !supportedLogics.contains(logic.get) then {
         throw new SolverMismatchError(s"Vampire does not support ${logic.get}")
       }
-  
-      if (ctx.termgraph.isSynthesisQuery()) {
+
+      if ctx.termgraph.isSynthesisQuery() then {
         throw new SolverMismatchError("Vampire does not support synthesis")
       }
-    })
+    }
 
     queries
   }

@@ -1,4 +1,4 @@
-val scala3Version = "3.0.0-M3"
+val scala3Version = "3.0.0-RC1"
 
 lazy val root = project
   .in(file("."))
@@ -15,11 +15,13 @@ lazy val root = project
       "-language:implicitConversions",
       "-language:higherKinds",
       "-language:existentials",
-      "-language:postfixOps"
+      "-language:postfixOps",
+      "-new-syntax",
+      "-rewrite"
     ),
-    libraryDependencies += ("org.scala-lang.modules" %% "scala-parser-combinators" % "1.2.0-M1"),
-    libraryDependencies += ("com.novocode"            % "junit-interface"          % "0.11" % "test"),
-    libraryDependencies += ("com.github.scopt"        %% "scopt"                    % "4.0.0"),
+    libraryDependencies += ("org.scala-lang.modules" %% "scala-parser-combinators"   % "1.2.0-M2"),
+    libraryDependencies += ("com.novocode"            % "junit-interface"            % "0.11" % "test"),
+    libraryDependencies += ("com.github.scopt"       %% "scopt"                      % "4.0.1"),
     libraryDependencies += ("org.scala-lang.modules" %% "scala-parallel-collections" % "1.0.1"),
     jacocoReportSettings := JacocoReportSettings(
       "Jacoco Coverage Report",
@@ -28,7 +30,7 @@ lazy val root = project
         instruction = 65,
         method = 65,
         branch = 55,
-        complexity = 60,
+        complexity = 55,
         line = 90,
         clazz = 90
       ),

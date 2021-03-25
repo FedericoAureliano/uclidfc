@@ -1,6 +1,5 @@
 package com.uclid.uclidcompiler.lexer
 
-
 import scala.util.parsing.input.Positional
 
 trait UclidToken extends Positional

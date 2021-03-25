@@ -11,12 +11,13 @@ class Z3() extends Solver() {
   def generateQueries(ctx: Context, prettyPrint: Int): List[String] = {
     // get the query but remove the set logic command
     val query = ctx
-      .toQueries(prettyPrint).map(q => {
+      .toQueries(prettyPrint)
+      .map { q =>
         q.split("\n")
-        .filter(p => !p.startsWith("(set-logic"))
-        .mkString("\n")
-      })
-    if (ctx.termgraph.isSynthesisQuery()) {
+          .filter(p => !p.startsWith("(set-logic"))
+          .mkString("\n")
+      }
+    if ctx.termgraph.isSynthesisQuery() then {
       throw new SolverMismatchError("Z3 does not support synthesis")
     }
     query

@@ -1,6 +1,5 @@
 // UCLID TEST
-// Solver=z3
-// Result=Some(false)
+// Result=None
 
 // Declare machine reference types
 type ServerMachine_ref_t;
@@ -130,13 +129,11 @@ module main {
      * Aux constraints to make sure the main invariant holds  
      */
 
-    //b
     invariant next_gt_last: forall (client_x: ClientMachine_ref_t) :: client_instances[client_x].next_id > client_instances[client_x].last_id;
 
     invariant every_event_id_gt_last_id_client1: forall (client_x : ClientMachine_ref_t, response_x: eResponse_t) ::
         (in_responses(client_instances[client_x].eResponse_in, response_x) ==> response_x.id == client_instances[client_x].next_id);
 
-    //b
     invariant every_event_id_gt_last_id_client2: forall (client_x : ClientMachine_ref_t, request_x: eRequest_t) ::
         (in_requests(client_instances[client_x].eRequest_out, request_x) ==> request_x.id == client_instances[client_x].next_id);
 
@@ -210,7 +207,7 @@ module main {
 
     control {
         induction;
-        set_solver_option("timeout", "20000");
+        set_solver_option("timeout", "5000");
         check;
     }
 }

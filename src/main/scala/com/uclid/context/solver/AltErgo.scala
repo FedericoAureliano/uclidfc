@@ -12,15 +12,15 @@ class AltErgo() extends Solver() {
     // get the query but remove the set logic and set-option commands
     val query = ctx
       .toQueries(prettyPrint)
-      .map(q => {
+      .map { q =>
         q.split("\n")
-        .filter(p =>
-          !(p.startsWith("(set-logic") || p.startsWith("(set-option") || p
-            .startsWith("(get-"))
-        )
-        .mkString("\n")
-      })
-    if (ctx.termgraph.isSynthesisQuery()) {
+          .filter(p =>
+            !(p.startsWith("(set-logic") || p.startsWith("(set-option") || p
+              .startsWith("(get-"))
+          )
+          .mkString("\n")
+      }
+    if ctx.termgraph.isSynthesisQuery() then {
       throw new SolverMismatchError("Alt-Ergo does not support synthesis")
     }
     query

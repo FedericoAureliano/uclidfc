@@ -84,7 +84,7 @@ abstract class Solver() {
         // need to call this first before checking if it is a synthesis query
         var queries : List[File] = generateQueries(ctx, prettyPrint).map(q => {
           var query = q
-          val suffix = if (ctx.termgraph.isSynthesisQuery()) { ".sl" }
+          val suffix = if ctx.termgraph.isSynthesisQuery() then { ".sl" }
           else { 
             ".smt2" 
           }
@@ -97,7 +97,7 @@ abstract class Solver() {
     val generationDuration = (System.nanoTime - t1) / 1e9d
     println(s"Query generated in ${generationDuration} seconds.")
 
-    if (!run) {
+    if !run then {
       return (
         new ProofResult(
           None,
@@ -113,7 +113,7 @@ abstract class Solver() {
     val answers = results.map(result => parseAnswer(" " ++ (result._1 ++ result._2).mkString("\n")))
 
     def ternaryCombine(a : Option[Boolean], b : Option[Boolean]) : Option[Boolean] = {
-      if (!a.isDefined || !b.isDefined) {
+      if !a.isDefined || !b.isDefined then {
         None
       } else {
         Some(List(a, b).flatten.exists(p => p))
@@ -121,7 +121,7 @@ abstract class Solver() {
     }
 
     def combineStrs(a : String, b: String) : String = {
-      if (a == "") {
+      if a == "" then {
         b
       } else {
         List(a, b).mkString(", ")
@@ -140,7 +140,7 @@ abstract class Solver() {
           (new ProofResult(ternaryCombine(acc._1.result, Some(true)),  combineStrs(acc._1.messages, answer)), generationDuration, acc._3 + result._4)
         }
         case _ if "(\\sunsat)".r.findFirstIn(answer).isDefined => {
-          if (ctx.termgraph.isSynthesisQuery()) {
+          if ctx.termgraph.isSynthesisQuery() then {
             (
               new ProofResult(ternaryCombine(acc._1.result, Some(false)),  combineStrs(acc._1.messages, answer)),
               generationDuration,

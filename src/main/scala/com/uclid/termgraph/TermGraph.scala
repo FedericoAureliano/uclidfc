@@ -6,12 +6,12 @@ import scala.util.Random
 object Util {
   val random = new Random
   private var uniqueId = 0
+
   def freshSymbolName(): String = {
     uniqueId += 1
     s"fresh!${uniqueId}"
   }
 }
-
 
 abstract class AbstractTermGraph() {
 
@@ -34,11 +34,18 @@ abstract class AbstractTermGraph() {
     */
   def memoAddInstruction(inst: Instruction): Int = {
     inst match {
-      case app : Application =>
-        app.args.foreach(a => assert(stmts(a).isInstanceOf[Application] || stmts(a).isInstanceOf[Ref]))
+      case app: Application =>
+        app.args.foreach(a =>
+          assert(
+            stmts(a).isInstanceOf[Application] || stmts(a).isInstanceOf[Ref]
+          )
+        )
         assert(!stmts(app.function).isInstanceOf[Application])
-      case r : Ref => 
-        assert(stmts(r.loc).isInstanceOf[Application] || stmts(r.loc).isInstanceOf[Ref])
+      case r: Ref =>
+        assert(
+          stmts(r.loc).isInstanceOf[Application] || stmts(r.loc)
+            .isInstanceOf[Ref]
+        )
       case _ =>
     }
     val location = memo.get(inst) match {
@@ -56,11 +63,18 @@ abstract class AbstractTermGraph() {
     */
   def addInstruction(inst: Instruction): Int = {
     inst match {
-      case app : Application =>
-        app.args.foreach(a => assert(stmts(a).isInstanceOf[Application] || stmts(a).isInstanceOf[Ref]))
+      case app: Application =>
+        app.args.foreach(a =>
+          assert(
+            stmts(a).isInstanceOf[Application] || stmts(a).isInstanceOf[Ref]
+          )
+        )
         assert(!stmts(app.function).isInstanceOf[Application])
-      case r : Ref => 
-        assert(stmts(r.loc).isInstanceOf[Application] || stmts(r.loc).isInstanceOf[Ref])
+      case r: Ref =>
+        assert(
+          stmts(r.loc).isInstanceOf[Application] || stmts(r.loc)
+            .isInstanceOf[Ref]
+        )
       case _ =>
     }
     val r = stmts.length
@@ -90,7 +104,6 @@ abstract class AbstractTermGraph() {
   def memoGetInstruction(inst: Instruction): Int =
     memo(inst)
 
-
   def terms(startingPoints: Iterable[Int]): Array[Boolean] = {
     val marks = Array.fill[Boolean](stmts.length)(false)
     startingPoints.foreach(r => terms_i(r, marks))
@@ -99,13 +112,13 @@ abstract class AbstractTermGraph() {
 
   private def terms_i(position: Int, marks: Array[Boolean]): Unit = {
     // markInstruction(position)
-    val frontier : Queue[Int] = Queue(position)
-    while (!frontier.isEmpty) {
+    val frontier: Queue[Int] = Queue(position)
+    while !frontier.isEmpty do {
       val pos = frontier.dequeue()
-      if (!marks(pos)) {
+      if !marks(pos) then {
         marks(pos) = true
         stmts(pos) match {
-          case Ref(i)               => frontier.addOne(i)
+          case Ref(i) => frontier.addOne(i)
           case Application(function, args) =>
             frontier.addOne(function); args.foreach(i => frontier.addOne(i))
           // case UserMacro(_, _, b, _) => frontier.addOne(b)
@@ -123,25 +136,29 @@ abstract class AbstractTermGraph() {
 
   private def mark_i(position: Int, marks: Array[Boolean]): Unit = {
     // markInstruction(position)
-    val frontier : Queue[Int] = Queue(position)
-    while (!frontier.isEmpty) {
+    val frontier: Queue[Int] = Queue(position)
+    while !frontier.isEmpty do {
       val pos = frontier.dequeue()
-      if (!marks(pos)) {
+      if !marks(pos) then {
         marks(pos) = true
         stmts(pos) match {
-          case Ref(i)               => frontier.addOne(i)
+          case Ref(i)                  => frontier.addOne(i)
           case Numeral(_)              =>
           case TheorySort(_, p)        => p.foreach(a => frontier.addOne(a))
           case UserSort(_, _)          =>
           case FunctionParameter(_, s) => frontier.addOne(s)
           case TheoryMacro(_, p)       => p.foreach(a => frontier.addOne(a))
           case UserMacro(_, s, b, p) =>
-            frontier.addOne(s); frontier.addOne(b); p.foreach(a => frontier.addOne(a))
-          case UserFunction(_, s, p) => frontier.addOne(s); p.foreach(a => frontier.addOne(a))
-          case Synthesis(_, s, p)    => frontier.addOne(s); p.foreach(a => frontier.addOne(a))
-          case Constructor(_, s, p)  => frontier.addOne(s); p.foreach(a => frontier.addOne(a))
-          case Selector(_, s)        => frontier.addOne(s)
-          case DataType(_, p)        => p.foreach(a => frontier.addOne(a))
+            frontier.addOne(s); frontier.addOne(b);
+            p.foreach(a => frontier.addOne(a))
+          case UserFunction(_, s, p) =>
+            frontier.addOne(s); p.foreach(a => frontier.addOne(a))
+          case Synthesis(_, s, p) =>
+            frontier.addOne(s); p.foreach(a => frontier.addOne(a))
+          case Constructor(_, s, p) =>
+            frontier.addOne(s); p.foreach(a => frontier.addOne(a))
+          case Selector(_, s) => frontier.addOne(s)
+          case DataType(_, p) => p.foreach(a => frontier.addOne(a))
           case Module(_, d, _, _, _) =>
             frontier.addOne(d)
           case Application(function, args) =>
@@ -151,61 +168,73 @@ abstract class AbstractTermGraph() {
     }
   }
 
-  def completeButUnapplied(loc: Int): Boolean = {
+  def completeButUnapplied(loc: Int): Boolean =
     stmts(loc) match {
       case UserFunction(_, _, params) => params.length == 0
       case UserMacro(_, _, _, params) => params.length == 0
-      case Synthesis(_, _, params) => params.length == 0
-      case Constructor(_, _, params) => params.length == 0
-      case Selector(_, _) => false
-      case FunctionParameter(_, _) => true
-      case TheoryMacro(name, _) => 
+      case Synthesis(_, _, params)    => params.length == 0
+      case Constructor(_, _, params)  => params.length == 0
+      case Selector(_, _)             => false
+      case FunctionParameter(_, _)    => true
+      case TheoryMacro(name, _)       =>
         // TODO support more than bools, strings, bitvecs, and ints
-        name == "true" || name == "false" || (name.startsWith("\"") && name.endsWith("\"")) || name.startsWith("#") || name.startsWith("bv") || name.toIntOption.isDefined
+        name == "true" || name == "false" || (name.startsWith("\"") && name
+          .endsWith("\"")) || name.startsWith("#") || name.startsWith(
+          "bv"
+        ) || name.toIntOption.isDefined
       case _ => false
     }
-  }
 
-  def findTarget(in: Int) : Int = {
+  def findTarget(in: Int): Int = {
     var pos = in
-    while (stmts(pos).isInstanceOf[Ref]) {
+    while stmts(pos).isInstanceOf[Ref] do
       pos = stmts(pos).asInstanceOf[Ref].loc
-    }
     pos
   }
 
-  def getStmts() : ArrayBuffer[Instruction] = stmts
-  def getStmt(in: Int) : Instruction = stmts(findTarget(in))
+  def getStmts(): ArrayBuffer[Instruction] = stmts
+  def getStmt(in: Int): Instruction = stmts(findTarget(in))
 
-  def repair() : Unit = {
+  def repair(): Unit = {
     memo.clear()
     val newStmts: ArrayBuffer[Instruction] = stmts.clone()
-    
+
     (0 to stmts.length - 1).foreach { p =>
       var pos = findTarget(p)
 
       val newInst = stmts(pos) match {
-        case Ref(i) => Ref(findTarget(i))
-        case TheorySort(n, p) => TheorySort(n, p.map(a => findTarget(a)))
+        case Ref(i)                  => Ref(findTarget(i))
+        case TheorySort(n, p)        => TheorySort(n, p.map(a => findTarget(a)))
         case FunctionParameter(n, s) => FunctionParameter(n, findTarget(s))
-        case TheoryMacro(n, p) => TheoryMacro(n, p.map(a => findTarget(a)))
-        case UserMacro(n, s, b, p) => UserMacro(n, findTarget(s), findTarget(b), p.map(a => findTarget(a)))
-        case UserFunction(n, s, p) => UserFunction(n, findTarget(s), p.map(a => findTarget(a)))
-        case Synthesis(n, s, p) => Synthesis(n, findTarget(s), p.map(a => findTarget(a)))
-        case Constructor(n, s, p) => Constructor(n, findTarget(s), p.map(a => findTarget(a)))
+        case TheoryMacro(n, p)       => TheoryMacro(n, p.map(a => findTarget(a)))
+        case UserMacro(n, s, b, p) =>
+          UserMacro(n, findTarget(s), findTarget(b), p.map(a => findTarget(a)))
+        case UserFunction(n, s, p) =>
+          UserFunction(n, findTarget(s), p.map(a => findTarget(a)))
+        case Synthesis(n, s, p) =>
+          Synthesis(n, findTarget(s), p.map(a => findTarget(a)))
+        case Constructor(n, s, p) =>
+          Constructor(n, findTarget(s), p.map(a => findTarget(a)))
         case Selector(n, s) => Selector(n, findTarget(s))
         case DataType(n, p) => DataType(n, p.map(a => findTarget(a)))
-        case Module(n, d, i, x, s) => Module(n, findTarget(d), findTarget(i), findTarget(x), s.map(spec => findTarget(spec)))
-        case Application(function, args) => Application(findTarget(function), args.map(a => findTarget(a)))
+        case Module(n, d, i, x, s) =>
+          Module(
+            n,
+            findTarget(d),
+            findTarget(i),
+            findTarget(x),
+            s.map(spec => findTarget(spec))
+          )
+        case Application(function, args) =>
+          Application(findTarget(function), args.map(a => findTarget(a)))
         case other => other
       }
-      
+
       memo.get(newInst) match {
-        case Some(otherPos) =>  newStmts(p) = Ref(otherPos)
-        case None => {
+        case Some(otherPos) => newStmts(p) = Ref(otherPos)
+        case None =>
           newStmts(p) = newInst
           memo.addOne(newInst, p)
-        }
       }
     }
 
@@ -213,13 +242,12 @@ abstract class AbstractTermGraph() {
     stmts.addAll(newStmts)
   }
 
-  def isQuantifier(pos: Int) : Boolean = {
+  def isQuantifier(pos: Int): Boolean =
     getStmt(pos) match {
       case TheoryMacro("forall", _) => true
       case TheoryMacro("exists", _) => true
-      case _ => false
+      case _                        => false
     }
-  }
 }
 
 class TermGraph

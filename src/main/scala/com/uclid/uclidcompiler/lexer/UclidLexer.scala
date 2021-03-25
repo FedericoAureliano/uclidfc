@@ -5,6 +5,7 @@ import com.uclid.uclidcompiler.{Location, UclidLexerError}
 import scala.util.parsing.combinator.RegexParsers
 
 object UclidLexer extends RegexParsers {
+
   /** Method called to handle whitespace before parsers.
     *
     *  skips anything matching `whiteSpace` starting from the current offset.
@@ -21,14 +22,14 @@ object UclidLexer extends RegexParsers {
     var count = 0
     var inLineComment = false
     var inLongComment = false
-    while (count > oldCount && offset + count < source.length) {
+    while count > oldCount && offset + count < source.length do {
       assert(!inLineComment || !inLongComment)
       oldCount = count
 
       source.charAt(offset + count) match {
 
         case '/' =>
-          if (inLineComment || inLongComment) {
+          if inLineComment || inLongComment then {
             // if we're in a comment already then just skip
             count += 1
           } else {
@@ -41,13 +42,13 @@ object UclidLexer extends RegexParsers {
           }
 
         case '*' =>
-          if (inLongComment) {
+          if inLongComment then {
             // if we're in a long comment already then we may want to exit it
             source.charAt(offset + count + 1) match {
               case '/' => inLongComment = false; count += 2
               case _   => count += 1
             }
-          } else if (inLineComment) {
+          } else if inLineComment then {
             count += 1
           } else {
             // we're not in either comment
@@ -56,10 +57,10 @@ object UclidLexer extends RegexParsers {
         // if we have a newline, then consume the character and exit line comment mode
         case '\n' => inLineComment = false; count += 1
         // if we have a whitespace, then consume the character no matter what
-        case a if whiteSpace.matches(a.toString)  => count += 1
-        case _          =>
+        case a if whiteSpace.matches(a.toString) => count += 1
+        case _                                   =>
           // if we're in a comment, then consume the character
-          if (inLineComment || inLongComment) {
+          if inLineComment || inLongComment then {
             count += 1
           }
       }
@@ -242,7 +243,7 @@ object UclidLexer extends RegexParsers {
     phrase(
       rep1(
         reserved |
-        identifierParser
+          identifierParser
       )
     )
 }

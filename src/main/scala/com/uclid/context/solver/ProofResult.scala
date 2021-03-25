@@ -11,7 +11,7 @@ class ProofResult(
 
   override def toString(): String = {
     val extra = "Detailed Output: " + messages
-    val answer = if (negated) {
+    val answer = if negated then {
       result match {
         case Some(true)  => "Positive Example!"
         case Some(false) => "Unsatisfiable!"

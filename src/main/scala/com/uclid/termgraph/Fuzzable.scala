@@ -22,7 +22,12 @@ trait Fuzzable() extends AbstractTermGraph {
       }
     val body = memoAddInstruction(Application(mod.ct, components))
     val um = memoAddInstruction(
-      UserMacro(Util.freshSymbolName(), memoGetInstruction(mod), body, List.empty)
+      UserMacro(
+        Util.freshSymbolName(),
+        memoGetInstruction(mod),
+        body,
+        List.empty
+      )
     )
     memoAddInstruction(Application(um, List.empty))
   }
@@ -45,17 +50,38 @@ trait Fuzzable() extends AbstractTermGraph {
   private def fuzzTheorysort(t: TheorySort): Int =
     t match {
       case TheorySort("Bool", _) =>
-        memoAddInstruction(Application(memoAddInstruction(TheoryMacro(Util.random.nextBoolean().toString())), List.empty))
+        memoAddInstruction(
+          Application(
+            memoAddInstruction(
+              TheoryMacro(Util.random.nextBoolean().toString())
+            ),
+            List.empty
+          )
+        )
       case TheorySort("Int", _) =>
-        memoAddInstruction(Application(memoAddInstruction(TheoryMacro(Util.random.nextInt().toString())), List.empty))
+        memoAddInstruction(
+          Application(
+            memoAddInstruction(TheoryMacro(Util.random.nextInt().toString())),
+            List.empty
+          )
+        )
       case TheorySort("Array", params) =>
         val out = fuzz(params.last)
-        val asConstAppRef = memoAddInstruction(TheoryMacro("as const", List(memoGetInstruction(t))))
+        val asConstAppRef = memoAddInstruction(
+          TheoryMacro("as const", List(memoGetInstruction(t)))
+        )
         memoAddInstruction(
           Application(asConstAppRef, List(out))
         )
     }
 
   private def fuzzUsersort(u: UserSort): Int =
-    memoAddInstruction(Application(memoAddInstruction(UserFunction(Util.freshSymbolName(), memoGetInstruction(u))), List.empty))
+    memoAddInstruction(
+      Application(
+        memoAddInstruction(
+          UserFunction(Util.freshSymbolName(), memoGetInstruction(u))
+        ),
+        List.empty
+      )
+    )
 }

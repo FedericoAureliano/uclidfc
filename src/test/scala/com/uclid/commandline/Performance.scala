@@ -12,7 +12,7 @@ class Performance {
       .map(f => readTestFile(f))
     tests.foreach { t =>
       println("Running: " + t._1)
-      endToEnd(t._1, t._2, t._8).foreach(answer => {
+      endToEnd(t._1, t._2, t._8).foreach { answer =>
         assert(
           t._3 == answer.presult.result,
           s"Failed: ${t._1}\nExpected: ${t._3}\nGot: ${answer.presult.result}\nOutput: ${answer.presult.messages}"
@@ -33,7 +33,7 @@ class Performance {
           !t._7.isDefined || t._7.get >= answer.solveTime,
           s"Failed: ${t._1}\nExpected solve time less than: ${t._7.get}\nGot solve time: ${answer.solveTime}\nOutput: ${answer.presult.messages}"
         )
-      })
+      }
     }
   }
 }

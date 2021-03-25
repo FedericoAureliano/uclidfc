@@ -28,47 +28,54 @@ class UclidContext(termgraph: TermGraph) extends Context(termgraph) {
 
   override def ignoreResult() = traceQuery
 
-  override def entryPoints() = assertionRefs.toList ++ axiomRefs ++ getValues.getOrElse(List.empty)
+  override def entryPoints() =
+    assertionRefs.toList ++ axiomRefs ++ getValues.getOrElse(List.empty)
 
   override def toQueries(pp: Int): List[String] = {
 
     val andRef = termgraph.memoAddInstruction(TheoryMacro("and"))
-    val axioms = termgraph.memoAddInstruction(Application(andRef, axiomRefs.toList))
-    
-    if (assertionRefs.length == 0) {
+    val axioms =
+      termgraph.memoAddInstruction(Application(andRef, axiomRefs.toList))
+
+    if assertionRefs.length == 0 then {
       val falseRef = termgraph.memoAddInstruction(TheoryMacro("false"))
-      assertionRefs.addOne(termgraph.memoAddInstruction(Application(falseRef, List.empty)))
+      assertionRefs.addOne(
+        termgraph.memoAddInstruction(Application(falseRef, List.empty))
+      )
     }
 
     val isSynthesis = termgraph.isSynthesisQuery(entryPoints())
 
     assert(!(negateQuery && isSynthesis), "Cannot check-sat for synthesis!")
 
-    if (negateQuery || isSynthesis || singleQuery) {
+    if negateQuery || isSynthesis || singleQuery then {
       // combine all the queries
       val orRef = termgraph.memoAddInstruction(TheoryMacro("or"))
-      val asserts = termgraph.memoAddInstruction(Application(orRef, assertionRefs.toList))
-      val assertion = if (negateQuery) {
+      val asserts =
+        termgraph.memoAddInstruction(Application(orRef, assertionRefs.toList))
+      val assertion = if negateQuery then {
         val notRef = termgraph.memoAddInstruction(TheoryMacro("not"))
         termgraph.memoAddInstruction(Application(notRef, List(asserts)))
       } else {
         asserts
       }
-      val spec = if (axiomRefs.length > 0) {
-        termgraph.memoAddInstruction(Application(andRef, List(axioms, assertion)))
+      val spec = if axiomRefs.length > 0 then {
+        termgraph.memoAddInstruction(
+          Application(andRef, List(axioms, assertion))
+        )
       } else {
         assertion
       }
       val innerCtx = new SyMTContext(termgraph)
       options.foreach(o => innerCtx.addOption(o._1, o._2))
       innerCtx.addAssertion(spec)
-      if (checkQuery || traceQuery) {
+      if checkQuery || traceQuery then {
         innerCtx.checkSat()
       }
       innerCtx.toQueries(pp)
     } else {
-      assertionRefs.foldLeft(List.empty : List[String])((acc, ass) => {
-        var spec = if (axiomRefs.length > 0) {
+      assertionRefs.foldLeft(List.empty: List[String]) { (acc, ass) =>
+        var spec = if axiomRefs.length > 0 then {
           termgraph.memoAddInstruction(Application(andRef, List(axioms, ass)))
         } else {
           ass
@@ -76,11 +83,11 @@ class UclidContext(termgraph: TermGraph) extends Context(termgraph) {
         val innerCtx = new SyMTContext(termgraph)
         options.foreach(o => innerCtx.addOption(o._1, o._2))
         innerCtx.addAssertion(spec)
-        if (checkQuery || traceQuery) {
+        if checkQuery || traceQuery then {
           innerCtx.checkSat()
         }
         acc ++ innerCtx.toQueries(pp)
-      })
+      }
     }
   }
 }

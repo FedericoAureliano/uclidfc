@@ -14,12 +14,12 @@ class Rewrite {
       println("Running: " + t._1)
       val answersWithout = endToEnd(t._1, t._2, List.empty)
       val answersWith = endToEnd(t._1, t._2, t._8)
-      answersWithout.zip(answersWith).foreach((answerWith, answerWithout) => {
+      answersWithout.zip(answersWith).foreach { (answerWith, answerWithout) =>
         assert(
           answerWithout.presult.result == answerWith.presult.result,
           s"Failed: ${t._1}\nExpected: ${t._3}\nGot: ${answerWithout.presult.result} and ${answerWith.presult.result}\nOutput: ${answerWith.presult.messages} and ${answerWithout.presult.messages}"
         )
-      })
+      }
     }
   }
 }

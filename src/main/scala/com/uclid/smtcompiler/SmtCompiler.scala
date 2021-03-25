@@ -56,7 +56,7 @@ object SmtCompiler {
 
     def getLocal(name : String) : Int = {
       local.foreach(local => {
-        if (local.contains(name)) {
+        if local.contains(name) then {
           return local(name)
         }
       })
@@ -66,7 +66,7 @@ object SmtCompiler {
     var pos = 0
     var nest = 0
 
-    while (pos < tokens.length) {
+    while pos < tokens.length do {
       parseCommand()
     }
 
@@ -151,17 +151,17 @@ object SmtCompiler {
         case "(" :: "set-info" :: _ =>
           pos += 2
           var parentheses = 1
-          while (parentheses > 0) {
-            if (tokens(pos) == "(") {parentheses += 1}
-            else if (tokens(pos) == ")") {parentheses -= 1}
+          while parentheses > 0 do {
+            if tokens(pos) == "(" then {parentheses += 1}
+            else if tokens(pos) == ")" then {parentheses -= 1}
             pos += 1
           }
         case "(" :: "get-info" :: _ =>
           pos += 2
           var parentheses = 1
-          while (parentheses > 0) {
-            if (tokens(pos) == "(") {parentheses += 1}
-            else if (tokens(pos) == ")") {parentheses -= 1}
+          while parentheses > 0 do {
+            if tokens(pos) == "(" then {parentheses += 1}
+            else if tokens(pos) == ")" then {parentheses -= 1}
             pos += 1
           }
         case "(" :: "exit" :: ")" :: _ =>
@@ -185,7 +185,7 @@ object SmtCompiler {
       while {
         tokens(pos) match {
           case "(" if tokens(pos + 1) != "_" && tokens(pos + 1) != "!" => {
-            if (tokens(pos + 1) == "let") {
+            if tokens(pos + 1) == "let" then {
               pos += 2
               nest += 1
               val bindings = parseLetList().toMap
@@ -202,7 +202,7 @@ object SmtCompiler {
             pos += 1
             nest -= 1
             local.pop()
-            if (path.size > 1) {
+            if path.size > 1 then {
               val mostRecent = ctx.termgraph.memoAddInstruction(path.pop())
               val parent = path.pop().asInstanceOf[Application]
               path.push(Application(parent.function, parent.args ++ List(mostRecent)))
@@ -225,16 +225,16 @@ object SmtCompiler {
               case _ => parseSymbol()
             } 
 
-            if (path.size > 0) {
+            if path.size > 0 then {
               // add to parent
               val parent = path.pop().asInstanceOf[Application]
-              if (ctx.termgraph.completeButUnapplied(curr)) {
+              if ctx.termgraph.completeButUnapplied(curr) then {
                 curr = ctx.termgraph.memoAddInstruction(Application(curr, List.empty))
               }
               path.push(Application(parent.function, parent.args ++ List(curr)))
             } else {
               // there was no parent so just return 
-              if (ctx.termgraph.completeButUnapplied(curr)) {
+              if ctx.termgraph.completeButUnapplied(curr) then {
                 curr = ctx.termgraph.memoAddInstruction(Application(curr, List.empty))
               }
               return curr
@@ -254,7 +254,7 @@ object SmtCompiler {
       assert(tokens(pos) == "(", s"Expected ( but got ${tokens(pos)}!")
       pos += 1
       var count = 0
-      while (tokens(pos) != ")") {
+      while tokens(pos) != ")" do {
         params.addOne(parseConstructorList(sorts(count)))
         count += 1
       }
@@ -268,7 +268,7 @@ object SmtCompiler {
       val params = new ListBuffer[Int]()
       assert(tokens(pos) == "(", s"Expected ( but got ${tokens(pos)}!")
       pos += 1
-      while (tokens(pos) != ")") {
+      while tokens(pos) != ")" do {
         params.addOne(parseConstructor(sort))
       }
       assert(tokens(pos) == ")", s"Expected ) but got ${tokens(pos)}!")
@@ -280,7 +280,7 @@ object SmtCompiler {
       assert(tokens(pos) == "(", s"Expected ( but got ${tokens(pos)}!")
       pos += 1
       val name = parseName()
-      val selectors = if (tokens(pos) == "(") {
+      val selectors = if tokens(pos) == "(" then {
         parseSelectorsList()
       } else {
         List.empty
@@ -296,7 +296,7 @@ object SmtCompiler {
       val params = new ListBuffer[Int]()
       assert(tokens(pos) == "(", s"Expected ( but got ${tokens(pos)}!")
       pos += 1
-      while (tokens(pos) != ")") {
+      while tokens(pos) != ")" do {
         params.addOne(parseSort())
       }
       assert(tokens(pos) == ")", s"Expected ) but got ${tokens(pos)}!")
@@ -308,7 +308,7 @@ object SmtCompiler {
       val params = new ListBuffer[String]()
       assert(tokens(pos) == "(", s"Expected ( but got ${tokens(pos)}!")
       pos += 1
-      while (tokens(pos) != ")") {
+      while tokens(pos) != ")" do {
         assert(tokens(pos) == "(", s"Expected ( but got ${tokens(pos)}!")
         pos += 1
         params.addOne(parseName())
@@ -326,7 +326,7 @@ object SmtCompiler {
       val params = new ListBuffer[Int]()
       assert(tokens(pos) == "(", s"Expected ( but got ${tokens(pos)}!")
       pos += 1
-      while (tokens(pos) != ")") {
+      while tokens(pos) != ")" do {
         params.addOne(parseParam())
       }
       assert(tokens(pos) == ")", s"Expected ) but got ${tokens(pos)}!")
@@ -347,7 +347,7 @@ object SmtCompiler {
 
     def parseSelectorsList(): List[Int] = {
       val selectors = new ListBuffer[Int]()
-      while (tokens(pos) != ")") {
+      while tokens(pos) != ")" do {
         selectors.addOne(parseSelector())
       }
       selectors.toList
@@ -369,7 +369,7 @@ object SmtCompiler {
       val params = new ListBuffer[(String, Int)]()
       assert(tokens(pos) == "(", s"Expected ( but got ${tokens(pos)}!")
       pos += 1
-      while (tokens(pos) != ")") {
+      while tokens(pos) != ")" do {
         params.addOne(parseLetPair())
       }
       assert(tokens(pos) == ")", s"Expected ) but got ${tokens(pos)}!")
@@ -425,7 +425,7 @@ object SmtCompiler {
         // sorts that are just names
         case name => {
           pos += 1
-          if (global.containsKey(name)) {
+          if global.containsKey(name) then {
             global.get(name)
           } else {
             ctx.termgraph.memoAddInstruction(TheorySort(name))
@@ -456,9 +456,9 @@ object SmtCompiler {
         }
         case other => {
           pos += 1
-          if (inLocal(tokens(pos - 1))) {
+          if inLocal(tokens(pos - 1)) then {
             getLocal(tokens(pos - 1))
-          } else if (global.containsKey(tokens(pos - 1))) {
+          } else if global.containsKey(tokens(pos - 1)) then {
             global.get(tokens(pos - 1))
           } else {
             tokens(pos - 1) match {
