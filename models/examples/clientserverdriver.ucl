@@ -1,0 +1,144 @@
+// UCLID TEST
+// Solver=z3
+// Result=Some(false)
+
+// Declare machine reference types
+type ServerMachine_ref_t;
+type ClientMachine_ref_t;
+
+const default_server: ServerMachine_ref_t;
+const default_client: ClientMachine_ref_t;
+
+// Declare event types
+type eRequest_t = record {source: ClientMachine_ref_t, target: ServerMachine_ref_t};
+type eResponse_t = record {source: ServerMachine_ref_t, target: ClientMachine_ref_t};
+
+// Declare event queue types
+type eRequest_buffer = [eRequest_t]boolean;
+type eResponse_buffer = [eResponse_t]boolean;
+
+// Declare event queue helpers
+define remove_request(q: eRequest_buffer, r: eRequest_t) : eRequest_buffer = q[r -> false];
+define add_request(q: eRequest_buffer, r : eRequest_t) : eRequest_buffer = q[r -> true];
+define init_requests() : eRequest_buffer = const(false, eRequest_buffer);
+define in_requests(q: eRequest_buffer, r: eRequest_t) : boolean = q[r];
+define is_empty_requests(q: eRequest_buffer) : boolean = forall (r: eRequest_t) :: !q[r];
+
+define remove_response(q: eResponse_buffer, r: eResponse_t) : eResponse_buffer = q[r -> false];
+define add_response(q: eResponse_buffer, r : eResponse_t) : eResponse_buffer = q[r -> true];
+define init_responses() : eResponse_buffer = const(false, eResponse_buffer);
+define in_responses(q: eResponse_buffer, r: eResponse_t) : boolean = q[r];
+define is_empty_responses(q: eResponse_buffer) : boolean = forall (r: eResponse_t) :: !q[r];
+
+// declare machines
+module ServerMachine {
+    sharedvar eRequest_in : eRequest_buffer;
+    sharedvar eResponse_out : eResponse_buffer;
+    
+    var r : eRequest_t;
+
+    init
+    {
+        eRequest_in = init_requests();
+        eResponse_out = init_responses();
+    }// End of init block
+
+    next
+    {
+        havoc r;
+        if (in_requests(eRequest_in, r)) {
+            eRequest_in = remove_request(eRequest_in, r);
+            eResponse_out = add_response(eResponse_out, eResponse_t(r.target, r.source)); // send it back to where it came from
+        }
+    }// End of next block
+
+} // End of ServerMachine module
+
+module ClientMachine {
+    sharedvar eResponse_in : eResponse_buffer;
+    sharedvar eRequest_out : eRequest_buffer;
+
+    var server : ServerMachine_ref_t;
+    var this : ClientMachine_ref_t;
+
+    var r : eResponse_t;
+
+    init
+    {
+        eResponse_in = init_responses();
+        eRequest_out = init_requests();
+        eRequest_out = add_request(eRequest_out, eRequest_t(this, server));
+    }// End of init block
+
+    next
+    {
+        havoc r;
+        if (in_responses(eResponse_in, r)) {
+            eResponse_in = remove_response(eResponse_in, r);
+            eRequest_out = add_request(eRequest_out, eRequest_t(this, server));
+        }
+
+    }// End of next block
+
+} // End of ClientMachine module
+
+module main {
+    var server_instances: [ServerMachine_ref_t]ServerMachine;
+    var client_instances: [ClientMachine_ref_t]ClientMachine;
+    
+    var tmp_server: ServerMachine_ref_t;
+    var tmp_client: ClientMachine_ref_t;
+    var tmp_request: eRequest_t;
+    var tmp_response: eResponse_t;
+
+    next {
+        havoc tmp_server;
+        havoc tmp_client;
+        havoc tmp_request;
+        havoc tmp_response;
+
+        let server_responses = server_instances[tmp_server].eResponse_out;
+        if (in_responses(server_responses, tmp_response)) {
+            server_instances[tmp_server].eResponse_out = remove_response(server_responses, tmp_response);
+            client_instances[tmp_response.target].eResponse_in = add_response(client_instances[tmp_response.target].eResponse_in, tmp_response);
+        }
+        let client_requests = client_instances[tmp_client].eRequest_out;
+        if (in_requests(client_requests, tmp_request)) {
+            client_instances[tmp_client].eRequest_out = remove_request(client_requests, tmp_request);
+            server_instances[tmp_request.target].eRequest_in = add_request(server_instances[tmp_request.target].eRequest_in, tmp_request);
+        }
+        next(client_instances[tmp_client]);
+        next(server_instances[tmp_server]);
+    }
+
+    axiom correct_this_pointer_at_start: forall (client_x: ClientMachine_ref_t) :: client_instances[client_x].this == client_x;
+
+    invariant correct_this_pointer: forall (client_x: ClientMachine_ref_t) :: client_instances[client_x].this == client_x;
+
+    invariant correct_client_selection: forall (client_x: ClientMachine_ref_t, request_x: eRequest_t) :: in_requests(client_instances[client_x].eRequest_out, request_x) ==> client_x == request_x.source;
+    invariant correct_client_target: forall (client_x: ClientMachine_ref_t, request_x: eRequest_t) :: in_requests(client_instances[client_x].eRequest_out, request_x) ==> client_instances[request_x.source].server == request_x.target;
+    invariant correct_server_selection: forall (server_x : ServerMachine_ref_t, response_x: eResponse_t) :: in_responses(server_instances[server_x].eResponse_out, response_x) ==> server_x == response_x.source;
+    invariant correct_server_target: forall (server_x : ServerMachine_ref_t, response_x: eResponse_t) :: in_responses(server_instances[server_x].eResponse_out, response_x) ==> client_instances[response_x.target].server == server_x;
+    
+    invariant correct_client_source_and_target: forall (client_x : ClientMachine_ref_t, response_x: eResponse_t, request_x: eRequest_t) ::
+        (in_responses(client_instances[client_x].eResponse_in, response_x) ==> response_x.target == client_x) && 
+        (in_requests(client_instances[client_x].eRequest_out, request_x) ==> request_x.source == client_x);
+
+    invariant correct_server_source_and_target: forall (server_x : ServerMachine_ref_t, response_x: eResponse_t, request_x: eRequest_t) ::
+        (in_requests(server_instances[server_x].eRequest_in, request_x) ==> request_x.target == server_x) && 
+        (in_responses(server_instances[server_x].eResponse_out, response_x) ==> response_x.source == server_x);
+
+    invariant server_only_communicates_with_matching_client: forall (server_x : ServerMachine_ref_t, response_x: eResponse_t, request_x: eRequest_t) ::
+        (in_responses(server_instances[server_x].eResponse_out, response_x) ==> client_instances[response_x.target].server == server_x) && 
+        (in_requests(server_instances[server_x].eRequest_in, request_x) ==> client_instances[request_x.source].server == server_x);
+
+    invariant client_only_communicates_with_matching_server: forall (client_x : ClientMachine_ref_t, response_x: eResponse_t, request_x: eRequest_t) ::
+        (in_requests(client_instances[client_x].eRequest_out, request_x) ==> request_x.target == client_instances[client_x].server) && 
+        (in_responses(client_instances[client_x].eResponse_in, response_x) ==> response_x.source == client_instances[client_x].server);
+
+    control {
+        induction;
+        set_solver_option("timeout", "5000");
+        check;
+    }
+}
