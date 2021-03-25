@@ -105,7 +105,7 @@ uclidfc-live <uclid files to edit> <query file to watch>
 
 ```
 sbt jacoco
-open target/scala-3.0.0-M3/jacoco/report/html/index.html
+open target/scala-3.0.0-RC1/jacoco/report/html/index.html
 ```
 
 ### Run JVM

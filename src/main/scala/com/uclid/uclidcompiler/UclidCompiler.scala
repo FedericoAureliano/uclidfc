@@ -33,6 +33,8 @@ object UclidCompiler {
     val letsMapStack: Stack[HashMap[Identifier, Int]] = new Stack()
 
     val proofStates: ListBuffer[Int] = new ListBuffer()
+    
+    val outerAxioms: ListBuffer[OuterAxiom] = new ListBuffer()
 
     model.outers.foreach { m =>
       m match {
@@ -40,7 +42,7 @@ object UclidCompiler {
         case dd: DefineDecl    => defineDeclToTerm(dd)
         case fd: FunctionDecl  => functionDeclToTerm(fd)
         case sy: SynthesisDecl => synthesisDeclToTerm(sy)
-        case ax: OuterAxiom    => axiomToAssertion(ax)
+        case ax: OuterAxiom    => outerAxioms.addOne(ax)
         case mod: ModuleDecl =>
           moduleToTerm(mod, Some(mod.id.name) == main)
       }
@@ -788,7 +790,7 @@ object UclidCompiler {
       res
     }
 
-    def getAxiomRef(stateParam: Int, axioms: List[InnerAxiom]): Int = {
+    def getAxiomRef(stateParam: Int, axioms: List[InnerAxiom]): Option[Int] = {
       // make sure invariant axioms hold on the fresh instance
       val specConjuncts = new ListBuffer[Int]()
       val axiomRef = if axioms.length > 1 then {
@@ -802,16 +804,15 @@ object UclidCompiler {
           specConjuncts.addOne(t)
           t
         }
-        termgraph.memoAddInstruction(Application(andRef, specConjuncts.toList))
+        Some(termgraph.memoAddInstruction(Application(andRef, specConjuncts.toList)))
       } else if axioms.length == 1 then {
-        exprToTerm(
+        Some(exprToTerm(
           Some(stateParam),
           Map.empty,
           axioms(0).expr
-        )._1 //specs shouldn't create new nondets
+        )._1) //specs shouldn't create new nondets
       } else {
-        val trueRef = termgraph.memoAddInstruction(TheoryMacro("true"))
-        trueRef
+        None
       }
       axiomRef
     }
@@ -823,6 +824,13 @@ object UclidCompiler {
       cmds: List[Command],
       axioms: List[InnerAxiom]
     ): Unit = {
+
+      val andRef = termgraph.memoAddInstruction(TheoryMacro("and"))
+      val negRef = termgraph.memoAddInstruction(TheoryMacro("not"))
+
+      val outers = outerAxioms.map(ax => {
+        exprToTerm(None, Map.empty, ax.expr)._1
+      }).toList
 
       def generateInitVariables(): List[Int] =
         initParams.map { p =>
@@ -880,6 +888,10 @@ object UclidCompiler {
                 assert(!ctx.checkQuery)
                 ctx.checkQuery = true
                 ctx.negateQuery = true
+                // if we haven't asserted anything then just treat it as an smt query where outeraxioms are like smtlib asserts
+                if ctx.entryPoints().length == ctx.getValues.getOrElse(List.empty).length then {
+                  outers.foreach(a => ctx.addAssertion(a))
+                }
               case GetValue(vars) =>
                 ctx.addOption("produce-models", "true")
                 val vs =
@@ -958,10 +970,9 @@ object UclidCompiler {
               case "induction" =>
                 // create all the variables you need
                 val baseInitVariables = generateInitVariables()
-                if axioms.length > 0 then {
-                  // all axioms should hold before base case
-                  val axiomRef = getAxiomRef(baseInitVariables.head, axioms)
-                  ctx.addAxiom(axiomRef)
+                val axiomRef = {
+                  val tmp = getAxiomRef(baseInitVariables.head, axioms)
+                  if tmp.isDefined then List(tmp.get) else List.empty
                 }
 
                 // get the module declaration
@@ -971,9 +982,6 @@ object UclidCompiler {
                 val initRef = mod.init
                 val nextRef = mod.next
                 val specRefs = mod.spec
-
-                val andRef = termgraph.memoAddInstruction(TheoryMacro("and"))
-                val negRef = termgraph.memoAddInstruction(TheoryMacro("not"))
 
                 (0 to specRefs.length - 1).foreach { i =>
                   val specRef = specRefs(i)
@@ -991,7 +999,7 @@ object UclidCompiler {
                   val main = termgraph.memoAddInstruction(
                     Application(specRef, List(initAppRef))
                   )
-                  val aux = others.map { spec =>
+                  val aux = axiomRef ++ others.map { spec =>
                     termgraph.memoAddInstruction(
                       Application(spec, List(initAppRef))
                     )
@@ -1002,7 +1010,7 @@ object UclidCompiler {
 
                   val baseRef =
                     termgraph.memoAddInstruction(
-                      Application(andRef, initSpecRef :: aux)
+                      Application(andRef, initSpecRef :: (aux ++ outers))
                     )
                   ctx.addAssertion(baseRef)
 
@@ -1011,12 +1019,6 @@ object UclidCompiler {
                   // create all the variables you need
                   val inductiveInitVariables = generateInitVariables()
                   val inductiveAxioms = axioms.filter(p => p.invariant)
-                  if inductiveAxioms.length > 0 then {
-                    // all inductiveAxioms should hold before inductive case
-                    val axiomRef =
-                      getAxiomRef(inductiveInitVariables.head, inductiveAxioms)
-                    ctx.addAxiom(axiomRef)
-                  }
                   proofStates.addOne(inductiveInitVariables.head)
 
                   val entryRefMain =
@@ -1036,13 +1038,8 @@ object UclidCompiler {
                   val states =
                     stepKTimes(k, inductiveInitVariables.head, nextRef)
                   proofStates.addAll(states)
-                  if inductiveAxioms.length > 0 then {
-                    // inductiveAxioms hold on every inner step
-                    states.foreach { s =>
-                      val axiomRef = getAxiomRef(s, inductiveAxioms)
-                      ctx.addAxiom(axiomRef)
-                    }
-                  }
+
+                  val indAxioms = proofStates.map {s => getAxiomRef(s, inductiveAxioms)}.flatten
 
                   // holds on exit
                   val exitRefMain =
@@ -1056,7 +1053,7 @@ object UclidCompiler {
                     )
 
                   val inductiveRef = termgraph.memoAddInstruction(
-                    Application(andRef, entryRefMain :: negExitRef :: auxEntry)
+                    Application(andRef, entryRefMain :: negExitRef :: (auxEntry ++ indAxioms ++ outers))
                   )
 
                   ctx.addAssertion(inductiveRef)
@@ -1081,29 +1078,20 @@ object UclidCompiler {
                       Application(initRef, initVariables)
                     )
                   proofStates.addOne(initAppRef)
-
-                  // apply axiom after init so that fresh variables don't cause problems when unrolling
-                  if axioms.length > 0 then {
-                    val axiomRef = getAxiomRef(initAppRef, axioms)
-                    ctx.addAxiom(axiomRef)
+                  val axiomRef = {
+                    val tmp = getAxiomRef(initAppRef, axioms)
+                    if tmp.isDefined then List(tmp.get) else List.empty
                   }
-
-                  val negRef = termgraph.memoAddInstruction(TheoryMacro("not"))
 
                   // Take k steps
                   val k = unwind.getOrElse(IntLit(1)).literal.toInt
-                  val states = initAppRef :: stepKTimes(k, initAppRef, nextRef)
+                  val states = stepKTimes(k, initAppRef, nextRef)
                   proofStates.addAll(states)
                   val inductiveAxioms = axioms.filter(p => p.invariant)
-                  if inductiveAxioms.length > 0 then {
-                    // inductiveAxioms hold on every inner step
-                    states.foreach { s =>
-                      val axiomRef = getAxiomRef(s, inductiveAxioms)
-                      ctx.addAxiom(axiomRef)
-                    }
-                  }
 
-                  states.zipWithIndex.foreach { p =>
+                  val indAxioms = axiomRef ++ states.map {s => getAxiomRef(s, inductiveAxioms)}.flatten
+
+                  proofStates.zipWithIndex.foreach { p =>
                     val exitRef =
                       termgraph.memoAddInstruction(
                         Application(specRef, List(p._1))
@@ -1112,7 +1100,11 @@ object UclidCompiler {
                       termgraph.memoAddInstruction(
                         Application(negRef, List(exitRef))
                       )
-                    ctx.addAssertion(negExitRef)
+
+                    val fullRef = termgraph.memoAddInstruction(
+                        Application(andRef, negExitRef :: (indAxioms.take(p._2 + 1) ++ outers))
+                      )
+                    ctx.addAssertion(fullRef)
                   }
                 }
             }
@@ -1309,11 +1301,6 @@ object UclidCompiler {
           UserFunction(fd.id.name, typeRefs.head, typeRefs.tail)
         )
       )
-    }
-
-    def axiomToAssertion(ax: OuterAxiom): Unit = {
-      val bodyRef = exprToTerm(None, Map.empty, ax.expr)._1
-      ctx.addAxiom(bodyRef)
     }
 
     def defineDeclToTerm(dd: DefineDecl): Unit = {

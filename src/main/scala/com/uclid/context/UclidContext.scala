@@ -6,14 +6,10 @@ import scala.collection.mutable.ListBuffer
 
 class UclidContext(termgraph: TermGraph) extends Context(termgraph) {
   protected val assertionRefs = new ListBuffer[Int]()
-  protected val axiomRefs = new ListBuffer[Int]()
   var getValues: Option[List[Int]] = None
 
   def addAssertion(ass: Int): Unit =
     assertionRefs.addOne(ass)
-
-  def addAxiom(ax: Int): Unit =
-    axiomRefs.addOne(ax)
 
   var checkQuery = false
   var negateQuery = false
@@ -29,14 +25,9 @@ class UclidContext(termgraph: TermGraph) extends Context(termgraph) {
   override def ignoreResult() = traceQuery
 
   override def entryPoints() =
-    assertionRefs.toList ++ axiomRefs ++ getValues.getOrElse(List.empty)
+    assertionRefs.toList ++ getValues.getOrElse(List.empty)
 
   override def toQueries(pp: Int): List[String] = {
-
-    val andRef = termgraph.memoAddInstruction(TheoryMacro("and"))
-    val axioms =
-      termgraph.memoAddInstruction(Application(andRef, axiomRefs.toList))
-
     if assertionRefs.length == 0 then {
       val falseRef = termgraph.memoAddInstruction(TheoryMacro("false"))
       assertionRefs.addOne(
@@ -59,30 +50,18 @@ class UclidContext(termgraph: TermGraph) extends Context(termgraph) {
       } else {
         asserts
       }
-      val spec = if axiomRefs.length > 0 then {
-        termgraph.memoAddInstruction(
-          Application(andRef, List(axioms, assertion))
-        )
-      } else {
-        assertion
-      }
       val innerCtx = new SyMTContext(termgraph)
       options.foreach(o => innerCtx.addOption(o._1, o._2))
-      innerCtx.addAssertion(spec)
+      innerCtx.addAssertion(assertion)
       if checkQuery || traceQuery then {
         innerCtx.checkSat()
       }
       innerCtx.toQueries(pp)
     } else {
       assertionRefs.foldLeft(List.empty: List[String]) { (acc, ass) =>
-        var spec = if axiomRefs.length > 0 then {
-          termgraph.memoAddInstruction(Application(andRef, List(axioms, ass)))
-        } else {
-          ass
-        }
         val innerCtx = new SyMTContext(termgraph)
         options.foreach(o => innerCtx.addOption(o._1, o._2))
-        innerCtx.addAssertion(spec)
+        innerCtx.addAssertion(ass)
         if checkQuery || traceQuery then {
           innerCtx.checkSat()
         }
