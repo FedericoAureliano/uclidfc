@@ -120,31 +120,69 @@ module main {
         next(server_instances[tmp_server]);
     }
 
+
+    /* 
+     * THE THING WE WANT TO PROVE
+     */
     invariant main_assertion: forall (client_x: ClientMachine_ref_t) :: client_instances[client_x].last_id >= client_instances[client_x].ghost_last_id;
 
+    /*
+     * Aux constraints to make sure the main invariant holds  
+     */
+
+    //b
     invariant next_gt_last: forall (client_x: ClientMachine_ref_t) :: client_instances[client_x].next_id > client_instances[client_x].last_id;
 
-    invariant unique_client_response_id: forall (client_x : ClientMachine_ref_t, response_x: eResponse_t, response_y: eResponse_t) :: 
-        !in_responses(client_instances[client_x].eResponse_in, response_x) || !in_responses(client_instances[client_x].eResponse_in, response_y) || response_x == response_y;
+    invariant every_event_id_gt_last_id_client1: forall (client_x : ClientMachine_ref_t, response_x: eResponse_t) ::
+        (in_responses(client_instances[client_x].eResponse_in, response_x) ==> response_x.id == client_instances[client_x].next_id);
 
-    invariant unique_client_request_id: forall (client_x : ClientMachine_ref_t, request_x: eRequest_t, request_y: eRequest_t) :: 
-        !in_requests(client_instances[client_x].eRequest_out, request_x) || !in_requests(client_instances[client_x].eRequest_out, request_y) || request_x == request_y;
+    //b
+    invariant every_event_id_gt_last_id_client2: forall (client_x : ClientMachine_ref_t, request_x: eRequest_t) ::
+        (in_requests(client_instances[client_x].eRequest_out, request_x) ==> request_x.id == client_instances[client_x].next_id);
 
-    // only one server sending to a given client
-    invariant unique_server_sending_to_client: forall (server_x : ServerMachine_ref_t, server_y : ServerMachine_ref_t, response_x: eResponse_t, response_y: eResponse_t) :: 
-        ((in_responses(server_instances[server_x].eResponse_out, response_x) && in_responses(server_instances[server_y].eResponse_out, response_y)) && server_x != server_y ==> response_x.target != response_y.target);
-    
-    // only one server receiveing from a given client
-    invariant unique_server_receiving_from_client: forall (server_x : ServerMachine_ref_t, server_y : ServerMachine_ref_t, request_x: eRequest_t, request_y: eRequest_t) :: 
-        ((in_requests(server_instances[server_x].eRequest_in, request_x) && in_requests(server_instances[server_y].eRequest_in, request_y)) && server_x != server_y ==> request_x.source != request_y.source);
+    invariant every_event_id_gt_last_id_server1: forall (server_x : ServerMachine_ref_t, request_x: eRequest_t) ::
+        (in_requests(server_instances[server_x].eRequest_in, request_x) ==> request_x.id == client_instances[request_x.source].next_id);
 
-    invariant every_event_id_gt_last_id_client: forall (client_x : ClientMachine_ref_t, response_x: eResponse_t, request_x: eRequest_t) ::
-        (in_responses(client_instances[client_x].eResponse_in, response_x) ==> response_x.id > client_instances[client_x].last_id) && 
-        (in_requests(client_instances[client_x].eRequest_out, request_x) ==> request_x.id > client_instances[client_x].last_id);
+    invariant every_event_id_gt_last_id_server2: forall (server_x : ServerMachine_ref_t, response_x: eResponse_t) ::
+        (in_responses(server_instances[server_x].eResponse_out, response_x) ==> response_x.id == client_instances[response_x.target].next_id);
 
-    invariant every_event_id_gt_last_id_server: forall (server_x : ServerMachine_ref_t, response_x: eResponse_t, request_x: eRequest_t) ::
-        (in_requests(server_instances[server_x].eRequest_in, request_x) ==> request_x.id > client_instances[request_x.source].last_id) && 
-        (in_responses(server_instances[server_x].eResponse_out, response_x) ==> response_x.id > client_instances[response_x.target].last_id);
+    /*
+     * Uniqueness constraints on messages involving a client  
+     */
+
+    invariant at_most_one_client_request_out: forall (client_x : ClientMachine_ref_t, request_x: eRequest_t, request_y: eRequest_t) :: 
+        in_requests(client_instances[client_x].eRequest_out, request_x) && in_requests(client_instances[client_x].eRequest_out, request_y) ==> request_x == request_y;
+
+    invariant at_most_one_client_request_out_with_server: forall (client_x : ClientMachine_ref_t, request_x: eRequest_t, request_y: eRequest_t) :: 
+        in_requests(client_instances[client_x].eRequest_out, request_x) && in_requests(server_instances[client_instances[client_x].server].eRequest_in, request_y) ==> request_x.source != request_y.source;
+
+    invariant at_most_one_client_response_in: forall (client_x : ClientMachine_ref_t, response_x: eResponse_t, response_y: eResponse_t) :: 
+        in_responses(client_instances[client_x].eResponse_in, response_x) && in_responses(client_instances[client_x].eResponse_in, response_y) ==> response_x == response_y;
+
+    invariant at_most_one_client_response_in_with_server: forall (client_x : ClientMachine_ref_t, response_x: eResponse_t, response_y: eResponse_t) :: 
+        in_responses(client_instances[client_x].eResponse_in, response_x) && in_responses(server_instances[client_instances[client_x].server].eResponse_out, response_y) ==> response_x.target != response_y.target;
+
+    invariant at_most_one_client_event: forall (client_x : ClientMachine_ref_t, request_x: eRequest_t, response_y: eResponse_t) :: 
+        !in_requests(client_instances[client_x].eRequest_out, request_x) || !in_responses(client_instances[client_x].eResponse_in, response_y);
+
+    invariant at_most_one_client_request_server_response: forall (client_x : ClientMachine_ref_t, request_x: eRequest_t, response_y: eResponse_t) :: 
+        in_requests(client_instances[client_x].eRequest_out, request_x) && in_responses(server_instances[client_instances[client_x].server].eResponse_out, response_y) ==> response_y.target != client_x;
+
+    invariant at_most_one_client_response_server_request: forall (client_x : ClientMachine_ref_t, response_x: eResponse_t, request_y: eRequest_t) :: 
+        in_responses(client_instances[client_x].eResponse_in, response_x) && in_requests(server_instances[client_instances[client_x].server].eRequest_in, request_y) ==> request_y.source != client_x;
+
+    invariant at_most_one_server_request_per_client: forall (server_x : ServerMachine_ref_t, request_x: eRequest_t, request_y: eRequest_t) :: 
+        in_requests(server_instances[server_x].eRequest_in, request_x) && in_requests(server_instances[server_x].eRequest_in, request_y) && request_x != request_y ==> request_x.source != request_y.source;
+
+    invariant one_server_response_per_client: forall (server_x : ServerMachine_ref_t, response_x: eResponse_t, response_y: eResponse_t) :: 
+        in_responses(server_instances[server_x].eResponse_out, response_x) && in_responses(server_instances[server_x].eResponse_out, response_y) && response_x != response_y ==> response_x.target != response_y.target;
+
+    invariant one_client_event_for_server: forall (server_x : ServerMachine_ref_t, request_x: eRequest_t, response_y: eResponse_t) :: 
+        in_requests(server_instances[server_x].eRequest_in, request_x) && in_responses(server_instances[server_x].eResponse_out, response_y) ==> request_x.source != response_y.target;
+
+    /*
+     * Invariants about the system and driver that are independent of IDs
+     */
 
     axiom correct_this_pointer_at_start: forall (client_x: ClientMachine_ref_t) :: client_instances[client_x].this == client_x;
     invariant correct_this_pointer: forall (client_x: ClientMachine_ref_t) :: client_instances[client_x].this == client_x;
@@ -171,8 +209,8 @@ module main {
         (in_responses(client_instances[client_x].eResponse_in, response_x) ==> response_x.source == client_instances[client_x].server);
 
     control {
-        unroll(3);
-        set_solver_option("timeout", "60000");
+        induction;
+        set_solver_option("timeout", "20000");
         check;
     }
 }
