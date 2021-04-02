@@ -28,8 +28,8 @@ abstract class Solver() {
       Await.result(f, duration.Duration(timeout, "sec"))
     } catch {
       case e: TimeoutException => 
-      exit.destroy() // kill the process, but then propagate the error so that UclidMain knows about it
-      throw e
+      exit.destroy() // kill the process
+      out = List("timeout")
     }
     val timetaken = (System.nanoTime - t1) / 1e9d
     println(s"-- ${in.split(" ").head} terminated in ${"%.3f".toString.format(timetaken)} seconds.")

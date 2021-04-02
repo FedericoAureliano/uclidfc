@@ -83,7 +83,7 @@ object UclidMain {
         .valueName("<timeout>")
         .action((x, c) => c.copy(timeout = x))
         .text(
-          s"Timeout (in seconds) to give the solver."
+          s"Timeout (in seconds) to give the solver per query."
         )
 
       opt[Int]('o', "optimize")
