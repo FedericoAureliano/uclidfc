@@ -5,7 +5,7 @@ import com.uclid.context.Context
 import java.io.{File, PrintWriter}
 import scala.sys.process._
 
-class CVC4() extends Solver() {
+case class CVC4() extends Solver() {
   def getCommand(ctx: Context): String = "cvc4 --strings-exp --incremental"
 
   def generateQueries(ctx: Context, prettyPrint: Int): List[String] = {

@@ -16,7 +16,7 @@ module main {
     a', b' = b, a + b;
   }
 
-  invariant a_le_b: a <= b && h(a, b);
+  invariant a_le_b: a <= b && b >= 1;
 
     control
     {

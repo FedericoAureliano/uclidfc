@@ -84,7 +84,7 @@ abstract class Solver() {
         // need to call this first before checking if it is a synthesis query
         var queries : List[File] = generateQueries(ctx, prettyPrint).map(q => {
           var query = q
-          val suffix = if ctx.termgraph.isSynthesisQuery() then { ".sl" }
+          val suffix = if ctx.isSynthesisQuery() then { ".sl" }
           else { 
             ".smt2" 
           }
@@ -140,7 +140,7 @@ abstract class Solver() {
           (new ProofResult(ternaryCombine(acc._1.result, Some(true)),  combineStrs(acc._1.messages, answer)), generationDuration, acc._3 + result._4)
         }
         case _ if "(\\sunsat)".r.findFirstIn(answer).isDefined => {
-          if ctx.termgraph.isSynthesisQuery() then {
+          if ctx.isSynthesisQuery() then {
             (
               new ProofResult(ternaryCombine(acc._1.result, Some(false)),  combineStrs(acc._1.messages, answer)),
               generationDuration,

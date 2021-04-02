@@ -53,8 +53,7 @@ uclidfc [options] <file> ...
 Basic Usage
   -m, --main <module>            Name of the main module.
   -s, --solver <solver>          Solver to use (alt_ergo or cvc4 or vampire or z3). Solver must be in your path.
-  -t, --timeout <timeout>        Timeout (in seconds) to give the solver.
-  -o, --optimize <level>         Optimization level (0 or 1).
+  -t, --timeout <timeout>        Timeout (in whole seconds) to give the solver per query.
   -w, --write <file>             Write query to <file>.
   --pretty-print                 Try to make output queries human readable.
   --debug-print                  Add internal term graph information as SMT comments.
@@ -65,20 +64,8 @@ Basic Usage
 Analysis
   --print-features               Print query features.
 
-Script Rewrites
-  --assertion-over-conjunction   Rewrite asserted conjunctions to repeated assertions.
-
-Arithmetic Rewrites
-  --plus-minus-zero              Remove zeros from additions/subtractions.
-
 Algebraic Datatype Rewrites
   --blast-enum-quantifiers       Rewrite quantifiers over enums to finite disjunctions/conjunctions.
-
-String Rewrites
-  --contains-over-concat         Rewrite "xy contains c," where c is a literal string of length 1.
-  --contains-over-replace        Rewrite "(replace c1 with c2 in x) contains c3," where c1, c2, and c3 are literal strings of length 1.
-  --indexof-gte-zero-gadgets     Rewrite "index of y in x >= 0" to "x contains y."
-
 
 ```
 

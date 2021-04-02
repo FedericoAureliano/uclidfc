@@ -43,13 +43,7 @@ object UclidMain {
     run: Boolean = true,
     timeout: Int = Int.MaxValue,
     features: Boolean = false,
-    optimizeLevel: Int = 0,
-    plusMinusZero: Boolean = false,
     blastEnumQuantifierFlag: Boolean = false,
-    assertionOverConjunction: Boolean = false,
-    containsOverConcat: Boolean = false,
-    containsOverReplace: Boolean = false,
-    indexOfGTZGadgets: Boolean = false,
     outFile: Option[String] = None,
     prettyPrint: Boolean = false,
     debugPrint: Boolean = false,
@@ -83,20 +77,8 @@ object UclidMain {
         .valueName("<timeout>")
         .action((x, c) => c.copy(timeout = x))
         .text(
-          s"Timeout (in seconds) to give the solver per query."
+          s"Timeout (in whole seconds) to give the solver per query."
         )
-
-      opt[Int]('o', "optimize")
-        .valueName("<level>")
-        .action((x, c) => c.copy(optimizeLevel = x))
-        .validate(x =>
-          if optimizationLevels.contains(x) then success
-          else
-            failure(
-              s"Optimization level must be ${optimizationLevels.mkString(" or ")}."
-            )
-        )
-        .text(s"Optimization level (${optimizationLevels.mkString(" or ")}).")
 
       opt[String]('w', "write")
         .valueName("<file>")
@@ -131,21 +113,6 @@ object UclidMain {
         .action((_, c) => c.copy(features = true))
         .text("Print query features.")
 
-      note(sys.props("line.separator") + "Script Rewrites")
-
-      opt[Unit]("assertion-over-conjunction")
-        .action((_, c) => c.copy(assertionOverConjunction = true))
-        .text(
-          "Rewrite asserted conjunctions to repeated assertions."
-        )
-
-      note(sys.props("line.separator") + "Arithmetic Rewrites")
-
-      opt[Unit]("plus-minus-zero")
-        .action((_, c) => c.copy(plusMinusZero = true))
-        .text(
-          "Remove zeros from additions/subtractions."
-        )
 
       note(sys.props("line.separator") + "Algebraic Datatype Rewrites")
 
@@ -153,26 +120,6 @@ object UclidMain {
         .action((_, c) => c.copy(blastEnumQuantifierFlag = true))
         .text(
           "Rewrite quantifiers over enums to finite disjunctions/conjunctions."
-        )
-
-      note(sys.props("line.separator") + "String Rewrites")
-
-      opt[Unit]("contains-over-concat")
-        .action((_, c) => c.copy(containsOverConcat = true))
-        .text(
-          "Rewrite \"xy contains c,\" where c is a literal string of length 1."
-        )
-
-      opt[Unit]("contains-over-replace")
-        .action((_, c) => c.copy(containsOverReplace = true))
-        .text(
-          "Rewrite \"(replace c1 with c2 in x) contains c3,\" where c1, c2, and c3 are literal strings of length 1."
-        )
-
-      opt[Unit]("indexof-gte-zero-gadgets")
-        .action((_, c) => c.copy(indexOfGTZGadgets = true))
-        .text(
-          "Rewrite \"index of y in x >= 0\" to \"x contains y.\""
         )
     }
     parser.parse(args, Config())
@@ -255,29 +202,8 @@ object UclidMain {
       if config.singleQuery then {
         ctx.singleQuery = true
       }
-
-      if config.plusMinusZero then {
-        ctx.termgraph.plusMinusZero()
-      }
       if config.blastEnumQuantifierFlag then {
         ctx.termgraph.blastEnumQuantifier()
-      }
-      if config.containsOverConcat then {
-        ctx.termgraph.containsOverConcat()
-      }
-      if config.containsOverReplace then {
-        ctx.termgraph.containsOverReplace()
-      }
-      if config.indexOfGTZGadgets then {
-        ctx.termgraph.indexOfGTZGadgets()
-      }
-      if config.assertionOverConjunction then {
-        throw new SemanticError(
-          "Flatten Assertions Not Yet Supported In UCLID Mode"
-        )
-      }
-      if config.optimizeLevel == 1 then {
-        ctx.termgraph.optimizeLevel0(ctx.entryPoints())
       }
       var processDuration = (System.nanoTime - startProcess) / 1e9d
       println(s"Processing completed in ${processDuration} seconds.")
@@ -295,23 +221,13 @@ object UclidMain {
         println(features.map(f => "-- " + f).mkString("\n"))
       }
 
-      val resTmp = solver.solve(
+      val res = solver.solve(
         config.run,
         config.timeout,
         ctx,
         config.outFile,
         prettyPrintLevel
       )
-
-      val res = if ctx.negateQuery then {
-        (
-          ProofResult(resTmp._1.result, resTmp._1.messages, true),
-          resTmp._2,
-          resTmp._3
-        )
-      } else {
-        resTmp
-      }
 
       val ret = if ctx.ignoreResult() then {
         UclidResult(
@@ -386,38 +302,9 @@ object UclidMain {
         print("Processing query ... ")
         var changed = false
         val startProcess = System.nanoTime
-        if config.plusMinusZero then {
-          changed = true
-          ctx.termgraph.plusMinusZero()
-        }
         if config.blastEnumQuantifierFlag then {
           changed = true
           ctx.termgraph.blastEnumQuantifier()
-        }
-        if config.containsOverConcat then {
-          changed = true
-          ctx.termgraph.containsOverConcat()
-        }
-        if config.containsOverReplace then {
-          changed = true
-          ctx.termgraph.containsOverReplace()
-        }
-        if config.indexOfGTZGadgets then {
-          changed = true
-          ctx.termgraph.indexOfGTZGadgets()
-        }
-        if config.assertionOverConjunction then {
-          changed = true
-          ctx.script = ctx.script.foldLeft(List.empty) { (acc, c) =>
-            c match {
-              case a: Assert =>
-                acc ++ ctx.termgraph.assertionOverConjunction(a)
-              case _ => acc ++ List(c)
-            }
-          }
-        }
-        if config.optimizeLevel == 1 then {
-          ctx.termgraph.optimizeLevel0(ctx.entryPoints())
         }
         var processDuration = (System.nanoTime - startProcess) / 1e9d
         println(s"Processing completed in ${processDuration} seconds.")

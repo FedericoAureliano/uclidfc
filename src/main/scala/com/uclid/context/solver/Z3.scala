@@ -5,7 +5,7 @@ import com.uclid.context.Context
 import java.io.{File, PrintWriter}
 import scala.sys.process._
 
-class Z3() extends Solver() {
+case class Z3() extends Solver() {
   def getCommand(ctx: Context): String = "z3"
 
   def generateQueries(ctx: Context, prettyPrint: Int): List[String] = {
@@ -17,7 +17,7 @@ class Z3() extends Solver() {
           .filter(p => !p.startsWith("(set-logic"))
           .mkString("\n")
       }
-    if ctx.termgraph.isSynthesisQuery() then {
+    if ctx.isSynthesisQuery() then {
       throw new SolverMismatchError("Z3 does not support synthesis")
     }
     query

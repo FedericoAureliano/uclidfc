@@ -884,14 +884,6 @@ object UclidCompiler {
               case Check() =>
                 assert(!ctx.checkQuery)
                 ctx.checkQuery = true
-              case CheckSat() =>
-                assert(!ctx.checkQuery)
-                ctx.checkQuery = true
-                ctx.negateQuery = true
-                // if we haven't asserted anything then just treat it as an smt query where outeraxioms are like smtlib asserts
-                if ctx.entryPoints().length == ctx.getValues.getOrElse(List.empty).length then {
-                  outers.foreach(a => ctx.addAssertion(a))
-                }
               case GetValue(vars) =>
                 ctx.addOption("produce-models", "true")
                 val vs =
@@ -899,69 +891,6 @@ object UclidCompiler {
                     acc ++ vars.map(p => exprToTerm(Some(s), Map.empty, p)._1)
                   }
                 ctx.getValues = Some(vs)
-              case Trace(unwind, init, start) =>
-                // get the module declaration
-                val modRef = typeMap(moduleId)
-                val mod = termgraph
-                  .getStmt(modRef)
-                  .asInstanceOf[Module]
-                val initRef = mod.init
-                val nextRef = mod.next
-
-                // TODO: currently ignores axioms
-                val preInit = transitionToTerm(
-                  mod.name + "!pre_init",
-                  initParams.head,
-                  mod.ct,
-                  start
-                )
-                val fuzzed = termgraph.fuzz(modRef)
-                val startTerm = termgraph.memoAddInstruction(
-                  Application(
-                    preInit._1,
-                    fuzzed :: preInit._2.map { p =>
-                      termgraph.getStmt(p) match {
-                        case FunctionParameter(_, sort) =>
-                          termgraph.fuzz(sort)
-                      }
-                    }
-                  )
-                )
-
-                val initVariables = startTerm :: initParams.tail.map { p =>
-                  termgraph.getStmt(p) match {
-                    case FunctionParameter(_, sort) =>
-                      termgraph.fuzz(sort)
-                  }
-                }
-
-                var transRef = if init.literal then {
-                  // apply init
-                  val initAppRef =
-                    termgraph.memoAddInstruction(
-                      Application(initRef, initVariables)
-                    )
-                  proofStates.addOne(initAppRef)
-                  initAppRef
-                } else {
-                  startTerm
-                }
-
-                // Take k steps but fuzz at each step
-                val k = unwind.literal.toInt
-                (1 to k).foreach { i =>
-                  val args = nextParams.tail.map { p =>
-                    termgraph.getStmt(p) match {
-                      case FunctionParameter(_, sort) =>
-                        termgraph.fuzz(sort)
-                    }
-                  }
-                  transRef = termgraph.memoAddInstruction(
-                    Application(nextRef, List(transRef) ++ args)
-                  )
-                  proofStates.addOne(transRef)
-                }
-                ctx.traceQuery = true
             }
           case SolverOption(name, option) =>
             ctx.addOption(name, option)

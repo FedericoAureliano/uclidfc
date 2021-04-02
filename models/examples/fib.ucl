@@ -2,7 +2,6 @@
 // Solver=cvc4
 // Solver=z3
 // Result=Some(true)
-// Optimize=1
 
 module main {
   var a, b : integer;

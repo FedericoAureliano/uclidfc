@@ -2,7 +2,6 @@
 // Solver=z3
 // Rewrite=blast-enum-quantifiers
 // Result=Some(true)
-// Optimize=1
 
 type cases = enum {A, B, C};
 

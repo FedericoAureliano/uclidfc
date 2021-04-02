@@ -7,7 +7,7 @@ import java.io.File
 class Error {
 
   @Test def testSyntaxErrors(): Unit = {
-    val tests = new File("models/tests/errors/syntactic").listFiles
+    val tests = new File("models/tests/ucl/errors/syntactic").listFiles
       .filter(_.isFile)
       .map(f => readTestFile(f))
     tests.foreach { t =>
@@ -22,7 +22,7 @@ class Error {
   }
 
   @Test def testSemanticErrors(): Unit = {
-    val tests = new File("models/tests/errors/semantic").listFiles
+    val tests = new File("models/tests/ucl/errors/semantic").listFiles
       .filter(_.isFile)
       .map(f => readTestFile(f))
     tests.foreach { t =>
@@ -37,7 +37,7 @@ class Error {
   }
 
   @Test def testNotSupportedYetErrors(): Unit = {
-    val tests = new File("models/tests/unsupported").listFiles
+    val tests = new File("models/tests/ucl/unsupported").listFiles
       .filter(_.isFile)
       .map(f => readTestFile(f))
     tests.foreach { t =>

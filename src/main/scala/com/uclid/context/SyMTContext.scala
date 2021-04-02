@@ -32,6 +32,8 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
     }
   })
 
+  override def isSynthesisQuery() = termgraph.isSynthesisQuery(entryPoints())
+
   def addAssertion(r: Int): Unit =
     script = script ++ List(Assert(r))
 
@@ -280,9 +282,6 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
     }
     def synthesisToQueryTerm(s: Synthesis): Unit = {
       pushDebugComment(s)
-      if !termgraph.isSynthesisQuery() then {
-        throw new SemanticError("Must be a synthesis query!")
-      }
       stack.push(Direct(s.name))
     }
 
@@ -363,7 +362,7 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
     def userfunctionToQueryCtx(u: UserFunction): String = {
       val tmp = new StringBuilder()
       if u.params.length > 0 then {
-        if termgraph.isSynthesisQuery() then {
+        if isSynthesisQuery() then {
           throw new SemanticError(
             "Uninterpreted functions are not supported for synthesis"
           )
@@ -372,7 +371,7 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
           .map(p => s"${programPointToQueryTerm(p, indent)}")
           .mkString(" ")}) "
       } else {
-        if termgraph.isSynthesisQuery() then {
+        if isSynthesisQuery() then {
           tmp ++= s"${TAB * indent}(declare-var ${u.name} "
         } else {
           tmp ++= s"${TAB * indent}(declare-const ${u.name} "
@@ -401,9 +400,6 @@ class SyMTContext(termgraph: TermGraph) extends Context(termgraph) {
     }
 
     def synthesisToQueryCtx(u: Synthesis): String = {
-      if !termgraph.isSynthesisQuery() then {
-        throw new SemanticError("Must be a synthesis query!")
-      }
       val tmp = new StringBuilder()
       tmp ++= s"${TAB * indent}(synth-fun ${u.name} (${u.params
         .map { p =>

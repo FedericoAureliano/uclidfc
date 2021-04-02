@@ -5,7 +5,7 @@ import com.uclid.context.Context
 import java.io.{File, PrintWriter}
 import scala.sys.process._
 
-class Vampire() extends Solver() {
+case class Vampire() extends Solver() {
 
   val supportedLogics = List(
     "ALIA",
@@ -47,7 +47,7 @@ class Vampire() extends Solver() {
         throw new SolverMismatchError(s"Vampire does not support ${logic.get}")
       }
 
-      if ctx.termgraph.isSynthesisQuery() then {
+      if ctx.isSynthesisQuery() then {
         throw new SolverMismatchError("Vampire does not support synthesis")
       }
     }

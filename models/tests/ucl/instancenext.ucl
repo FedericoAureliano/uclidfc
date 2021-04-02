@@ -2,7 +2,6 @@
 // Solver=z3
 // Result=Some(false)
 // Option=print-features
-// Optimize=1
 
 module fib
 {

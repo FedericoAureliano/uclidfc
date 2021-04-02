@@ -5,7 +5,7 @@ import com.uclid.context.Context
 import java.io.{File, PrintWriter}
 import scala.sys.process._
 
-class AltErgo() extends Solver() {
+case class AltErgo() extends Solver() {
   def getCommand(ctx: Context): String = "alt-ergo -enable-adts-cs"
 
   def generateQueries(ctx: Context, prettyPrint: Int): List[String] = {
@@ -20,7 +20,7 @@ class AltErgo() extends Solver() {
           )
           .mkString("\n")
       }
-    if ctx.termgraph.isSynthesisQuery() then {
+    if ctx.isSynthesisQuery() then {
       throw new SolverMismatchError("Alt-Ergo does not support synthesis")
     }
     query

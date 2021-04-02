@@ -14,7 +14,8 @@ class Medley(choices: List[Solver]) extends Solver() {
     // Very silly rule to demo.
     // TODO: do something better
     val z3 = Z3()
-    if features("NIA").toInt > 0 && choices.contains(z3) then {
+
+    if features("Logic").contains("NIA") && choices.contains(z3) then {
       z3
     } else {
       choices(random.nextInt(choices.length))

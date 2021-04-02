@@ -6,4 +6,5 @@ abstract class Context(val termgraph: TermGraph) {
   def toQueries(prettyPrint: Int): List[String]
   def ignoreResult(): Boolean
   def entryPoints(): List[Int]
+  def isSynthesisQuery(): Boolean
 }

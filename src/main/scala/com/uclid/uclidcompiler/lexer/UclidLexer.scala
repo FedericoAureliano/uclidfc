@@ -143,8 +143,6 @@ object UclidLexer extends RegexParsers {
       kwSynthesis |
       kwPrint_cex |
       kwCheck |
-      kwCheckSat |
-      kwTrace |
       kwAxiom |
       kwLet |
       intliteralParser |
@@ -234,8 +232,6 @@ object UclidLexer extends RegexParsers {
   def kwSynthesis = positioned("synthesis\\b".r ^^ (_ => KWSYNTHESIS()))
   def kwPrint_cex = positioned("print_cex\\b".r ^^ (_ => KWGETVALUE()))
   def kwCheck = positioned("check\\b".r ^^ (_ => KWCHECK()))
-  def kwCheckSat = positioned("check_sat\\b".r ^^ (_ => KWCHECKSAT()))
-  def kwTrace = positioned("trace\\b".r ^^ (_ => KWTRACE()))
   def kwAxiom = positioned("axiom\\b".r ^^ (_ => KWAXIOM()))
   def kwLet = positioned("let\\b".r ^^ (_ => KWLET()))
 

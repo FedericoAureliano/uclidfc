@@ -252,7 +252,6 @@ abstract class AbstractTermGraph() {
 
 class TermGraph
     extends AbstractTermGraph
-    with Fuzzable
     with Rewritable
     with WellFormed
     with Probed

@@ -11,7 +11,6 @@ trait WellFormed() extends AbstractTermGraph {
     def checkRef(r: Int): Boolean = r < getStmts().length && r >= 0
 
     getStmts().zipWithIndex.foreach { case (s, i) =>
-      val err = s"${i}: ${s} >>> REFERENCE OUT OF BOUNDS!"
       s match {
         case r: Ref =>
           assert(checkRef(r.loc))

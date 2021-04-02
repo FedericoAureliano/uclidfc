@@ -2,11 +2,6 @@
 ; Solver=cvc4
 ; Result=Some(true)
 ; Option=print-features
-; Rewrite=assertion-over-conjunction
-; Rewrite=contains-over-concat
-; Rewrite=contains-over-replace
-; Rewrite=indexof-gte-zero-gadgets
-; Rewrite=plus-minus-zero
 
 (declare-fun uri () String)
 
