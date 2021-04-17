@@ -6,6 +6,7 @@ import com.uclid.context.solver._
 import com.uclid.termgraph
 import com.uclid.uclidcompiler._
 import com.uclid.uclidcompiler.parser._
+import com.uclid.idiolect.WCFG
 
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -45,6 +46,8 @@ object UclidMain {
     features: Boolean = false,
     blastEnumQuantifierFlag: Boolean = false,
     outFile: Option[String] = None,
+    dataFolder: Option[String] = None,
+    train: Boolean = false,
     prettyPrint: Boolean = false,
     debugPrint: Boolean = false,
     singleQuery: Boolean = false,
@@ -113,7 +116,6 @@ object UclidMain {
         .action((_, c) => c.copy(features = true))
         .text("Print query features.")
 
-
       note(sys.props("line.separator") + "Algebraic Datatype Rewrites")
 
       opt[Unit]("blast-enum-quantifiers")
@@ -121,6 +123,18 @@ object UclidMain {
         .text(
           "Rewrite quantifiers over enums to finite disjunctions/conjunctions."
         )
+
+      note(sys.props("line.separator") + "Idiolect")
+
+      opt[Unit]("train")
+        .action((_, c) => c.copy(train = true))
+        .text("Train an idiolect model per solver.")
+
+      opt[String]("data")
+        .valueName("<folder>")
+        .action((x, c) => c.copy(dataFolder = Some(x)))
+        .text("Folder with idiolect models <folder>.")
+
     }
     parser.parse(args, Config())
   }
@@ -289,6 +303,8 @@ object UclidMain {
       0
     }
 
+    val wcfg = WCFG()
+
     // Must be SMT Language
     val results = config.files.map { f =>
       val errorResult = new ProofResult()
@@ -298,6 +314,8 @@ object UclidMain {
         val ctx = SmtCompiler.compile(scala.io.Source.fromFile(f).mkString(""))
         var parseDuration = (System.nanoTime - startParse) / 1e9d
         println(s"Parsing completed in ${parseDuration} seconds.")
+
+        wcfg.update(ctx)
 
         print("Processing query ... ")
         var changed = false
@@ -361,6 +379,8 @@ object UclidMain {
         } else {
           println(ret.presult.messages)
         }
+
+        println("WCFG:\n" + wcfg)
 
         ret
       } catch {

@@ -192,6 +192,25 @@ abstract class AbstractTermGraph() {
     pos
   }
 
+  def getName(in: Int) : Option[String] = {
+      getStmt(findTarget(in)) match {
+          case Numeral(n) => Some(n.toString)
+          case TheorySort(n, _) => Some(n)
+          case UserSort(n, _) => Some(n)
+          case FunctionParameter(n, _) => Some(n)
+          case TheoryMacro(n, _) => Some(n)
+          case UserMacro(n, _, _, _) => Some(n)
+          case UserFunction(n, _, _) => Some(n)
+          case Synthesis(n, _, _) => Some(n)
+          case Constructor(n, _, _) => Some(n)
+          case Selector(n, _) => Some(n)
+          case DataType(n, _) => Some(n)
+          case Module(n, _, _, _, _) => Some(n)
+          case Application(function, _) => getName(function)
+          case _ => None
+      }
+  }
+
   def getStmts(): ArrayBuffer[Instruction] = stmts
   def getStmt(in: Int): Instruction = stmts(findTarget(in))
 
