@@ -17,41 +17,41 @@ trait Probed() extends AbstractTermGraph {
     val combinedSeq : Map[String, Option[Any]] = Map(
       ("Logic", Some(queryLogic(entryPoints))),
       ("Term graph size", numberOfNodes()),
-      ("Number of asserts", Some(entryPoints.size)),
-      ("Number of variables", numberOfVariables(entryPoints)),
+      ("Number of assertions", Some(entryPoints.size)),
+      ("Number of free variables", numberOfVariables(entryPoints)),
       ("Number of free bits", numberOfBits(entryPoints)),
       (
-        "Number of integer variables",
+        "Number of integer free variables",
         numberOfIntegerVariables(entryPoints)
       ),
       (
-        "Number of bit-vector variables",
+        "Number of bit-vector free variables",
         numberOfBitVecVariables(entryPoints)
       ),
       (
-        "Number of array variables",
+        "Number of array free variables",
         numberOfArrayVariables(entryPoints)
       ),
       (
-        "Number of nullary variables",
+        "Number of nullary free variables",
         numberOfNullaryVariables(entryPoints)
       ),
-      ("Number of multi-ary variables", numberOfUFs(entryPoints)),
+      ("Number of multi-ary free variables", numberOfUFs(entryPoints)),
       ("Number of uninterpreted sorts", numberOfUSorts()),
       ("Largest integer literal", largestIntegerLiteral(entryPoints)),
       ("Sum of integer literals", sumIntegerLiteral(entryPoints)),
       ("Largest bit-vector literal", largestBVliteral(entryPoints)),
       ("Sum of bit-vector literals", sumBVliteral(entryPoints)),
       ("Number of unique integer literals", numberOfIntegerLiterals()),
-      ("Number of unique BV literals", numberOfBVLiterals()),
+      ("Number of unique bit-vector literals", numberOfBVLiterals()),
       ("Number of free bits", numberOfBits(entryPoints)),
       (
         "Max consecutive quantifier alternations",
         maxQuantifierAlternations()
       ),
       ("Max nested stores", maxNestedStores()),
-      ("Max Arity", maxArity(entryPoints)),
-      ("Avg Arity", avgArity(entryPoints))
+      ("Max UF arity", maxArity(entryPoints)),
+      ("Avgerage UF arity", avgArity(entryPoints))
     ) ++ countOperators(entryPoints)
 
     combinedSeq.collect {
@@ -488,10 +488,10 @@ trait Probed() extends AbstractTermGraph {
         }
       )
     Map(
-      ("Number of foralls", foralls),
-      ("Number of exists", exists),
+      ("Number of universal quantifiers", foralls),
+      ("Number of existential quantifiers", exists),
       ("Number of quantifiers", quants),
-      ("Number of quantified variables", quantified),
+      ("Number of bound variables", quantified),
       ("Number of selects", select),
       ("Number of stores", store),
       ("Number of as consts", asConst)
