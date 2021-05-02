@@ -6,6 +6,7 @@ import java.io.{File, PrintWriter}
 import scala.sys.process._
 
 case class Vampire() extends Solver() {
+  def getName() : String = "vampire"
 
   val supportedLogics = List(
     "ALIA",

@@ -6,6 +6,7 @@ import java.io.{File, PrintWriter}
 import scala.sys.process._
 
 case class Z3() extends Solver() {
+  def getName() : String = "z3"
   def getCommand(ctx: Context): String = "z3"
 
   def generateQueries(ctx: Context, prettyPrint: Int): List[String] = {

@@ -65,6 +65,7 @@ abstract class Solver() {
 
   def generateQueries(ctx: Context, prettyPrint: Int): List[String]
   def getCommand(ctx: Context): String
+  def getName(): String
   def parseAnswer(answer: String): String
 
   def solve(

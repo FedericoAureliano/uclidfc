@@ -5,36 +5,23 @@ import com.uclid.termgraph._
 
 import scala.collection.mutable.{HashMap}
 import java.io._ 
+import scala.io.Source
 
-class WCFG (weights: HashMap[String, Int] = new HashMap()) {
+class WCFG (weights: Map[String, Int]) {
 
-    def likelihood(ctx: SyMTContext) : Int = {
+    def likelihood(ctx: Context) : Int = {
         var p = 1
         val marks = ctx.termgraph.mark(ctx.entryPoints())
 
         marks.zipWithIndex.foreach((m, i) => if m then ctx.termgraph.getStmt(ctx.termgraph.findTarget(i)) match {
             case Application(parent, _) => ctx.termgraph.getName(parent) match {
-                case Some(name) => weights.getOrElse(name, 1) * p
+                case Some(name) => p = weights.getOrElse(name, 1) * p
                 case None => 
             }
             case _ =>
         })
 
         p
-    }
-
-    def update(ctx: SyMTContext) : Unit = {
-        val marks = ctx.termgraph.mark(ctx.entryPoints())
-        marks.zipWithIndex.foreach((m, i) => if m then ctx.termgraph.getStmt(ctx.termgraph.findTarget(i)) match {
-            case Application(parent, _) => ctx.termgraph.getName(parent) match {
-                case Some(name) => {
-                    weights.getOrElseUpdate(name, 0)
-                    weights(name) = weights(name) + 1
-                }
-                case None => 
-            }
-            case _ =>
-        })
     }
 
     override def toString() : String = {
@@ -50,15 +37,13 @@ class WCFG (weights: HashMap[String, Int] = new HashMap()) {
 }
 
 object WCFG {
-    def load(location: String) : WCFG = {
-        val weights : HashMap[String, Int] = HashMap()
-        val bufferedSource = io.Source.fromFile(location)
-        for (line, count) <- bufferedSource.getLines.zipWithIndex do {
-            val cols = line.split(",").map(_.trim)
-            weights(cols(0)) = cols(1).toInt
-        }
-        bufferedSource.close
 
-        WCFG(weights)
+    def load(location: String) : WCFG = {
+        val content=Source.fromFile(location).getLines.map(_.split(","))
+        val header=content.next
+        assert(header.length == 2, "WCFGs should have two columns!")
+        assert(header(0) == "production rule", "First column of WCFG should be \"production rule\"")
+        assert(header(1) == "weight", "Second column of WCFG should be \"weight\"")
+        WCFG(content.map(line => (line(0), line(1).toInt)).toMap)
     }
 }

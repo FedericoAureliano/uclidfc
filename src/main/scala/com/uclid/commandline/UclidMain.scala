@@ -133,7 +133,11 @@ object UclidMain {
       opt[String]("data")
         .valueName("<folder>")
         .action((x, c) => c.copy(dataFolder = Some(x)))
-        .text("Folder with idiolect models <folder>.")
+        .text("Folder with idiolect models <folder>. Required for automated solver selection.")
+
+      checkConfig( c =>
+        if c.solvers.length > 1 && !c.dataFolder.isDefined then failure("Must provide data folder for automated solver selection (you provided more than one solver but no data folder)!")
+        else success )
 
     }
     parser.parse(args, Config())
@@ -171,7 +175,8 @@ object UclidMain {
     } else if solvers.length == 1 then {
       solvers.head
     } else {
-      Medley(solvers)
+      val idiolectMap = solvers.map(s => (WCFG.load(config.dataFolder.get + "/" + s.getName() + ".csv"), s))
+      Lida(idiolectMap)
     }
 
     var parseDuration = 0.0
@@ -303,8 +308,6 @@ object UclidMain {
       0
     }
 
-    val wcfg = WCFG()
-
     // Must be SMT Language
     val results = config.files.map { f =>
       val errorResult = new ProofResult()
@@ -314,8 +317,6 @@ object UclidMain {
         val ctx = SmtCompiler.compile(scala.io.Source.fromFile(f).mkString(""))
         var parseDuration = (System.nanoTime - startParse) / 1e9d
         println(s"Parsing completed in ${parseDuration} seconds.")
-
-        wcfg.update(ctx)
 
         print("Processing query ... ")
         var changed = false
@@ -379,8 +380,6 @@ object UclidMain {
         } else {
           println(ret.presult.messages)
         }
-
-        println("WCFG:\n" + wcfg)
 
         ret
       } catch {

@@ -9,15 +9,25 @@ import scala.sys.process._
 import scala.util.Random
 
 // http://parnaseo.uv.es/Celestinesca/Numeros/1982/VOL%206/NUM%202/2_articulo1.pdf
-class Lida(choices: Map[Solver, WCFG]) extends Solver() {
+class Lida(choices: List[(WCFG, Solver)]) extends Solver() {
+  def getName() : String = "lida"
+
   val random = Random
 
-  def pickSolver(features: Map[String, String]): Solver = {
-      choices.keys.toList(random.nextInt(choices.size))
-  }
+  def getCommand(ctx: Context): String = {
+    var bestScore = choices(0)._1.likelihood(ctx)
+    var bestSolver = choices(0)._2
 
-  def getCommand(ctx: Context): String =
-    pickSolver(ctx.termgraph.featureMap(ctx.entryPoints())).getCommand(ctx)
+    choices.tail.foreach((wcfg, solver) => {
+      val tmpScore = wcfg.likelihood(ctx)
+      if tmpScore > bestScore then {
+        bestSolver = solver
+        bestScore = tmpScore
+      }
+    })
+
+    bestSolver.getCommand(ctx)
+  }
 
   def generateQueries(ctx: Context, prettyPrint: Int): List[String] = {
     val query = ctx.toQueries(prettyPrint)
@@ -26,4 +36,5 @@ class Lida(choices: Map[Solver, WCFG]) extends Solver() {
 
   def parseAnswer(answer: String): String =
     SmtCompiler.removeComments(answer).replace("unsupported", "")
+
 }
