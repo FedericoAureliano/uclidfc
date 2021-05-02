@@ -128,16 +128,23 @@ object UclidMain {
 
       opt[Unit]("train")
         .action((_, c) => c.copy(train = true))
-        .text("Train an idiolect model per solver.")
+        .text("Train an idiolect model per solver. Writes to data folder; requires at least two solvers.")
 
       opt[String]("data")
         .valueName("<folder>")
         .action((x, c) => c.copy(dataFolder = Some(x)))
         .text("Folder with idiolect models <folder>. Required for automated solver selection.")
 
-      checkConfig( c =>
-        if c.solvers.length > 1 && !c.dataFolder.isDefined then failure("Must provide data folder for automated solver selection (you provided more than one solver but no data folder)!")
-        else success )
+      checkConfig(c => {
+        if c.solvers.length > 1 && !c.dataFolder.isDefined then 
+          failure("Must provide data folder for automated solver selection (you provided more than one solver but no data folder)!")
+        else if c.train && !c.dataFolder.isDefined then 
+          failure("Must provide data folder for automated solver selection training!")
+        else if c.train && c.solvers.length <= 1 then 
+          failure("Must specify at least two solvers for automated solver selection training!")
+        else 
+          success
+      })
 
     }
     parser.parse(args, Config())
@@ -182,11 +189,19 @@ object UclidMain {
     var parseDuration = 0.0
     var processDuration = 0.0
     var analysisDuration = 0.0
-    if inputLanguage == "UCLID" then {
+
+    val ret = if inputLanguage == "UCLID" then {
       List(runUclidMode(solver, config))
     } else {
       runSMTMode(solver, config)
     }
+
+    if config.train then {
+      val lida = solver.asInstanceOf[Lida]
+      lida.save(config.dataFolder.get)
+    }
+
+    ret
   }
 
   def runUclidMode(solver: Solver, config: Config): UclidResult = {
@@ -240,13 +255,26 @@ object UclidMain {
         println(features.map(f => "-- " + f).mkString("\n"))
       }
 
-      val res = solver.solve(
-        config.run,
-        config.timeout,
-        ctx,
-        config.outFile,
-        prettyPrintLevel
-      )
+      val res = if config.train then {
+        assert(solver.isInstanceOf[Lida], "Can only train Lida!")
+        assert(config.run, "Must be set to run!")
+        val lida = solver.asInstanceOf[Lida]
+        lida.train(
+          config.run,
+          config.timeout,
+          ctx,
+          config.outFile,
+          prettyPrintLevel
+        )
+      } else {
+        solver.solve(
+          config.run,
+          config.timeout,
+          ctx,
+          config.outFile,
+          prettyPrintLevel
+        )
+      }
 
       val ret = if ctx.ignoreResult() then {
         UclidResult(
@@ -347,14 +375,29 @@ object UclidMain {
           Some(f)
         }
 
-        val res = solver.solve(
-          config.run,
-          config.timeout,
-          ctx,
-          config.outFile,
-          prettyPrintLevel,
-          unmodifiedSMTFile
-        )
+        val res = if config.train then {
+          assert(solver.isInstanceOf[Lida], "Can only train Lida!")
+          assert(config.run, "Must be set to run!")
+          val lida = solver.asInstanceOf[Lida]
+          lida.train(
+            config.run,
+            config.timeout,
+            ctx,
+            config.outFile,
+            prettyPrintLevel,
+            unmodifiedSMTFile
+          )
+        } else {
+          solver.solve(
+            config.run,
+            config.timeout,
+            ctx,
+            config.outFile,
+            prettyPrintLevel,
+            unmodifiedSMTFile
+          )
+        }
+
         val ret = if ctx.ignoreResult() then {
           UclidResult(
             ProofResult(None, res._1.messages),

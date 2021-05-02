@@ -168,6 +168,13 @@ abstract class AbstractTermGraph() {
     }
   }
 
+  def theoryLiteral(name: String): Boolean = {
+    name == "true" || name == "false" || (name.startsWith("\"") && name
+      .endsWith("\"")) || name.startsWith("#") || name.startsWith(
+      "bv"
+    ) || name.toIntOption.isDefined
+  }
+
   def completeButUnapplied(loc: Int): Boolean =
     stmts(loc) match {
       case UserFunction(_, _, params) => params.length == 0
@@ -176,12 +183,7 @@ abstract class AbstractTermGraph() {
       case Constructor(_, _, params)  => params.length == 0
       case Selector(_, _)             => false
       case FunctionParameter(_, _)    => true
-      case TheoryMacro(name, _)       =>
-        // TODO support more than bools, strings, bitvecs, and ints
-        name == "true" || name == "false" || (name.startsWith("\"") && name
-          .endsWith("\"")) || name.startsWith("#") || name.startsWith(
-          "bv"
-        ) || name.toIntOption.isDefined
+      case TheoryMacro(name, _)       => theoryLiteral(name)
       case _ => false
     }
 
@@ -194,18 +196,8 @@ abstract class AbstractTermGraph() {
 
   def getName(in: Int) : Option[String] = {
       getStmt(findTarget(in)) match {
-          case Numeral(n) => Some(n.toString)
           case TheorySort(n, _) => Some(n)
-          case UserSort(n, _) => Some(n)
-          case FunctionParameter(n, _) => Some(n)
-          case TheoryMacro(n, _) => Some(n)
-          case UserMacro(n, _, _, _) => Some(n)
-          case UserFunction(n, _, _) => Some(n)
-          case Synthesis(n, _, _) => Some(n)
-          case Constructor(n, _, _) => Some(n)
-          case Selector(n, _) => Some(n)
-          case DataType(n, _) => Some(n)
-          case Module(n, _, _, _, _) => Some(n)
+          case TheoryMacro(n, _) => if theoryLiteral(n) then None else Some(n) 
           case Application(function, _) => getName(function)
           case _ => None
       }

@@ -37,4 +37,37 @@ class Lida(choices: List[(WCFG, Solver)]) extends Solver() {
   def parseAnswer(answer: String): String =
     SmtCompiler.removeComments(answer).replace("unsupported", "")
 
+
+  def train(
+    run: Boolean,
+    timeout: Int,
+    ctx: Context,
+    outFile: Option[String],
+    prettyPrint: Int,
+    unmodifiedSMTFile: Option[File] = None
+  ): (ProofResult, Double, Double) = {
+    val results = choices.map((wcfg, solver) => solver.solve(run, timeout, ctx, outFile, prettyPrint, unmodifiedSMTFile))
+
+    var bestResult = results(0)._1 
+    var bestScore = results(0)._3
+    var bestSolverIndex = 0
+
+    results.zipWithIndex.tail.foreach((result, index) => {
+      if result._1.result.isDefined && result._3 < bestScore then {
+        bestResult = result._1
+        bestScore = result._3
+        bestSolverIndex = index
+      }
+    })
+
+    choices(bestSolverIndex)._1.update(ctx)
+
+    results(bestSolverIndex)
+  }
+
+  def save(folder: String) : Unit = {
+    choices.foreach((wcfg, solver) => {
+      wcfg.save(folder + "/" + solver.getName() + ".csv")
+    })
+  }
 }
