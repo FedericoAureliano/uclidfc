@@ -7,6 +7,7 @@ import com.uclid.termgraph
 import com.uclid.uclidcompiler._
 import com.uclid.uclidcompiler.parser._
 import com.uclid.idiolect.WCFG
+import com.uclid.utility.SimulationTable
 
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -47,6 +48,7 @@ object UclidMain {
     blastEnumQuantifierFlag: Boolean = false,
     outFile: Option[String] = None,
     dataFolder: Option[String] = None,
+    simulate: Option[String] = None,
     train: Boolean = false,
     prettyPrint: Boolean = false,
     debugPrint: Boolean = false,
@@ -126,14 +128,21 @@ object UclidMain {
 
       note(sys.props("line.separator") + "Idiolect")
 
-      opt[Unit]("train")
-        .action((_, c) => c.copy(train = true))
-        .text("Train an idiolect model per solver. Writes to data folder; requires at least two solvers.")
-
       opt[String]("data")
         .valueName("<folder>")
         .action((x, c) => c.copy(dataFolder = Some(x)))
-        .text("Folder with idiolect models <folder>. Required for automated solver selection.")
+        .text("<folder> with idiolect models. Required for solver selection and idiolect training.")
+
+      opt[Unit]("train")
+        .action((_, c) => c.copy(train = true))
+        .text("Train solver idiolect models. Writes to data folder; requires at least two solvers.")
+
+      note(sys.props("line.separator") + "Utility")
+
+      opt[String]("simulate")
+        .valueName("<file>")
+        .action((x, c) => c.copy(simulate = Some(x)))
+        .text("Use the solver and query data in <file> to simulate solver execution.")
 
       checkConfig(c => {
         if c.solvers.length > 1 && !c.dataFolder.isDefined then 
@@ -190,10 +199,12 @@ object UclidMain {
     var processDuration = 0.0
     var analysisDuration = 0.0
 
+    val simulationData = if config.simulate.isDefined then Some(SimulationTable.load(config.simulate.get)) else None
+
     val ret = if inputLanguage == "UCLID" then {
-      List(runUclidMode(solver, config))
+      List(runUclidMode(solver, config, simulationData))
     } else {
-      runSMTMode(solver, config)
+      runSMTMode(solver, config, simulationData)
     }
 
     if config.train then {
@@ -204,7 +215,7 @@ object UclidMain {
     ret
   }
 
-  def runUclidMode(solver: Solver, config: Config): UclidResult = {
+  def runUclidMode(solver: Solver, config: Config, simulationData: Option[SimulationTable]): UclidResult = {
     val errorResult =
       new ProofResult()
 
@@ -264,7 +275,8 @@ object UclidMain {
           config.timeout,
           ctx,
           config.outFile,
-          prettyPrintLevel
+          prettyPrintLevel,
+          simulationData
         )
       } else {
         solver.solve(
@@ -272,7 +284,8 @@ object UclidMain {
           config.timeout,
           ctx,
           config.outFile,
-          prettyPrintLevel
+          prettyPrintLevel,
+          simulationData
         )
       }
 
@@ -326,7 +339,7 @@ object UclidMain {
     }
   }
 
-  def runSMTMode(solver: Solver, config: Config): List[UclidResult] = {
+  def runSMTMode(solver: Solver, config: Config, simulationData: Option[SimulationTable]): List[UclidResult] = {
 
     val prettyPrintLevel = if config.debugPrint then {
       2
@@ -385,6 +398,7 @@ object UclidMain {
             ctx,
             config.outFile,
             prettyPrintLevel,
+            simulationData,
             unmodifiedSMTFile
           )
         } else {
@@ -394,6 +408,7 @@ object UclidMain {
             ctx,
             config.outFile,
             prettyPrintLevel,
+            simulationData,
             unmodifiedSMTFile
           )
         }

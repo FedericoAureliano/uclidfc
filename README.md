@@ -67,17 +67,31 @@ Analysis
 Algebraic Datatype Rewrites
   --blast-enum-quantifiers       Rewrite quantifiers over enums to finite disjunctions/conjunctions.
 
+Idiolect
+  --data <folder>                <folder> with idiolect models. Required for solver selection and idiolect training.
+  --train                        Train solver idiolect models. Writes to data folder; requires at least two solvers.
+
+Utility
+  --simulate <file>              Use the solver and query data in <file> to simulate solver execution.
 ```
 
-In SMT mode (when you call uclidfc on .smt2 files) uclidfc will iterate over the
-files. If you give uclidfc multiple solver arguments, uclidfc will automatically
-select the solver to use. So, the following command will, for each query in
-`models/tests/smt2/`, print the query features, and use either z3 or cvc4 to
-solve the query.
+In SMT mode (when you call uclidfc on .smt2 files) uclidfc will iterate over
+the input files. If you give uclidfc multiple solver arguments and a data
+folder with idiolect models, uclidfc will automatically select the solver to
+use. So, the following command will, for each query in `models/tests/smt2/`,
+print the query features, and use either z3 or cvc4 to solve the query.
 
 ```
-uclidfc models/tests/smt2/* --print-features -s cvc4 -s z3
+uclidfc models/tests/smt2/* -s cvc4 -s z3 --data data
 ```
+
+To train idiolect models, do
+```
+uclidfc models/tests/smt2/* -s cvc4 -s z3 --data data --train
+```
+
+Instead of running solvers on the same queries over and over, you can save
+solver results an simulate their execution using the `--simulate` option.
 
 ## Live Edit
 

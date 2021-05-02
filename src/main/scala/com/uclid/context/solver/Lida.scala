@@ -3,6 +3,7 @@ package com.uclid.context.solver
 import com.uclid.context.Context
 import com.uclid.smtcompiler.SmtCompiler
 import com.uclid.idiolect.WCFG
+import com.uclid.utility.SimulationTable
 
 import java.io.{File, PrintWriter}
 import scala.sys.process._
@@ -44,9 +45,10 @@ class Lida(choices: List[(WCFG, Solver)]) extends Solver() {
     ctx: Context,
     outFile: Option[String],
     prettyPrint: Int,
+    simulationData: Option[SimulationTable],
     unmodifiedSMTFile: Option[File] = None
   ): (ProofResult, Double, Double) = {
-    val results = choices.map((wcfg, solver) => solver.solve(run, timeout, ctx, outFile, prettyPrint, unmodifiedSMTFile))
+    val results = choices.map((wcfg, solver) => solver.solve(run, timeout, ctx, outFile, prettyPrint, simulationData, unmodifiedSMTFile))
 
     var bestResult = results(0)._1 
     var bestScore = results(0)._3
@@ -60,7 +62,7 @@ class Lida(choices: List[(WCFG, Solver)]) extends Solver() {
       }
     })
 
-    choices(bestSolverIndex)._1.update(ctx)
+    if bestResult.result.isDefined then choices(bestSolverIndex)._1.update(ctx)
 
     results(bestSolverIndex)
   }

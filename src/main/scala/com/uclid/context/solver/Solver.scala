@@ -3,6 +3,7 @@ package com.uclid.context.solver
 import com.uclid.context.Context
 import com.uclid.context.solver.ProofResult
 import com.uclid.termgraph
+import com.uclid.utility.SimulationTable
 
 import java.io.{File, PrintWriter}
 import java.nio.file.Paths
@@ -15,7 +16,17 @@ private var fileCount = 0
 
 abstract class Solver() {
 
-  def runProcess(in: String, timeout: Int): (List[String], List[String], Int, Double) = {
+  def runProcess(ctx: Context, file: File, timeout: Int, simulationData: Option[SimulationTable]): (List[String], List[String], Int, Double) = {
+    val in = s"${getCommand(ctx)} ${file}"
+
+    if simulationData.isDefined then {
+      val table = simulationData.get
+      val (res, time) = table.simulate(getName(), file.getAbsolutePath())
+      val timetaken = if time < timeout then time else timeout.toDouble
+      println(s"-- ${in.split(" ").head} terminated in ${"%.3f".toString.format(timetaken)} seconds.")
+      return (List(res), List(), 0, timetaken)
+    }
+
     val qb = Process(in)
     var out = List[String]()
     var err = List[String]()
@@ -74,6 +85,7 @@ abstract class Solver() {
     ctx: Context,
     outFile: Option[String],
     prettyPrint: Int,
+    simulationData: Option[SimulationTable],
     unmodifiedSMTFile: Option[File] = None
   ): (ProofResult, Double, Double) = {
 
@@ -110,7 +122,7 @@ abstract class Solver() {
     }
 
     println("Running solver processes ... ")
-    val results = qfiles.par.map(qfile => runProcess(s"${getCommand(ctx)} ${qfile}", timeout))
+    val results = qfiles.par.map(qfile => runProcess(ctx, qfile, timeout, simulationData))
     val answers = results.map(result => parseAnswer(" " ++ (result._1 ++ result._2).mkString("\n")))
 
     def ternaryCombine(a : Option[Boolean], b : Option[Boolean]) : Option[Boolean] = {
