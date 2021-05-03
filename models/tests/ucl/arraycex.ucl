@@ -1,7 +1,7 @@
 // UCLID TEST
 // Solver=cvc4
 // Result=Some(true)
-// Option=pretty-print
+// Option=pretty-queries
 
 type intarray = [integer]integer;
 type boolarray = [boolean]boolean;

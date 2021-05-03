@@ -16,15 +16,16 @@ private var fileCount = 0
 
 abstract class Solver() {
 
-  def runProcess(ctx: Context, file: File, timeout: Int, simulationData: Option[SimulationTable]): (List[String], List[String], Int, Double) = {
-    val in = s"${getCommand(ctx)} ${file}"
+  def runProcess(ctx: Context, file: File, timeout: Int, quiet: Boolean, simulationData: Option[SimulationTable]): (String, List[String], List[String], Int, Double) = {
+    val command = getCommand(ctx)
+    val in = s"${command} ${file}"
 
     if simulationData.isDefined then {
       val table = simulationData.get
-      val (res, time) = table.simulate(getName(), file.getAbsolutePath())
+      val (res, time) = table.simulate(command.split(" ")(0), file.getAbsolutePath())
       val timetaken = if time < timeout then time else timeout.toDouble
-      println(s"-- ${in.split(" ").head} terminated in ${"%.3f".toString.format(timetaken)} seconds.")
-      return (List(res), List(), 0, timetaken)
+      if !quiet then println(s"-- ${in.split(" ").head} terminated in ${"%.3f".toString.format(timetaken)} seconds.")
+      return (command.split(" ")(0), List(res), List(), 0, timetaken)
     }
 
     val qb = Process(in)
@@ -43,9 +44,9 @@ abstract class Solver() {
       out = List("timeout")
     }
     val timetaken = (System.nanoTime - t1) / 1e9d
-    println(s"-- ${in.split(" ").head} terminated in ${"%.3f".toString.format(timetaken)} seconds.")
+    if !quiet then println(s"-- ${in.split(" ").head} terminated in ${"%.3f".toString.format(timetaken)} seconds.")
 
-    (out.reverse, err.reverse, exit.exitValue(), timetaken)
+    (command.split(" ")(0), out.reverse, err.reverse, exit.exitValue(), timetaken)
   }
 
   def writeQueryToFile(
@@ -85,11 +86,12 @@ abstract class Solver() {
     ctx: Context,
     outFile: Option[String],
     prettyPrint: Int,
+    quiet: Boolean,
     simulationData: Option[SimulationTable],
     unmodifiedSMTFile: Option[File] = None
   ): (ProofResult, Double, Double) = {
 
-    print("Generating query ... ")
+    if !quiet then print("Generating query ... ")
     val t1 = System.nanoTime
     val qfiles : List[File] = unmodifiedSMTFile match {
       case Some(value) if prettyPrint == 0 => List(value)
@@ -108,7 +110,7 @@ abstract class Solver() {
     }
 
     val generationDuration = (System.nanoTime - t1) / 1e9d
-    println(s"Query generated in ${generationDuration} seconds.")
+    if !quiet then println(s"Query generated in ${generationDuration} seconds.")
 
     if !run then {
       return (
@@ -121,9 +123,9 @@ abstract class Solver() {
       )
     }
 
-    println("Running solver processes ... ")
-    val results = qfiles.par.map(qfile => runProcess(ctx, qfile, timeout, simulationData))
-    val answers = results.map(result => parseAnswer(" " ++ (result._1 ++ result._2).mkString("\n")))
+    if !quiet then println("Running solver processes ... ")
+    val results = qfiles.par.map(qfile => runProcess(ctx, qfile, timeout, quiet, simulationData))
+    val answers = results.map(result => parseAnswer(" " ++ (result._2 ++ result._3).mkString("\n")))
 
     def ternaryCombine(a : Option[Boolean], b : Option[Boolean]) : Option[Boolean] = {
       if !a.isDefined || !b.isDefined then {
@@ -141,33 +143,43 @@ abstract class Solver() {
       }
     }
 
-    answers.zip(results).foldLeft((new ProofResult(Some(false), ""), generationDuration, 0.0))((acc, pair) => {
-      val answer = pair._1
-      val result = pair._2
+    answers.zip(results).zipWithIndex.foldLeft((new ProofResult(Some(false), ""), generationDuration, 0.0))((acc, triple) => {
+      val answer = triple._1._1
+      val result = triple._1._2
+      val index = triple._2
+
+      if quiet then print(s"${qfiles(index).getAbsolutePath()},${result._1},")
 
       answer match {
         case _ if answer.contains("error") || answer.contains("unknown") => {
-          (new ProofResult(None,  combineStrs(acc._1.messages, answer)), generationDuration, acc._3 + result._4)
+          if quiet then println(s"other,${result._5}")
+          (new ProofResult(None,  combineStrs(acc._1.messages, answer)), generationDuration, acc._3 + result._5)
         }
         case _ if "(\\ssat)".r.findFirstIn(answer).isDefined => {
-          (new ProofResult(ternaryCombine(acc._1.result, Some(true)),  combineStrs(acc._1.messages, answer)), generationDuration, acc._3 + result._4)
+          if quiet then println(s"sat,${result._5}")
+          (new ProofResult(ternaryCombine(acc._1.result, Some(true)),  combineStrs(acc._1.messages, answer)), generationDuration, acc._3 + result._5)
         }
         case _ if "(\\sunsat)".r.findFirstIn(answer).isDefined => {
           if ctx.isSynthesisQuery() then {
+            if quiet then println(s"sat,${result._5}")
             (
               new ProofResult(ternaryCombine(acc._1.result, Some(false)),  combineStrs(acc._1.messages, answer)),
               generationDuration,
-              acc._3 + result._4
+              acc._3 + result._5
             )
           } else {
+            if quiet then println(s"unsat,${result._5}")
             (
               new ProofResult(ternaryCombine(acc._1.result, Some(false)), combineStrs(acc._1.messages, "unsat")),
               generationDuration,
-              acc._3 + result._4
+              acc._3 + result._5
             )
           }
         }
-        case _ => (new ProofResult(None,  combineStrs(acc._1.messages, answer)), generationDuration, acc._3 + result._4)
+        case _ => {
+          if quiet then println(s"other,${result._5}")
+          (new ProofResult(None,  combineStrs(acc._1.messages, answer)), generationDuration, acc._3 + result._5)
+        }
       }
     })
   }

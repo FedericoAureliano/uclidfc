@@ -1,6 +1,6 @@
 ; UCLID TEST
 ; Result=None
-; Option=debug-print
+; Option=debug-queries
 
 (set-info :smt-lib-version 2.6)
 (set-logic ABV)

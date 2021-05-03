@@ -2,7 +2,7 @@
 ; Solver=z3
 ; Result=Some(false)
 ; Option=print-features
-; Option=pretty-print
+; Option=pretty-queries
 
 (set-info :smt-lib-version 2.6)
 (set-logic UF)

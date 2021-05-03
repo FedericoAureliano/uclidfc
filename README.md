@@ -55,10 +55,11 @@ Basic Usage
   -s, --solver <solver>          Solver to use (alt_ergo or cvc4 or vampire or z3). Solver must be in your path.
   -t, --timeout <timeout>        Timeout (in whole seconds) to give the solver per query.
   -w, --write <file>             Write query to <file>.
-  --pretty-print                 Try to make output queries human readable.
-  --debug-print                  Add internal term graph information as SMT comments.
+  --pretty-queries               Try to make output queries human readable.
+  --debug-queries                Add internal term graph information as SMT comments.
   --skip-solver                  Don't run the solver.
   --single-thread                Don't run solvers in parallel.
+  --table                        Print CSV table of results.
   <file> ...                     List of input files.
 
 Analysis
@@ -68,8 +69,8 @@ Algebraic Datatype Rewrites
   --blast-enum-quantifiers       Rewrite quantifiers over enums to finite disjunctions/conjunctions.
 
 Idiolect
-  --data <folder>                <folder> with idiolect models. Required for solver selection and idiolect training.
-  --train                        Train solver idiolect models. Writes to data folder; requires at least two solvers.
+  --language-models <folder>     Path to folder with idiolect models. Required for solver selection and training.
+  --train                        Train solver idiolect models. Requires language-models folder and at least two solvers.
 
 Utility
   --simulate <file>              Use the solver and query data in <file> to simulate solver execution.
@@ -79,19 +80,29 @@ In SMT mode (when you call uclidfc on .smt2 files) uclidfc will iterate over
 the input files. If you give uclidfc multiple solver arguments and a data
 folder with idiolect models, uclidfc will automatically select the solver to
 use. So, the following command will, for each query in `models/tests/smt2/`,
-print the query features, and use either z3 or cvc4 to solve the query.
+print the query features, and use either z3 or cvc4 to solve the query with
+a five second timeout per query.
+```
+uclidfc models/tests/smt2/* -s cvc4 -s z3 --language-models data -t 5 --table
+```
 
+The previous command assumes that there are language models in a folder called `data`. 
+To train idiolect models and save them in a folder called `data`, do
 ```
-uclidfc models/tests/smt2/* -s cvc4 -s z3 --data data
-```
-
-To train idiolect models, do
-```
-uclidfc models/tests/smt2/* -s cvc4 -s z3 --data data --train
+uclidfc models/tests/smt2/* -s cvc4 -s z3 --language-models data --train -t 5 --table
 ```
 
 Instead of running solvers on the same queries over and over, you can save
-solver results an simulate their execution using the `--simulate` option.
+solver results and simulate their execution using the `--simulate` option.
+To save results, just redirect stdout to a CSV file and use `--table`.
+```
+uclidfc models/tests/smt2/* -s cvc4 -s z3 --language-models data --train -t 5 --table > data.csv
+```
+
+To run with solver execution simulation, just point uclidfc to the data.csv file.
+```
+uclidfc models/tests/smt2/* -s cvc4 -s z3 --language-models data -t 5 --table --simulate data.csv
+```
 
 ## Live Edit
 

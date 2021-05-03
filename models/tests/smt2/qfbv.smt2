@@ -2,7 +2,7 @@
 ; Solver=z3
 ; Result=Some(true)
 ; Option=print-features
-; Option=pretty-print
+; Option=pretty-queries
 
 (define-sort TEST () Int)
 (declare-const f TEST)

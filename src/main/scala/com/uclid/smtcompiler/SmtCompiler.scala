@@ -41,7 +41,7 @@ object SmtCompiler {
   /** Translate smtlib string to termgraph in SMT context
     * 
     */
-  def compile(script: String): SyMTContext = {
+  def compile(script: String, quiet: Boolean): SyMTContext = {
     var tokens : Array[String] = tokenize(removeComments(script))
     val global: HashMap[String, Int] = new HashMap()
     val local: Stack[Map[String, Int]] = new Stack()
@@ -144,10 +144,10 @@ object SmtCompiler {
           pos += 1
         case "(" :: "set-option" :: optionName :: _ =>
           pos += 5
-          print(s"Ignoring (set-option $optionName ...) command in query ... ")
+          if !quiet then print(s"Ignoring (set-option $optionName ...) command in query ... ")
         case "(" :: "set-logic" :: logic :: _ =>
           pos += 4 
-          print(s"Ignoring (set-logic $logic) command in query ... ")
+          if !quiet then print(s"Ignoring (set-logic $logic) command in query ... ")
         case "(" :: "set-info" :: _ =>
           pos += 2
           var parentheses = 1

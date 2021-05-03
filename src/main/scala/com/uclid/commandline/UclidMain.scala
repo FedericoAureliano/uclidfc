@@ -50,6 +50,7 @@ object UclidMain {
     dataFolder: Option[String] = None,
     simulate: Option[String] = None,
     train: Boolean = false,
+    quiet: Boolean = false,
     prettyPrint: Boolean = false,
     debugPrint: Boolean = false,
     singleQuery: Boolean = false,
@@ -90,11 +91,11 @@ object UclidMain {
         .action((x, c) => c.copy(outFile = Some(x)))
         .text("Write query to <file>.")
 
-      opt[Unit]("pretty-print")
+      opt[Unit]("pretty-queries")
         .action((_, c) => c.copy(prettyPrint = true))
         .text("Try to make output queries human readable.")
 
-      opt[Unit]("debug-print")
+      opt[Unit]("debug-queries")
         .action((_, c) => c.copy(debugPrint = true))
         .text("Add internal term graph information as SMT comments.")
 
@@ -105,6 +106,10 @@ object UclidMain {
       opt[Unit]("single-thread")
         .action((_, c) => c.copy(singleQuery = true))
         .text("Don't run solvers in parallel.")
+
+      opt[Unit]("table")
+        .action((_, c) => c.copy(quiet = true))
+        .text("Print CSV table of results.")
 
       arg[java.io.File]("<file> ...")
         .unbounded()
@@ -128,14 +133,14 @@ object UclidMain {
 
       note(sys.props("line.separator") + "Idiolect")
 
-      opt[String]("data")
+      opt[String]("language-models")
         .valueName("<folder>")
         .action((x, c) => c.copy(dataFolder = Some(x)))
-        .text("<folder> with idiolect models. Required for solver selection and idiolect training.")
+        .text("Path to folder with idiolect models. Required for solver selection and training.")
 
       opt[Unit]("train")
         .action((_, c) => c.copy(train = true))
-        .text("Train solver idiolect models. Writes to data folder; requires at least two solvers.")
+        .text("Train solver idiolect models. Requires language-models folder and at least two solvers.")
 
       note(sys.props("line.separator") + "Utility")
 
@@ -151,6 +156,8 @@ object UclidMain {
           failure("Must provide data folder for automated solver selection training!")
         else if c.train && c.solvers.length <= 1 then 
           failure("Must specify at least two solvers for automated solver selection training!")
+        else if c.quiet && c.features then 
+          failure("Can't be quiet and print features!")
         else 
           success
       })
@@ -199,6 +206,8 @@ object UclidMain {
     var processDuration = 0.0
     var analysisDuration = 0.0
 
+    if config.quiet then println("benchmark,solver,answer,time")
+
     val simulationData = if config.simulate.isDefined then Some(SimulationTable.load(config.simulate.get)) else None
 
     val ret = if inputLanguage == "UCLID" then {
@@ -228,7 +237,7 @@ object UclidMain {
     }
 
     try {
-      print("\nParsing input ... ")
+      if !config.quiet then print("\nParsing input ... ")
       val startParse = System.nanoTime
       val modules = UclidCompiler.parse(config.files) match {
         case Right(m) => m
@@ -238,9 +247,9 @@ object UclidMain {
           return UclidResult(errorResult)
       }
       var parseDuration = (System.nanoTime - startParse) / 1e9d
-      println(s"Parsing completed in ${parseDuration} seconds.")
+      if !config.quiet then println(s"Parsing completed in ${parseDuration} seconds.")
 
-      print("Processing model ... ")
+      if !config.quiet then print("Processing model ... ")
       val startProcess = System.nanoTime
       val ctx = UclidCompiler.process(modules, Some(config.mainModuleName))
 
@@ -251,9 +260,9 @@ object UclidMain {
         ctx.termgraph.blastEnumQuantifier()
       }
       var processDuration = (System.nanoTime - startProcess) / 1e9d
-      println(s"Processing completed in ${processDuration} seconds.")
+      if !config.quiet then println(s"Processing completed in ${processDuration} seconds.")
 
-      print("Analyzing model ... ")
+      if !config.quiet then print("Analyzing model ... ")
       val startAnalysis = System.nanoTime
       val features = if config.features then {
         ctx.termgraph.featuresList(ctx.entryPoints())
@@ -261,7 +270,7 @@ object UclidMain {
         List.empty
       }
       var analysisDuration = (System.nanoTime - startAnalysis) / 1e9d
-      println(s"Analysis completed in ${analysisDuration} seconds.")
+      if !config.quiet then println(s"Analysis completed in ${analysisDuration} seconds.")
       if config.features then {
         println(features.map(f => "-- " + f).mkString("\n"))
       }
@@ -276,6 +285,7 @@ object UclidMain {
           ctx,
           config.outFile,
           prettyPrintLevel,
+          config.quiet,
           simulationData
         )
       } else {
@@ -285,6 +295,7 @@ object UclidMain {
           ctx,
           config.outFile,
           prettyPrintLevel,
+          config.quiet,
           simulationData
         )
       }
@@ -310,31 +321,31 @@ object UclidMain {
       }
 
       if config.run then {
-        println(ret.presult)
+        if !config.quiet then println(ret.presult)
       } else {
-        println(ret.presult.messages)
+        if !config.quiet then println(ret.presult.messages)
       }
       ret
     } catch {
       case (e: java.io.FileNotFoundException) =>
         errorResult.messages = "\n" + e.toString()
-        println("\n" + errorResult)
+        if !config.quiet then println("\n" + errorResult)
         UclidResult(errorResult)
       case e: SemanticError =>
         errorResult.messages = "\n" + e.msg
-        println("\n" + errorResult)
+        if !config.quiet then println("\n" + errorResult)
         UclidResult(errorResult)
       case e: SolverMismatchError =>
         errorResult.messages = "\n" + e.msg
-        println("\n" + errorResult)
+        if !config.quiet then println("\n" + errorResult)
         UclidResult(errorResult)
       case e: SmtParserError =>
         errorResult.messages = "\n" + e.msg
-        println("\n" + errorResult)
+        if !config.quiet then println("\n" + errorResult)
         UclidResult(errorResult)
       case e: TimeoutException =>
         errorResult.messages = "\n" + e.toString()
-        println("\n" + errorResult)
+        if !config.quiet then println("\n" + errorResult)
         UclidResult(errorResult)
     }
   }
@@ -353,13 +364,13 @@ object UclidMain {
     val results = config.files.map { f =>
       val errorResult = new ProofResult()
       try {
-        print(s"\nParsing ${f.getName()} ... ")
+        if !config.quiet then print(s"\nParsing ${f.getName()} ... ")
         val startParse = System.nanoTime
-        val ctx = SmtCompiler.compile(scala.io.Source.fromFile(f).mkString(""))
+        val ctx = SmtCompiler.compile(scala.io.Source.fromFile(f).mkString(""), config.quiet)
         var parseDuration = (System.nanoTime - startParse) / 1e9d
-        println(s"Parsing completed in ${parseDuration} seconds.")
+        if !config.quiet then println(s"Parsing completed in ${parseDuration} seconds.")
 
-        print("Processing query ... ")
+        if !config.quiet then print("Processing query ... ")
         var changed = false
         val startProcess = System.nanoTime
         if config.blastEnumQuantifierFlag then {
@@ -367,9 +378,9 @@ object UclidMain {
           ctx.termgraph.blastEnumQuantifier()
         }
         var processDuration = (System.nanoTime - startProcess) / 1e9d
-        println(s"Processing completed in ${processDuration} seconds.")
+        if !config.quiet then println(s"Processing completed in ${processDuration} seconds.")
 
-        print("Analyzing query ... ")
+        if !config.quiet then print("Analyzing query ... ")
         val startAnalysis = System.nanoTime
         val features = if config.features then {
           ctx.termgraph.featuresList(ctx.entryPoints())
@@ -377,7 +388,7 @@ object UclidMain {
           List.empty
         }
         var analysisDuration = (System.nanoTime - startAnalysis) / 1e9d
-        println(s"Analysis completed in ${analysisDuration} seconds.")
+        if !config.quiet then println(s"Analysis completed in ${analysisDuration} seconds.")
         if config.features then {
           println(features.map(f => "-- " + f).mkString("\n"))
         }
@@ -398,6 +409,7 @@ object UclidMain {
             ctx,
             config.outFile,
             prettyPrintLevel,
+            config.quiet,
             simulationData,
             unmodifiedSMTFile
           )
@@ -408,6 +420,7 @@ object UclidMain {
             ctx,
             config.outFile,
             prettyPrintLevel,
+            config.quiet,
             simulationData,
             unmodifiedSMTFile
           )
@@ -434,32 +447,32 @@ object UclidMain {
         }
 
         if config.run then {
-          println(ret.presult)
+          if !config.quiet then println(ret.presult)
         } else {
-          println(ret.presult.messages)
+          if !config.quiet then println(ret.presult.messages)
         }
 
         ret
       } catch {
         case (e: java.io.FileNotFoundException) =>
           errorResult.messages = "\n" + e.toString()
-          println("\n" + errorResult)
+          if !config.quiet then println("\n" + errorResult)
           UclidResult(errorResult)
         case e: SemanticError =>
           errorResult.messages = "\n" + e.msg
-          println("\n" + errorResult)
+          if !config.quiet then println("\n" + errorResult)
           UclidResult(errorResult)
         case e: SolverMismatchError =>
           errorResult.messages = "\n" + e.msg
-          println("\n" + errorResult)
+          if !config.quiet then println("\n" + errorResult)
           UclidResult(errorResult)
         case e: SmtParserError =>
           errorResult.messages = "\n" + e.msg
-          println("\n" + errorResult)
+          if !config.quiet then println("\n" + errorResult)
           UclidResult(errorResult)
         case e: TimeoutException =>
           errorResult.messages = "\n" + e.toString()
-          println("\n" + errorResult)
+          if !config.quiet then println("\n" + errorResult)
           UclidResult(errorResult)
       }
     }

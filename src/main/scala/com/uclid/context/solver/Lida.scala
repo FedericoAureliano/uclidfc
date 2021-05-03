@@ -45,10 +45,11 @@ class Lida(choices: List[(WCFG, Solver)]) extends Solver() {
     ctx: Context,
     outFile: Option[String],
     prettyPrint: Int,
+    quiet: Boolean,
     simulationData: Option[SimulationTable],
     unmodifiedSMTFile: Option[File] = None
   ): (ProofResult, Double, Double) = {
-    val results = choices.map((wcfg, solver) => solver.solve(run, timeout, ctx, outFile, prettyPrint, simulationData, unmodifiedSMTFile))
+    val results = choices.map((wcfg, solver) => solver.solve(run, timeout, ctx, outFile, prettyPrint, quiet, simulationData, unmodifiedSMTFile))
 
     var bestResult = results(0)._1 
     var bestScore = results(0)._3
