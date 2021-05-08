@@ -469,11 +469,6 @@ object SmtCompiler {
             val v = ctx.termgraph.memoAddInstruction(Numeral(l.toInt))
             ctx.termgraph.memoAddInstruction(TheoryMacro("re.loop", List(w, v)))
           }
-          case "str.to_re" :: s :: ")" :: _ => {
-            pos += 4
-            val arg = ctx.termgraph.memoAddInstruction(TheoryMacro(s))
-            ctx.termgraph.memoAddInstruction(TheoryMacro("str.to_re", List(arg)))
-          }
           case c => throw new SmtParserError(s"Unexpected literal $c!")
         }
         case other => {

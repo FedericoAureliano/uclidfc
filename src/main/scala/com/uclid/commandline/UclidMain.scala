@@ -175,11 +175,11 @@ object UclidMain {
     val inputLanguage =
       if config.files.forall(f => f.getName.endsWith(".ucl")) then {
         "UCLID"
-      } else if config.files.forall(f => f.getName.endsWith(".smt2") || f.getName.endsWith(".smt")) then {
+      } else if config.files.forall(f => f.getName.endsWith(".smt25") || f.getName.endsWith(".smt2") || f.getName.endsWith(".smt") ) then {
         "SMT"
       } else {
         errorResult.messages =
-          "\nAll files must be Uclid5 queries (.ucl) or SMT2 queries (.smt2 or .smt)!"
+          "\nAll files must be Uclid5 queries (.ucl) or SMT2 queries (.smt25, .smt2 or .smt)!"
         println("\n" + errorResult)
         return List(UclidResult(errorResult))
       }
