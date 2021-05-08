@@ -16,7 +16,7 @@ import scala.sys.process._
 
 object Solvers extends Enumeration {
   type Solvers = Value
-  val alt_ergo, cvc4, vampire, z3 = Value
+  val alt_ergo, cvc4, vampire, z3, z3las, z3seq, z3arr = Value
 }
 
 /** This is the main class for Uclid.
@@ -190,6 +190,9 @@ object UclidMain {
         case Solvers.cvc4     => new CVC4()
         case Solvers.vampire  => new Vampire()
         case Solvers.z3       => new Z3()
+        case Solvers.z3las    => new Z3LAS()
+        case Solvers.z3seq    => new Z3Seq()
+        case Solvers.z3arr    => new Z3Arr()
       }
     )
 
@@ -206,7 +209,7 @@ object UclidMain {
     var processDuration = 0.0
     var analysisDuration = 0.0
 
-    if config.quiet then println("benchmark,solver,answer,time")
+    if config.quiet then println("solver,benchmark,result,time")
 
     val simulationData = if config.simulate.isDefined then Some(SimulationTable.load(config.simulate.get)) else None
 

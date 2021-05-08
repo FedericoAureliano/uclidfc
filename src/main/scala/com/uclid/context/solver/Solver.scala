@@ -22,7 +22,7 @@ abstract class Solver() {
 
     if simulationData.isDefined then {
       val table = simulationData.get
-      val (res, time) = table.simulate(command.split(" ")(0), file.getAbsolutePath())
+      val (res, time) = table.simulate(command.split(" ")(0), file.getPath())
       val timetaken = if time < timeout then time else timeout.toDouble
       if !quiet then println(s"-- ${in.split(" ").head} terminated in ${"%.3f".toString.format(timetaken)} seconds.")
       return (command.split(" ")(0), List(res), List(), 0, timetaken)
@@ -148,7 +148,7 @@ abstract class Solver() {
       val result = triple._1._2
       val index = triple._2
 
-      if quiet then print(s"${qfiles(index).getAbsolutePath()},${result._1},")
+      if quiet then print(s"${result._1},${qfiles(index).getAbsolutePath()},")
 
       answer match {
         case _ if answer.contains("error") || answer.contains("unknown") => {
