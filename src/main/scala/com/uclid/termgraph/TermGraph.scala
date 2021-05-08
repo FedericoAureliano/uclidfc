@@ -172,7 +172,7 @@ abstract class AbstractTermGraph() {
     name == "true" || name == "false" || (name.startsWith("\"") && name
       .endsWith("\"")) || name.startsWith("#") || name.startsWith(
       "bv"
-    ) || name.toIntOption.isDefined
+    ) || name == "re.allchar" || name.toIntOption.isDefined
   }
 
   def completeButUnapplied(loc: Int): Boolean =

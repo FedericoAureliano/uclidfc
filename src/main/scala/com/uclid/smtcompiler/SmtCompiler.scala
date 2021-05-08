@@ -18,13 +18,21 @@ object SmtCompiler {
     val clean = new StringBuffer()
 
     var inComment = false
+    var inQuote = false
+    var inBlock = false
     script.foreach { c =>
       c match {
-        case '\n'            => inComment = false; clean.append(" ")
-        case ';'             => inComment = true
-        case a if inComment  =>
-        case a if !inComment => clean.append(a)
+        case '\n' if !inQuote && !inBlock      => inComment = false; clean.append(" ")
+        case ';'  if !inQuote && !inBlock      => inComment = true
+        case '"' if !inComment && !inBlock     => inQuote = !inQuote; clean.append('"')
+        case '|'  if !inComment && !inQuote    => inBlock = !inBlock; clean.append('|')
+        case a    if (inBlock || inQuote) && (a.isWhitespace || a == '(' || a == ')') => "_" //unsound, but temporary patch for 289a
+        case a    if inComment                 =>
+        case a    if !inComment                => clean.append(a)
       }
+      assert(!(inQuote && inComment))
+      assert(!(inBlock && inComment))
+      assert(!(inBlock && inQuote))
     }
 
     clean.toString
@@ -156,6 +164,7 @@ object SmtCompiler {
             else if tokens(pos) == ")" then {parentheses -= 1}
             pos += 1
           }
+          if !quiet then print(s"Ignoring set-info command in query ... ")
         case "(" :: "get-info" :: _ =>
           pos += 2
           var parentheses = 1
@@ -164,8 +173,10 @@ object SmtCompiler {
             else if tokens(pos) == ")" then {parentheses -= 1}
             pos += 1
           }
+          if !quiet then print(s"Ignoring get-info command in query ... ")
         case "(" :: "exit" :: ")" :: _ =>
           pos = tokens.length
+          if !quiet then print(s"Ignoring exit command in query ... ")
         case c =>
           throw new SmtParserError("Unexpected character around: " + c)
       }
@@ -457,6 +468,11 @@ object SmtCompiler {
             val w = ctx.termgraph.memoAddInstruction(Numeral(r.toInt))
             val v = ctx.termgraph.memoAddInstruction(Numeral(l.toInt))
             ctx.termgraph.memoAddInstruction(TheoryMacro("re.loop", List(w, v)))
+          }
+          case "str.to_re" :: s :: ")" :: _ => {
+            pos += 4
+            val arg = ctx.termgraph.memoAddInstruction(TheoryMacro(s))
+            ctx.termgraph.memoAddInstruction(TheoryMacro("str.to_re", List(arg)))
           }
           case c => throw new SmtParserError(s"Unexpected literal $c!")
         }
