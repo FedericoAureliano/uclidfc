@@ -148,7 +148,7 @@ abstract class Solver() {
       val result = triple._1._2
       val index = triple._2
 
-      if quiet then print(s"${result._1},${qfiles(index).getAbsolutePath()},")
+      if quiet then print(s"${result._1},${qfiles(index).getPath()},")
 
       answer match {
         case _ if answer.contains("error") || answer.contains("unknown") => {
