@@ -28,17 +28,22 @@ z3str4 = z3str4[z3str4['result'] != "other"]
 # fig = px.scatter(x = lida.index, y = lida['time'], title='Cactus Plot of Lida')
 fig = go.Figure()
 fig.update_layout(
-    title="Cactus Plot of Lida (WCFG Selection), the Component Algorithms (Z3Seq, Z3Arr, and Z3Las), and the State-of-the-Art (Z3str4)",
+    # title="Cactus Plot of Lida, the Component Algorithms (Z3Seq, Z3Arr, and Z3Las), and Z3str4",
     xaxis_title="Number Solved",
     yaxis_title="Time (ms)",
     legend_title="Solver",
+    font=dict(
+        size=24
+    )
 )
 
-fig.add_scatter(y = lida['time'], mode='markers', name="lida")
-fig.add_scatter(y = z3seq['time'], mode='markers', name="z3seq")
-fig.add_scatter(y = z3arr['time'], mode='markers', name="z3arr")
-fig.add_scatter(y = z3las['time'], mode='markers', name="z3las")
-fig.add_scatter(y = z3str4['time'], mode='markers', name="z3str4")
+fig.add_scatter(y = z3str4['time'], mode='markers', name="Z3str4")
+fig.add_scatter(y = lida['time'], mode='markers', name="Lida")
+fig.add_scatter(y = z3seq['time'], mode='markers', name="Z3Seq")
+fig.add_scatter(y = z3arr['time'], mode='markers', name="Z3Arr")
+fig.add_scatter(y = z3las['time'], mode='markers', name="Z3LAS")
+
+fig.update_traces(marker=dict(size=20,line=dict(width=2)))
 
 fig.show()
 
