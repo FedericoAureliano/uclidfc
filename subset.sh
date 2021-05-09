@@ -1,1 +1,0 @@
-find data -type f -name *.smt* | shuf -n $1

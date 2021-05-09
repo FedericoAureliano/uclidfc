@@ -1,8 +1,14 @@
 rm -r experiment
 mkdir experiment
 
-sh subset.sh 10000 > experiment/training.txt
-sh subset.sh 1000 > experiment/testing.txt
+training=$1
+testing=$2
+
+queries=`find data -type f -name *.smt* | shuf -n $(($training + $testing))`
+queries=($queries)
+
+printf "%s\n" "${queries[@]:0:training}" > experiment/training.txt
+printf "%s\n" "${queries[@]:training}" > experiment/testing.txt
 
 uclidfc --simulate data/results.csv `cat experiment/training.txt` --table -s z3seq -s z3arr -s z3las --train --language-models experiment
 
