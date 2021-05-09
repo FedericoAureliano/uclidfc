@@ -7,18 +7,17 @@ import scala.collection.mutable.{HashMap}
 import java.io._ 
 import scala.io.Source
 
-class WCFG (weights: HashMap[String, Int]) {
+class WCFG (weights: HashMap[String, Double]) {
 
-    def likelihood(ctx: Context) : Int = {
-        var p = 1
+    def likelihood(ctx: Context) : Double = {
+        var p = 0.0
         val marks = ctx.termgraph.mark(ctx.entryPoints())
 
         marks.zipWithIndex.foreach((m, i) => if m then ctx.termgraph.getStmt(ctx.termgraph.findTarget(i)) match {
             case Application(parent, _) => ctx.termgraph.getName(parent) match {
-                case Some(name) => p = weights.getOrElse(name, 1) * p
+                case Some(name) => p = weights.getOrElse(name, 0.0) + p
                 case None => 
             }
-            case Synthesis(_, _, _) => p = weights.getOrElse("synthesis", 0) * p
             case _ =>
         })
 
@@ -29,23 +28,25 @@ class WCFG (weights: HashMap[String, Int]) {
         weights.toList.prepended(("production rule", "weight")).map((k, v) => s"$k,$v").mkString("\n")
     }
 
-    // this was the best solver, so reward it
-    def update(ctx: Context) : Unit = {
+    // this was not the best solver, so punish it
+    def punish(ctx: Context, factor: Double) : Unit = {
+        var count = 0.0
+        val newWeights: HashMap[String, Double]= HashMap()
         val marks = ctx.termgraph.mark(ctx.entryPoints())
-
         marks.zipWithIndex.foreach((m, i) => if m then ctx.termgraph.getStmt(ctx.termgraph.findTarget(i)) match {
             case Application(parent, _) => ctx.termgraph.getName(parent) match {
-                case Some(name) => weights.update(name, weights.getOrElse(name, 0) + 1)
+                case Some(name) => newWeights.update(name, newWeights.getOrElse(name, 0.0) - 1.0); count += 1.0
                 case None => 
             }
-            case Synthesis(_, _, _) => weights.update("synthesis", weights.getOrElse("synthesis", 0) + 1)
             case _ =>
+        })
+        newWeights.keys.foreach(k => {
+            newWeights(k) = (newWeights(k)/count)*factor
+            weights.update(k, weights.getOrElse(k, 0.0) + newWeights(k))
         })
     }
 
     def save(location: String) : Unit = {
-        weights.getOrElseUpdate("synthesis", 0)
-        
         val file = new File(location)
         val bw = new BufferedWriter(new FileWriter(file))
         bw.write("production rule,weight\n")
@@ -65,7 +66,7 @@ object WCFG {
         assert(header(0) == "production rule", "First column of WCFG should be \"production rule\"")
         assert(header(1) == "weight", "Second column of WCFG should be \"weight\"")
 
-        val hmap : HashMap[String, Int] = HashMap(content.map(line => line(0) -> line(1).toInt).toList: _*)
+        val hmap : HashMap[String, Double] = HashMap(content.map(line => line(0) -> line(1).toDouble).toList: _*)
 
         WCFG(hmap)
     }

@@ -16,7 +16,7 @@ import scala.sys.process._
 
 object Solvers extends Enumeration {
   type Solvers = Value
-  val alt_ergo, cvc4, vampire, z3, z3las, z3seq, z3arr = Value
+  val alt_ergo, cvc4, vampire, z3, z3las, z3seq, z3arr, z3str4 = Value
 }
 
 /** This is the main class for Uclid.
@@ -193,6 +193,7 @@ object UclidMain {
         case Solvers.z3las    => new Z3LAS()
         case Solvers.z3seq    => new Z3Seq()
         case Solvers.z3arr    => new Z3Arr()
+        case Solvers.z3str4   => new Z3str4()
       }
     )
 

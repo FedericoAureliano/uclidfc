@@ -21,10 +21,14 @@ z3las = pd.read_csv('experiment/results-z3las.csv')
 z3las = z3las.sort_values(["time"]).reset_index(drop=True)
 z3las = z3las[z3las['result'] != "other"]
 
+z3str4 = pd.read_csv('experiment/results-z3str4.csv')
+z3str4 = z3str4.sort_values(["time"]).reset_index(drop=True)
+z3str4 = z3str4[z3str4['result'] != "other"]
+
 # fig = px.scatter(x = lida.index, y = lida['time'], title='Cactus Plot of Lida')
 fig = go.Figure()
 fig.update_layout(
-    title="Cactus Plot of Lida, Z3Seq, Z3Arr, and Z3Las",
+    title="Cactus Plot of Lida (WCFG Selection), the Component Algorithms (Z3Seq, Z3Arr, and Z3Las), and the State-of-the-Art (Z3str4)",
     xaxis_title="Number Solved",
     yaxis_title="Time (ms)",
     legend_title="Solver",
@@ -34,6 +38,7 @@ fig.add_scatter(y = lida['time'], mode='markers', name="lida")
 fig.add_scatter(y = z3seq['time'], mode='markers', name="z3seq")
 fig.add_scatter(y = z3arr['time'], mode='markers', name="z3arr")
 fig.add_scatter(y = z3las['time'], mode='markers', name="z3las")
+fig.add_scatter(y = z3str4['time'], mode='markers', name="z3str4")
 
 fig.show()
 
@@ -42,3 +47,4 @@ print(",".join(["lida", str(len(lida)), str(lida['time'].sum()), str(lida['time'
 print(",".join(["z3seq", str(len(z3seq)), str(z3seq['time'].sum()), str(z3seq['time'].sum() + (TOTAL - len(z3seq))*TIMEOUT)]))
 print(",".join(["z3arr", str(len(z3arr)), str(z3arr['time'].sum()), str(z3arr['time'].sum() + (TOTAL - len(z3arr))*TIMEOUT)]))
 print(",".join(["z3las", str(len(z3las)), str(z3las['time'].sum()), str(z3las['time'].sum() + (TOTAL - len(z3las))*TIMEOUT)]))
+print(",".join(["z3str4", str(len(z3str4)), str(z3str4['time'].sum()), str(z3str4['time'].sum() + (TOTAL - len(z3str4))*TIMEOUT)]))

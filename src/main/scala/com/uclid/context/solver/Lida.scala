@@ -63,7 +63,12 @@ class Lida(choices: List[(WCFG, Solver)]) extends Solver() {
       }
     })
 
-    if bestResult.result.isDefined then choices(bestSolverIndex)._1.update(ctx)
+    if bestResult.result.isDefined then {
+      (0 to choices.length - 1).foreach(i => {
+        val scoreDiff = if results(i)._1.result.isDefined then results(i)._3/bestScore else timeout.toDouble/bestScore
+        if i != bestSolverIndex then choices(i)._1.punish(ctx, scoreDiff)
+      })
+    }
 
     results(bestSolverIndex)
   }
